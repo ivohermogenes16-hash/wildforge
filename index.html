@@ -7675,12 +7675,266 @@ renderInv=function(){
   }catch(e){}
 };
 /* =====================================================================
+   JOGAR COM AMIGO (etapa 1)
+   o dono do mundo abre e recebe um código · o amigo entra com o código
+   os dois se veem andando, com mensagens rápidas · dia e clima iguais
+   ao entrar, o amigo recebe o mundo como está (casas, cortes, baús)
+   ===================================================================== */
+const MP={on:false,role:null,code:'',peer:null,conn:null,name:'',sendT:0,clkT:0,lastRx:0,joinT:0};
+const REMOTES=[];           // outros jogadores visíveis (por enquanto um)
+const MP_PREFIX='wildforge-v1-';
+const MP_KEY='wf-mp';       // pedido de entrada pendente (amigo)
+const mpCode=()=>{const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<5;i++)s+=A[Math.floor(Math.random()*A.length)];return s;};
+const myLook=()=>{const w=WORLD&&WORLD.look?WORLD.look:(worldList().filter(x=>x.look&&!String(x.id).startsWith('mp-')).sort((a,b)=>(b.last||0)-(a.last||0))[0]||{}).look||{};return w;};
+const myName=()=>((myLook().n||'').trim())||'Viajante';
+
+/* ---------- transporte: PeerJS (internet) ou canal local para teste ---------- */
+function mpLib(cb){
+  if(localStorage.getItem('wf-mp-mock'))return cb(null,MockPeer);
+  if(window.Peer)return cb(null,window.Peer);
+  const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
+  s.onload=()=>cb(window.Peer?null:new Error('lib'),window.Peer);s.onerror=()=>cb(new Error('lib'));document.head.appendChild(s);
+}
+const ICE={config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:global.stun.twilio.com:3478'},
+  {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}]}};
+// imitação do PeerJS usando BroadcastChannel (dois jogos abertos no mesmo navegador)
+function MockPeer(id){
+  const ev={},bc=new BroadcastChannel('wf-mock'),me=id||('anon'+Math.random().toString(36).slice(2,8)),conns={};
+  const emit=(o,k,a)=>{(o._ev[k]||[]).forEach(f=>f(a));};
+  const mkConn=(cid,peer)=>{const c={_ev:{},peer,open:false,on(k,f){(this._ev[k]=this._ev[k]||[]).push(f);return this;},
+    send(d){bc.postMessage({t:'data',cid,to:peer,from:me,d:JSON.stringify(d)});},close(){bc.postMessage({t:'close',cid,to:peer});emit(c,'close');}};conns[cid]=c;return c;};
+  bc.onmessage=e=>{const m=e.data;if(m.to!==me)return;
+    if(m.t==='conn'){const c=mkConn(m.cid,m.from);c.open=true;emit(this,'connection',c);bc.postMessage({t:'ok',cid:m.cid,to:m.from});setTimeout(()=>emit(c,'open'),10);}
+    else if(m.t==='ok'){const c=conns[m.cid];if(c){c.open=true;emit(c,'open');}}
+    else if(m.t==='data'){const c=conns[m.cid];if(c)emit(c,'data',JSON.parse(m.d));}
+    else if(m.t==='close'){const c=conns[m.cid];if(c)emit(c,'close');}};
+  this._ev=ev;this.id=me;
+  this.on=(k,f)=>{(ev[k]=ev[k]||[]).push(f);return this;};
+  this.connect=(to)=>{const cid=me+'>'+to+Math.random();const c=mkConn(cid,to);bc.postMessage({t:'conn',cid,to,from:me});setTimeout(()=>{if(!c.open)emit(c,'error',new Error('timeout'));},6000);return c;};
+  this.destroy=()=>{try{bc.close();}catch(_){}};
+  setTimeout(()=>emit(this,'open',me),20);
+}
+
+/* ---------- interface ---------- */
+(function mpUI(){
+  const st=document.createElement('style');
+  st.textContent=`
+#mpui{position:absolute;inset:0;z-index:48;display:flex;align-items:center;justify-content:center;background:rgba(6,4,2,.74);padding:10px max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left))}
+#mpui[hidden]{display:none}
+#mpui .mp{width:min(420px,100%);padding:12px 16px 14px;background:linear-gradient(rgba(36,22,10,.97),rgba(20,12,6,.98));border:1px solid #6e4a22;border-radius:8px;box-shadow:0 12px 36px rgba(0,0,0,.7);text-align:center;color:#ead6a6}
+#mpui h2{margin:0 0 6px;font:700 15px 'Cinzel',Georgia,serif;letter-spacing:.22em;color:#f0d58e}
+#mpui p{margin:4px 0;font:italic 13px 'IM Fell English',Georgia,serif;color:#cdb98f}
+#mpui .code{margin:8px auto;font:700 34px Georgia,serif;letter-spacing:.3em;color:#fff1cf;text-shadow:0 0 18px rgba(240,180,76,.45);user-select:all;-webkit-user-select:all}
+#mpui input{width:100%;height:46px;margin:6px 0;text-align:center;font:700 26px Georgia,serif;letter-spacing:.3em;text-transform:uppercase;color:#2e1d0e;background:#ead6a6;border:1px solid #8a6a3b;border-radius:4px;user-select:text;-webkit-user-select:text}
+#mpui .mpst{min-height:18px;font:600 12px Georgia,serif;color:#9be08b}
+#mpui .mpst.bad{color:#ff8a72}
+#mpui .row{display:flex;gap:8px;margin-top:10px}
+#mpui .mbtn{flex:1;min-height:38px}
+#mpui .go{background:linear-gradient(#8a4a1a,#5a2c0e);border-color:#d39a48;color:#fff1cf}
+#mpbadge{position:absolute;left:50%;top:calc(env(safe-area-inset-top,0px) + 6px);transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:6px;padding:3px 10px 3px 6px;border-radius:12px;background:rgba(12,9,6,.62);border:1px solid rgba(155,224,139,.45);font:600 11px Georgia,serif;color:#d8f0c8;pointer-events:none}
+#mpbadge i{width:8px;height:8px;border-radius:50%;background:#7bd46a;box-shadow:0 0 6px #7bd46a}
+#mpbadge.off i{background:#e0604a;box-shadow:0 0 6px #e0604a}
+#mpbadge[hidden],#mpchat[hidden],#mpmsgs[hidden]{display:none}
+#stage.menu #mpbadge,#stage.menu #mpchat{visibility:hidden}
+#mpchat{position:absolute;right:calc(var(--edge-r) + 160px);bottom:84px;width:44px;height:44px;border-radius:50%;z-index:5;font-size:20px;line-height:40px;padding:0}
+#mpmsgs{position:absolute;right:calc(var(--edge-r) + 110px);bottom:134px;z-index:6;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+#mpmsgs button{font:600 12px Georgia,serif;padding:6px 12px;border-radius:14px;border:1px solid #b8893e;background:rgba(36,22,10,.92);color:#fff1cf;cursor:pointer;white-space:nowrap}
+@media (max-height:340px){#mpchat{right:calc(var(--edge-r) + 146px);bottom:74px;width:40px;height:40px;line-height:36px}}
+`;
+  document.head.appendChild(st);
+  const d=document.createElement('div');d.id='mpui';d.setAttribute('data-ui','');d.hidden=true;
+  d.innerHTML='<div class="mp"><h2></h2><div class="body"></div><div class="mpst"></div><div class="row"><button class="mbtn" id="mpclose">Fechar</button><button class="mbtn go" id="mpgo" hidden>Entrar</button></div></div>';
+  stage.appendChild(d);d.addEventListener('pointerdown',e=>e.stopPropagation());
+  $('mpclose').addEventListener('click',()=>{d.hidden=true;if(!MP.on&&MP.role==='host'&&!MP.conn)mpStop();if(pauseOpen===false&&!inTitle){invOpen=false;}});
+  // botão no menu de pausa (dono do mundo)
+  const pm=$('pMenu');if(pm){const b=document.createElement('button');b.className='mbtn';b.id='pMp';b.textContent='Jogar com amigo';pm.parentNode.insertBefore(b,pm);b.addEventListener('click',()=>mpHostOpen());}
+  // botão na tela inicial (amigo)
+  const tm=$('tmenu');if(tm){const b=document.createElement('button');b.className='tbtn';b.id='tJoin';b.style.setProperty('--i','2');b.textContent='Entrar com amigo';tm.insertBefore(b,$('tSet'));b.addEventListener('click',e=>{e.stopPropagation();mpJoinOpen();});}
+  // selo de conexão e mensagens rápidas
+  const bd=document.createElement('div');bd.id='mpbadge';bd.hidden=true;bd.innerHTML='<i></i><span></span>';stage.appendChild(bd);
+  const cb=document.createElement('button');cb.className='btn rnd';cb.id='mpchat';cb.setAttribute('data-ui','');cb.hidden=true;cb.textContent='💬';stage.appendChild(cb);
+  const ml=document.createElement('div');ml.id='mpmsgs';ml.setAttribute('data-ui','');ml.hidden=true;
+  ml.innerHTML=['Vem cá!','Socorro!','Olha isso!','Vamos construir aqui','Tô com fome','Boa!'].map(t=>'<button>'+t+'</button>').join('');stage.appendChild(ml);
+  ['pointerdown','touchstart'].forEach(ev=>{cb.addEventListener(ev,e=>e.stopPropagation(),{passive:true});ml.addEventListener(ev,e=>e.stopPropagation(),{passive:true});});
+  cb.addEventListener('click',e=>{e.stopPropagation();ml.hidden=!ml.hidden;});
+  ml.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;ml.hidden=true;mpChat(b.textContent);});
+})();
+function mpPanel(title,html,stTxt,go){const d=$('mpui');d.querySelector('h2').textContent=title;d.querySelector('.body').innerHTML=html;mpStatus(stTxt||'');$('mpgo').hidden=!go;d.hidden=false;}
+function mpStatus(t,bad){const s=document.querySelector('#mpui .mpst');if(s){s.textContent=t;s.classList.toggle('bad',!!bad);}}
+function mpBadge(){const b=$('mpbadge');b.hidden=!MP.on;$('mpchat').hidden=!MP.on;if(!MP.on){$('mpmsgs').hidden=true;return;}
+  const r=REMOTES[0];const ok=r&&performance.now()-MP.lastRx<5000;b.classList.toggle('off',!ok);
+  b.querySelector('span').textContent=(MP.role==='host'?'Seu mundo · ':'Mundo de '+(MP.hostName||'amigo')+' · ')+(r?r.name+(ok?'':' (sem sinal)'):'esperando amigo')+(MP.role==='host'&&!r?' · código '+MP.code:'');}
+
+/* ---------- dono do mundo: abre a partida ---------- */
+function mpHostOpen(){
+  if(!WORLD||CAVE!==null){toast('Abra um mundo seu para jogar com amigo.','bad');return;}
+  if(MP.on&&MP.role==='host'){mpPanel('Jogar com amigo','<p>Passe este código para o seu amigo:</p><div class="code">'+MP.code+'</div><p>Ele toca em <b>Entrar com amigo</b> na tela inicial e digita o código.</p>',REMOTES[0]?REMOTES[0].name+' está no seu mundo.':'Esperando o amigo entrar…');return;}
+  mpPanel('Jogar com amigo','<p>Preparando a partida…</p>','Conectando à internet…');
+  mpLib((err,PeerC)=>{
+    if(err){mpStatus('Sem internet ou bloqueado. Tente de novo.',true);return;}
+    const tryOpen=(n)=>{
+      const code=mpCode();const peer=new PeerC(MP_PREFIX+code,ICE);
+      peer.on('open',()=>{MP.on=true;MP.role='host';MP.code=code;MP.peer=peer;MP.name=myName();
+        mpPanel('Jogar com amigo','<p>Passe este código para o seu amigo:</p><div class="code">'+code+'</div><p>Ele toca em <b>Entrar com amigo</b> na tela inicial e digita o código. Deixe o jogo aberto.</p>','Esperando o amigo entrar…');mpBadge();});
+      peer.on('error',e=>{if(e&&e.type==='unavailable-id'&&n<3){try{peer.destroy();}catch(_){}tryOpen(n+1);}else if(!MP.on)mpStatus('Não foi possível abrir a partida ('+(e&&e.type||'erro')+').',true);});
+      peer.on('connection',c=>mpHostConn(c));
+    };
+    tryOpen(0);
+  });
+}
+function mpHostConn(c){
+  // só um amigo por vez: a conexão nova substitui a antiga (o amigo reconecta depois de entrar no mundo)
+  const old=MP.conn;MP.conn=c;if(old&&old!==c){try{old.close();}catch(_){}}
+  c.on('data',m=>mpRx(m,c));
+  c.on('close',()=>{if(MP.conn===c){MP.conn=null;const r=REMOTES[0];if(r)toast(r.name+' saiu do seu mundo.');REMOTES.length=0;mpBadge();}});
+}
+
+/* ---------- amigo: entra com o código ---------- */
+function mpJoinOpen(){
+  mpPanel('Entrar com amigo','<p>Digite o código que aparece no jogo do seu amigo:</p><input id="mpcode" maxlength="5" autocomplete="off" placeholder="•••••">','',true);
+  const i=$('mpcode');i.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter')mpJoinGo();});setTimeout(()=>i.focus(),50);
+  $('mpgo').onclick=mpJoinGo;
+}
+function mpJoinGo(){
+  const code=($('mpcode').value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(code.length<5){mpStatus('O código tem 5 letras.',true);return;}
+  mpStatus('Procurando o mundo do seu amigo…');
+  mpLib((err,PeerC)=>{
+    if(err){mpStatus('Sem internet ou bloqueado. Tente de novo.',true);return;}
+    const peer=new PeerC(undefined,ICE);let done=false;
+    peer.on('error',e=>{if(done)return;done=true;mpStatus(e&&e.type==='peer-unavailable'?'Código não encontrado. O jogo do seu amigo está aberto?':'Não conectou ('+(e&&e.type||'erro')+').',true);try{peer.destroy();}catch(_){}});
+    peer.on('open',()=>{
+      const c=peer.connect(MP_PREFIX+code,{reliable:true});
+      setTimeout(()=>{if(!done){done=true;mpStatus('Demorou demais. Confira o código e a internet.',true);try{peer.destroy();}catch(_){}}},15000);
+      c.on('open',()=>c.send({t:'ask',name:myName(),look:myLook()}));
+      c.on('data',m=>{
+        if(m.t==='full'){done=true;mpStatus('Esse mundo já tem um amigo dentro.',true);return;}
+        if(m.t==='world'){done=true;
+          // cria (ou reaproveita) uma cópia local do mundo do amigo e entra nela
+          const id='mp-'+m.hid,l=worldList();let w=l.find(x=>x.id===id);
+          if(!w){w={id,name:'​'+m.wname,seed:m.seed,N:m.N,created:Date.now(),last:0,day:1,play:0};l.push(w);}
+          w.seed=m.seed;w.N=m.N;w.diff=m.diff;w.look=myLook();w.last=0;
+          try{localStorage.setItem(WIDX_KEY,JSON.stringify(l));localStorage.setItem(MP_KEY,JSON.stringify({code,hid:m.hid,host:m.host,at:Date.now()}));}catch(_){}
+          mpStatus('Entrando no mundo de '+m.host+'…');try{c.close();peer.destroy();}catch(_){}
+          setTimeout(()=>bootWorld(id),300);
+        }
+      });
+    });
+  });
+}
+// depois de recarregar dentro da cópia do mundo: conecta de novo e pede o estado atual
+function mpGuestResume(){
+  let p=null;try{p=JSON.parse(localStorage.getItem(MP_KEY)||'null');}catch(_){}
+  if(!p||!WORLD||WORLD.id!=='mp-'+p.hid||Date.now()-p.at>10*60*1000)return false;
+  try{localStorage.removeItem(MP_KEY);}catch(_){}
+  MP.role='guest';MP.code=p.code;MP.hostName=p.host;MP.name=myName();
+  mpLib((err,PeerC)=>{
+    if(err){toast('Sem internet: você está numa cópia do mundo do amigo, sozinho.','bad');return;}
+    const peer=new PeerC(undefined,ICE);MP.peer=peer;
+    peer.on('error',e=>{toast('A conexão com o amigo falhou ('+(e&&e.type||'erro')+').','bad');mpEnd(true);});
+    peer.on('open',()=>{const c=peer.connect(MP_PREFIX+p.code,{reliable:true});MP.conn=c;
+      c.on('open',()=>{MP.on=true;c.send({t:'hello',name:MP.name,look:myLook()});mpBadge();});
+      c.on('data',m=>mpRx(m,c));
+      c.on('close',()=>{if(MP.on){toast((MP.hostName||'O dono do mundo')+' fechou o jogo. A partida acabou.','bad');mpEnd(true);}});});
+  });
+  return true;
+}
+function mpStop(){try{if(MP.conn)MP.conn.close();}catch(_){}try{if(MP.peer)MP.peer.destroy();}catch(_){}MP.on=false;MP.conn=null;MP.peer=null;REMOTES.length=0;mpBadge();}
+function mpEnd(toMenu){
+  const wasGuest=MP.role==='guest';mpStop();MP.role=null;
+  if(wasGuest&&toMenu){try{saveGame(true);}catch(_){}setTimeout(()=>{try{localStorage.removeItem('ts-boot');}catch(_){}WFRELOAD();},2200);}
+}
+
+/* ---------- mensagens ---------- */
+function mpSend(m){try{if(MP.conn&&MP.conn.open)MP.conn.send(m);}catch(_){}}
+function mpRx(m,c){
+  MP.lastRx=performance.now();
+  if(MP.role==='host'){
+    if(m.t==='ask'){c.send({t:'world',hid:WORLD.id,seed:SEED,N,diff:WORLD.diff===undefined?1:WORLD.diff,wname:WORLD.name,host:MP.name});return;}
+    if(m.t==='hello'){const r=mpRemote(m.name,m.look);toast(r.name+' entrou no seu mundo!','good');
+      try{saveGame(true);}catch(_){}
+      c.send({t:'snap',sv:buildSave(),host:MP.name,hlook:myLook()});mpBadge();return;}
+  }else{
+    if(m.t==='snap'){mpApplySnap(m);return;}
+    if(m.t==='clk'){CLOCK.hour=m.h;CLOCK.day=m.d;WX.rain=m.r;WX.fog=m.f;WX.tRain=m.tr;WX.tFog=m.tf;WX.type=m.ty;WX.next=1e9;return;}
+  }
+  if(m.t==='st'){const r=REMOTES[0]||mpRemote(m.name||'Amigo',m.look||{});Object.assign(r.tg,m);if(!r.init){r.x=m.x;r.y=m.y;r.init=1;}return;}
+  if(m.t==='chat'){const r=REMOTES[0];if(r){r.say=m.t2;r.sayT=performance.now();}toast((r?r.name:'Amigo')+': '+m.t2);try{SND.page();}catch(_){}return;}
+}
+function mpRemote(name,look){
+  let r=REMOTES[0];
+  if(!r){r={name:name||'Amigo',x:P.x,y:P.y,fx:0,fy:1,yaw:0,ph:0,tg:{},look:mpLookCols(look||{})};REMOTES[0]=r;}
+  r.name=name||r.name;r.look=mpLookCols(look||{});return r;
+}
+function mpLookCols(L){return {skin:LOOKS.skin[L.s|0]||LOOKS.skin[1],hair:LOOKS.hair[L.h|0]||LOOKS.hair[0],tun:LOOKS.tun[L.t|0]||LOOKS.tun[0],tro:LOOKS.tro[L.p|0]||LOOKS.tro[0],beard:!!L.b,hood:L.c?[.32,.24,.16]:null};}
+function mpChat(t){mpSend({t:'chat',t2:t});MP.mySay=t;MP.mySayT=performance.now();toast('Você: '+t);}
+// o amigo recebe o mundo como está e entra ao lado do dono
+function mpApplySnap(m){
+  const sv=JSON.parse(JSON.stringify(m.sv)),mine=readSave();
+  const hx=sv.P.x,hy=sv.P.y;
+  if(mine){sv.inv=mine.inv;sv.eq=mine.eq;sv.hb=mine.hb;sv.S=mine.S;sv.C=mine.C;sv.known=mine.known;sv.play=mine.play;}
+  else{sv.inv=[];sv.eq={};sv.hb=[null,null,null,null];sv.S={life:100,hunger:85,thirst:85,energy:100,rest:90,hygiene:90,temp:36.6,wet:0,dead:false};sv.C={};sv.known=[];}
+  sv.P={x:hx+1.2,y:hy+.4,dir:2};sv.resp={x:hx+1.2,y:hy+.4,b:-1};
+  if(sv.up){sv.up.hs=[];sv.up.plv=0;}
+  try{loadSave(sv);}catch(e){toast('Não deu para receber o mundo do amigo.','bad');return;}
+  MP.hostName=m.host;const r=mpRemote(m.host,m.hlook);r.x=hx;r.y=hy;r.init=1;
+  toast('Você está no mundo de '+m.host+'!','good');mpBadge();
+}
+
+/* ---------- a cada quadro: manda posição, recebe e suaviza a do amigo ---------- */
+function mpTick(dt){
+  if(!MP.on)return;
+  MP.sendT-=dt;
+  if(MP.sendT<=0&&MP.conn&&MP.conn.open){MP.sendT=.1;
+    const hk=handKind();
+    mpSend({t:'st',x:+P.x.toFixed(3),y:+P.y.toFixed(3),fx:+P.fx.toFixed(2),fy:+P.fy.toFixed(2),mv:P.moving?1:0,run:P.running&&P.moving?1:0,
+      hk,sw:P.swim?1:0,bt:P.boat?1:0,rd:RIDE.on?(RIDE.h.c|0)+1:0,lv:P.lv|0,phz:+PHZ.toFixed(2),sl:sleeping?1:0,act:G.on?1:0,
+      ar:EQ.armor&&inv.indexOf(EQ.armor)>=0?EQ.armor.id:0,sh:EQ.off&&inv.indexOf(EQ.off)>=0?EQ.off.id:0,co:EQ.body&&inv.indexOf(EQ.body)>=0?EQ.body.id:0,
+      name:MP.name,look:myLook()});}
+  if(MP.role==='host'){MP.clkT-=dt;if(MP.clkT<=0&&MP.conn&&MP.conn.open){MP.clkT=2;mpSend({t:'clk',h:CLOCK.hour,d:CLOCK.day,r:WX.rain,f:WX.fog,tr:WX.tRain,tf:WX.tFog,ty:WX.type});}}
+  for(const r of REMOTES){const g=r.tg;if(g.x===undefined)continue;
+    const k=Math.min(1,dt*10),dx=g.x-r.x,dy=g.y-r.y;
+    if(Math.hypot(dx,dy)>8){r.x=g.x;r.y=g.y;}else{r.x+=dx*k;r.y+=dy*k;}
+    r.fx=g.fx;r.fy=g.fy;r.mv=!!g.mv;r.run=!!g.run;r.ph+=dt*(r.run?14:r.mv?9.5:0);r.hz=(r.hz||0)+((g.phz||0)-(r.hz||0))*k;}
+  if((MP.bT=(MP.bT||0)-dt)<=0){MP.bT=1;mpBadge();}
+}
+const _updateMP=update;
+update=function(dt){const r=_updateMP(dt);if(!inTitle)mpTick(dt);return r;};
+
+/* ---------- regras da partida ---------- */
+$('sleep').addEventListener('click',e=>{if(MP.on&&MP.role==='guest'){e.stopImmediatePropagation();toast('Só o dono do mundo faz a noite passar dormindo. Descanse perto dele.','bad');}},true);
+const _saveGameMP=saveGame;
+saveGame=function(q){const r=_saveGameMP(q);if(WORLD&&String(WORLD.id).startsWith('mp-')){try{const l=worldList(),w=l.find(x=>x.id===WORLD.id);if(w){w.last=0;localStorage.setItem(WIDX_KEY,JSON.stringify(l));}}catch(_){}}return r;};
+// mina recarrega a página: por enquanto não dá para entrar jogando junto
+const _goCaveMP=goCave;
+goCave=function(ci,o){if(MP.on){if(!MP.caveT||performance.now()-MP.caveT>4000){MP.caveT=performance.now();toast('Jogando com amigo, as minas ficam fechadas por enquanto.','bad');}return;}return _goCaveMP(ci,o);};
+// só o dono do mundo acelera o tempo dormindo
+const _trySleepMP=trySleep;
+trySleep=function(){if(MP.on&&MP.role==='guest'){toast('Só o dono do mundo faz a noite passar dormindo. Descanse perto dele.','bad');return;}return _trySleepMP();};
+// a cópia local do mundo do amigo não aparece na lista de mundos nem em "Continuar"
+const _renderWorldsMP=renderWorlds;
+renderWorlds=function(){_renderWorldsMP();document.querySelectorAll('#wlist .wcard').forEach(c=>{const b=c.querySelector('b');if(b&&b.textContent.startsWith('​'))c.remove();});};
+// sair para o menu encerra a partida
+const _showTitleMP=showTitle;
+showTitle=function(){if(MP.on||MP.peer){if(MP.role==='guest')mpEnd(false);else mpStop();}return _showTitleMP();};
+window.addEventListener('pagehide',()=>{if(MP.on)mpStop();});
+// ao abrir o mundo do amigo pelo código: reconecta
+setTimeout(()=>{try{mpGuestResume();}catch(_){}},400);
+/* =====================================================================
    TELA INICIAL NOVA (entrega 3)
    cena de cinema girando em volta da vila ao entardecer · menu em texto
    novidades de cada versão · criar mundo com prévia do mapa
    ===================================================================== */
-const GAMEVER=38;
+const GAMEVER=39;
 const NEWS=[
+ {v:39,t:'Jogar com amigo',d:'Multijogador · etapa 1',s:'Jogue junto com um amigo pela internet',it:[
+  'Dono do mundo: menu de pausa → Jogar com amigo → passe o código de 5 letras',
+  'Amigo: tela inicial → Entrar com amigo → digite o código',
+  'Vocês se veem andando, correndo, nadando, de barco e a cavalo, com nome em cima',
+  'Mensagens rápidas no botão 💬',
+  'O dia e o clima são os do dono do mundo',
+  'Nesta etapa cada um ainda coleta e constrói só no próprio jogo; minas ficam fechadas jogando junto']},
  {v:38,t:'Alforje novo',d:'Ajustes',s:'Mochila nova, clima e menos coleta',it:[
   'Mochila redesenhada: alforje de couro com o seu personagem e os encaixes de equipamento',
   'Construir não precisa mais de martelo nem de outra ferramenta',
@@ -9788,6 +10042,34 @@ function drawPlayer3b(now,dt){
   }else HOLD.on=false;
 }
 
+/* ---------- outro jogador (jogar com amigo) ---------- */
+const OJ={root:af(),hip:af(),lL:af(),lR:af(),kL:af(),kR:af(),aL:af(),aR:af(),fL:af(),fR:af(),head:af(),tor:af(),hand:af(),tmp:af()};
+const RHORSE={kind:'horse',x:0,y:0,dx:0,dy:1,mv:false,run:false,c:0,tame:true};
+function drawOther(o,now,dt){
+  const g=o.tg||{},gp=gy(o.x,o.y)+(o.hz||0);
+  const ty=Math.atan2(o.fx||0,o.fy||1);o.yaw=(o.yaw||0)+wrapA(ty-(o.yaw||0))*Math.min(1,dt*12);
+  const mv=o.mv&&!g.sl,ph=o.ph*1.0,act=!!g.act&&!g.sl;
+  const R=OJ.root;
+  if(g.sl){aTRS(R,o.x,gp+.17,o.y,-1.5708,o.yaw,0,1,1,1);aTRS(LOC,0,-.55,0,0,0,0,1,1,1);aMul(R,R,LOC);}
+  else if(g.bt){aTRS(R,o.x,WL-.38+Math.sin(now*1.8)*.02,o.y,0,o.yaw,0,1,1,1);inst(boatKey(),o.x,WL+.02+Math.sin(now*1.8)*.02,o.y,o.yaw,1,1,1,1,1,1,1,0,0,0);}
+  else if(g.sw)aTRS(R,o.x,WL-.82+Math.sin(now*4)*.03,o.y,mv?.55:.15,o.yaw,0,1,1,1);
+  else if(g.rd){RHORSE.x=o.x;RHORSE.y=o.y;RHORSE.dx=o.fx;RHORSE.dy=o.fy;RHORSE.mv=mv;RHORSE.run=o.run;RHORSE.c=g.rd-1;drawAnimal3(RHORSE,now,dt);aTRS(R,o.x,gp+.5,o.y,0,o.yaw,0,1,1,1);}
+  else aTRS(R,o.x,gp+(mv?Math.abs(Math.cos(ph))*.045:0),o.y,0,o.yaw,0,1,1,1);
+  const po={lean:act?(Math.sin(now*8)*.5+.5)*.22:0,hipX:0,headX:0};
+  legPose(po,mv&&!g.rd&&!g.bt,ph,o.run,.7);
+  if(g.rd||g.bt){po.lLx=po.lRx=-1.25;po.kL=po.kR=g.rd?1.1:1.9;}
+  if(g.sw&&!g.bt){const s=Math.sin(now*8);po.lLx=s*.45;po.lRx=-s*.45;po.kL=po.kR=.25;}
+  if(g.sl){po.lLx=po.lRx=0;po.kL=po.kR=.05;}
+  po.aLx=(mv?Math.sin(ph+Math.PI):0)*.6;po.aRx=(mv?Math.sin(ph):0)*.6;
+  if(act){const sw=Math.sin(now*8)*.5+.5;po.aRx=-1.2-sw*1.25;po.aLx=-.5-sw*.5;}
+  if(g.bt&&!act){const s=mv?Math.sin(now*4.5):0;po.aLx=-.9+s*.5;po.aRx=-.9-s*.5;}
+  po.eL=mv?-.35:-.15;po.eR=g.hk?-.55:(mv?-.35:-.15);
+  const L=o.look,ar=g.ar&&ITEMS[g.ar]?ITEMS[g.ar].col:null,co=g.co?(g.co==='fur_coat'?[.56,.45,.33]:g.co==='alpha_coat'?[.24,.23,.25]:g.co==='wool_coat'?[.88,.84,.74]:[.42,.27,.16]):null;
+  drawBody(OJ,{tun:L.tun,tro:L.tro,boot:[.25,.16,.1],belt:[.32,.21,.12],skin:L.skin,hair:L.hair,beard:L.beard,hood:L.hood,armor:ar,coat:co,iris:[.25,.17,.1]},po,true);
+  if(g.sh&&ITEMS[g.sh]&&!g.sl&&!g.bt){joint(OJ.hand,OJ.fL,0,-.12,0,0,0,0);dr('cyl',OJ.hand,-.07,0,.02,0,0,1.5708,.2,.035,.2,ITEMS[g.sh].col,true);}
+  if(g.hk&&!g.sl){joint(OJ.hand,OJ.fR,0,-.22,.02,-1.35,0,0);toolMesh(g.hk,OJ.hand,true);}
+  o.headY=gp+(g.rd?2.55:g.bt?1.45:g.sw?1.05:2.05);
+}
 /* ---------- pessoas: bandidos e aldeões ---------- */
 const HJ={root:af(),hip:af(),lL:af(),lR:af(),kL:af(),kR:af(),aL:af(),aR:af(),fL:af(),fR:af(),head:af(),tor:af(),hand:af()};
 const HLOOK={
@@ -10155,6 +10437,7 @@ function buildScene(now,dt){
   }
   // animais
   curPass='D';try{for(const a of ANIMALS){const dx=a.x-cxw,dz=a.y-czw;if(dx*dx+dz*dz<R2)drawAnimal3(a,now,dt);}if(RIDE.on&&RIDE.h)drawAnimal3(RIDE.h,now,dt);}finally{curPass='';}
+  curPass='D';try{for(const o of REMOTES){const dx=o.x-cxw,dz=o.y-czw;if(dx*dx+dz*dz<R2)drawOther(o,now,dt);}}finally{curPass='';}
   // vida aquática (debaixo da superfície; o tubarão mostra a barbatana)
   for(const f of AQUA){
     const dx=f.x-cxw,dz=f.y-czw;if(dx*dx+dz*dz>R2*.7)continue;
@@ -10474,6 +10757,14 @@ function overlay(now,dt){
     const gx=BM.tx,gz=BM.ty,pts=[[gx,gz],[gx+1,gz],[gx+1,gz+1],[gx,gz+1]].map(q=>proj(q[0],gy(q[0],q[1])+.05+(BM.lv?LVH:0),q[1]));
     if(pts.every(Boolean)){g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();g.fillStyle=BM.ok?'rgba(110,230,120,.16)':'rgba(240,80,70,.2)';g.fill();g.strokeStyle=BM.ok?'#7be07b':'#ff7a6e';g.lineWidth=2;g.stroke();}
   }
+  // outro jogador: nome e balão de mensagem
+  for(const o of REMOTES){
+    const p=proj(o.x,(o.headY||gy(o.x,o.y)+2)+.15,o.y);if(!p)continue;
+    g.font='600 11px Georgia,serif';g.textAlign='center';g.textBaseline='bottom';
+    const w=g.measureText(o.name).width+12;g.fillStyle='rgba(12,9,6,.6)';g.fillRect(p[0]-w/2,p[1]-16,w,15);g.fillStyle='#d8f0c8';g.fillText(o.name,p[0],p[1]-2);
+    if(o.say&&performance.now()-o.sayT<4500){const t=o.say,tw=g.measureText(t).width+16;g.fillStyle='rgba(255,246,220,.95)';g.fillRect(p[0]-tw/2,p[1]-40,tw,20);g.beginPath();g.moveTo(p[0]-5,p[1]-20);g.lineTo(p[0]+5,p[1]-20);g.lineTo(p[0],p[1]-14);g.fill();g.fillStyle='#3a2614';g.fillText(t,p[0],p[1]-24);}
+  }
+  if(MP.mySay&&performance.now()-MP.mySayT<4500){const p=proj(P.x,gy(P.x,P.y)+PHZ+2.2,P.y);if(p){g.font='600 11px Georgia,serif';g.textAlign='center';g.textBaseline='bottom';const t=MP.mySay,tw=g.measureText(t).width+16;g.fillStyle='rgba(255,246,220,.95)';g.fillRect(p[0]-tw/2,p[1]-24,tw,20);g.fillStyle='#3a2614';g.fillText(t,p[0],p[1]-8);}}
   // pontos de entrega de material
   for(const d of DPL){
     const p=proj(d.x,d.y+.25,d.z);if(!p)continue;
