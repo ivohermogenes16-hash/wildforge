@@ -1415,7 +1415,7 @@ const S={life:100,hunger:85,thirst:85,energy:100,rest:90,hygiene:90,temp:36.6,we
 const C={bleed:0,wound:0,intest:0,cold:0,infect:0};     // condições (segundos de sobrevivência restantes)
 const CLOCK={hour:8,day:1};
 const SLP=12;                                             // dormir acelera o tempo ×12
-const DAY_LEN=480;                                        // 1 dia do jogo = 480 s de sobrevivência
+const DAY_LEN=840;                                        // 1 dia do jogo = 480 s de sobrevivência
 let TS=1,sleeping=false,sleepStart=0,lastCause='',FEELS=20;
 const WX={rain:0,fog:0,tRain:0,tFog:0,next:70,type:'clear'};
 const ENV={tempOff:0,shelter:0,mud:false,dark:false,fireHeat:0,nearFire:false,tree:false};
@@ -5382,8 +5382,10 @@ refreshTitle=function(){
   $('tNew').addEventListener('click',e=>{e.stopImmediatePropagation();openWorlds();},true);
   refreshTitle();
   // ao recarregar num mundo escolhido, entra direto nele
-  if(BOOT&&BOOT.world){try{localStorage.removeItem('ts-boot');}catch(_){}
-    if(WORLD)setTimeout(()=>startGame(readSave()?'continue':'new'),60);}
+  if(BOOT&&BOOT.world){
+    // só esquece o pedido de entrada depois que o mundo abriu (se a página recarregar no meio, entra de novo)
+    if(WORLD){setTimeout(()=>startGame(readSave()?'continue':'new'),60);setTimeout(()=>{try{const b=JSON.parse(localStorage.getItem('ts-boot')||'null');if(b&&b.world===BOOT.world&&b.cave===BOOT.cave)localStorage.removeItem('ts-boot');}catch(_){}},4000);}
+    else{try{localStorage.removeItem('ts-boot');}catch(_){}}}
   $('title').querySelector('.tver').textContent=WORLD?'mundo: '+WORLD.name:'crie mundos e alterne entre eles em "Mundos"';
 })();
 
@@ -7465,12 +7467,227 @@ const _newGameE=newGame;
 newGame=function(){ACH.done={};ACH.c={};ACH.vv={};E4T.day=-1;const r=_newGameE.apply(this,arguments);
   if(LK0.n)setTimeout(()=>toast('Bem-vindo, '+LK0.n+'. Dificuldade: '+DIFFK.n+'.'),1800);return r;};
 /* =====================================================================
+   AJUSTES (V38): construir sem ferramenta, receitas mais baratas,
+   dia mais longo e clima por temporadas (chuva em períodos, neblina rara)
+   ===================================================================== */
+// construir não exige mais martelo, enxada nem pá
+for(const k in STRUCT)STRUCT[k].tool=null;
+// receitas e construções pedem menos material; corda rende 2 com 2 fibras
+(function cheaper(){
+  const seen=new Set(),red=n=>n<=1?1:n<=3?n-1:Math.ceil(n*.6);
+  for(const r of RECIPES){
+    if(r.id==='rope'){r.need={fiber:2};r.qty=2;r.t=1.5;r.d='Fibras torcidas. Rende 2 cordas.';continue;}
+    if(r.need&&!seen.has(r.need)){seen.add(r.need);for(const m in r.need)r.need[m]=red(r.need[m]);}
+  }
+  for(const k in STRUCT){const n=STRUCT[k].need;if(n&&!seen.has(n)){seen.add(n);for(const m in n)n[m]=red(n[m]);}}
+})();
+// clima: períodos secos longos e períodos de chuva; neblina só de vez em quando, de madrugada
+const absH=()=>(CLOCK.day-1)*24+CLOCK.hour;
+const hrsToTs=h=>h*DAY_LEN/24;
+pickWeather=function(){
+  const H=absH(),si=seasonIdx(),rf=SEASONS[si].rain;
+  if(WX.pu===undefined||H>=WX.pu){
+    const was=!!WX.pw;
+    WX.pw=!was&&Math.random()<.32*rf;                     // chance de começar uma temporada de chuva
+    WX.pu=H+(WX.pw?10+Math.random()*26:30+Math.random()*60);
+    if(was&&!WX.pw)WX.wet=CLOCK.day;                       // terra molhada: neblina mais provável na manhã seguinte
+  }
+  if(WX.pw){
+    if(WX.type==='rain'||WX.type==='storm'){WX.type='clear';WX.tRain=0;WX.tFog=0;WX.next=hrsToTs(1+Math.random()*4);}
+    else{const st=Math.random()<.2;WX.type=st?'storm':'rain';WX.tRain=st?1:.45+Math.random()*.5;WX.tFog=st?.15:0;WX.next=hrsToTs(2+Math.random()*6);}
+    return;
+  }
+  const h=CLOCK.hour;
+  if(WX.type!=='fog'&&h>3.5&&h<7.5&&WX.fd!==CLOCK.day&&Math.random()<(WX.wet&&CLOCK.day-WX.wet<=1?.3:.05)){
+    WX.fd=CLOCK.day;WX.type='fog';WX.tFog=.45+Math.random()*.35;WX.tRain=0;WX.next=hrsToTs(1.5+Math.random()*2);return;}
+  WX.type='clear';WX.tRain=0;WX.tFog=0;WX.next=hrsToTs(2+Math.random()*3);
+};
+const _buildSaveT=buildSave;
+buildSave=function(){const o=_buildSaveT();if(o.up)o.up.wx={pw:WX.pw?1:0,pu:WX.pu,fd:WX.fd,wet:WX.wet};return o;};
+const _loadSaveT=loadSave;
+loadSave=function(sv){_loadSaveT(sv);const w=(sv.up||{}).wx;if(w){WX.pw=!!w.pw;WX.pu=w.pu;WX.fd=w.fd;WX.wet=w.wet;}else{WX.pw=false;WX.pu=undefined;WX.next=Math.min(WX.next,5);}};
+const _newGameT=newGame;
+newGame=function(){const r=_newGameT.apply(this,arguments);WX.pw=false;WX.pu=absH()+20+Math.random()*30;WX.next=hrsToTs(3);return r;};
+/* =====================================================================
+   MOCHILA NOVA: "Alforje do viajante"
+   figura do personagem com encaixes de equipamento · bolsos de couro costurado
+   anel de durabilidade · etiqueta de pergaminho · alça de capacidade
+   ===================================================================== */
+(function invUI(){
+  const css=document.createElement('style');
+  css.textContent=`
+#inv{background:radial-gradient(ellipse at 50% 45%,rgba(30,18,8,.55),rgba(4,2,1,.9) 75%)!important;perspective:1100px}
+#inv .invbox{position:relative;width:min(900px,100%)!important;border:0!important;box-shadow:0 18px 50px rgba(0,0,0,.75),0 0 0 1px #1a0e06,inset 0 0 0 1px rgba(255,210,150,.08)!important;border-radius:14px;overflow:hidden;
+  background:radial-gradient(ellipse at 30% 0%,rgba(255,200,130,.10),transparent 55%),repeating-linear-gradient(37deg,rgba(0,0,0,.05) 0 2px,rgba(255,255,255,.012) 2px 5px),linear-gradient(160deg,#4a2c16,#2e1a0c 55%,#24140a)!important;
+  transform-origin:50% 100%;animation:alfOpen .55s cubic-bezier(.2,1.25,.35,1) both}
+#inv .invbox::before{content:"";position:absolute;inset:5px;border:1.5px dashed rgba(232,190,110,.42);border-radius:10px;pointer-events:none}
+@keyframes alfOpen{from{opacity:0;transform:rotateX(62deg) translateY(30px) scale(.92)}to{opacity:1;transform:none}}
+#inv header{position:relative;padding:7px 14px 5px!important;border:0!important;gap:10px!important;background:linear-gradient(rgba(0,0,0,.25),transparent)}
+#inv header b{flex:none!important;font:700 15px 'Cinzel',Georgia,serif!important;letter-spacing:.3em!important;color:#f3d58e!important;text-shadow:0 1px 0 #1a0c04,0 0 14px rgba(240,180,76,.35)}
+#inv header #invcap{display:none}
+#inv header span{font:italic 11px 'IM Fell English',Georgia,serif!important;color:#c9ad7a;opacity:1!important}
+#inv .strap{flex:1;display:flex;align-items:center;gap:7px;min-width:0}
+#inv .strap .sb{flex:1;max-width:240px;height:9px;border-radius:5px;background:#1a0e06;box-shadow:inset 0 1px 2px #000,0 1px 0 rgba(255,220,160,.1);display:flex;gap:2px;padding:2px;box-sizing:border-box}
+#inv .strap .sb i{flex:1;border-radius:2px;background:rgba(255,220,160,.06)}
+#inv .strap .sb i.f{background:linear-gradient(#f0c46a,#b07a2a);box-shadow:0 0 4px rgba(240,180,76,.45)}
+#inv .strap .sb i.f.full{background:linear-gradient(#ff8a6a,#b03a2a)}
+#inv .strap em{font:600 11px Georgia,serif;font-style:normal;color:#ead6a6;white-space:nowrap}
+#inv #invx{width:30px!important;height:30px!important;min-width:0!important;padding:0!important;border-radius:50%!important;font-size:0!important;background:radial-gradient(circle at 40% 35%,#8a3a1c,#4a1a0a)!important;border:1.5px solid #d39a48!important;box-shadow:0 2px 0 #160a04!important;position:relative}
+#inv #invx::before,#inv #invx::after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;background:#ffe2b0;border-radius:1px}
+#inv #invx::before{transform:translate(-50%,-50%) rotate(45deg)}#inv #invx::after{transform:translate(-50%,-50%) rotate(-45deg)}
+#inv #tabs{border:0!important;gap:6px!important;padding:2px 14px 6px!important}
+#inv .tab{height:30px!important;padding:0 10px 0 6px!important;display:flex!important;align-items:center;gap:5px;border-radius:15px!important;border:1px solid rgba(232,190,110,.28)!important;background:rgba(0,0,0,.22)!important;color:#e6d2a6!important;font:600 11px Georgia,serif!important;letter-spacing:.04em;transition:all .2s}
+#inv .tab img{width:18px;height:18px;image-rendering:pixelated;filter:drop-shadow(0 1px 0 #000)}
+#inv .tab.on{background:radial-gradient(circle at 30% 30%,#a8541e,#6a2c0c)!important;border-color:#f0b44c!important;color:#fff1cf!important;box-shadow:0 0 12px rgba(240,160,60,.35),inset 0 1px 0 rgba(255,220,160,.3)}
+#inv .invbody{grid-template-columns:auto auto minmax(0,1fr)!important;gap:12px!important;padding:2px 14px 12px!important}
+/* figura e encaixes */
+#doll{position:relative;width:132px;display:flex;flex-direction:column;align-items:center;gap:6px}
+#doll .frame{position:relative;width:132px;height:min(170px,calc(100vh - 150px));border-radius:66px 66px 10px 10px;background:radial-gradient(ellipse at 50% 85%,rgba(240,170,70,.28),transparent 60%),linear-gradient(#1c1008,#120a04);box-shadow:inset 0 0 0 1px rgba(232,190,110,.35),inset 0 0 20px rgba(0,0,0,.8),0 2px 0 rgba(255,220,160,.06)}
+#doll svg{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);height:82%;width:auto;filter:drop-shadow(0 4px 6px rgba(0,0,0,.6))}
+#doll .so{position:absolute;width:34px;height:34px;border-radius:50%;padding:0;cursor:pointer;background:radial-gradient(circle at 40% 35%,#3a2412,#1a0e06);border:2px solid #8a6230;box-shadow:0 2px 4px rgba(0,0,0,.6),inset 0 0 6px rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center}
+#doll .so img{width:24px;height:24px;image-rendering:pixelated}
+#doll .so.has{border-color:#e6b25a;box-shadow:0 0 10px rgba(240,180,76,.4),inset 0 0 6px rgba(0,0,0,.6)}
+#doll .so.sel{border-color:#fff1cf}
+#doll .so i{position:absolute;bottom:-11px;left:50%;transform:translateX(-50%);font:600 7.5px Georgia,serif;font-style:normal;letter-spacing:.06em;color:#c9ad7a;white-space:nowrap;text-transform:uppercase;text-shadow:0 1px 0 #000}
+#doll .so[data-k="hand"]{right:-6px;top:52%}#doll .so[data-k="off"]{left:-6px;top:52%}
+#doll .so[data-k="armor"]{left:-6px;top:14%}#doll .so[data-k="body"]{right:-6px;top:14%}#doll .so[data-k="back"]{left:50%;top:-6px;transform:translateX(-50%)}
+#doll .dst{display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;width:100%}
+#doll .dst div{display:flex;justify-content:space-between;font:11px Georgia,serif;color:#c9ad7a;border-bottom:1px dotted rgba(232,190,110,.25)}
+#doll .dst b{color:#f3e2b8;font-weight:600}
+/* bolsos */
+#inv #slots{--slot:clamp(40px,12.5vh,56px)!important;gap:7px!important;padding:4px 6px 6px 2px!important;grid-template-columns:repeat(5,var(--slot))!important;max-height:calc(100vh - 110px)!important}
+#inv .sec{font:700 9px Georgia,serif!important;letter-spacing:.28em!important;color:#d8b46a!important;opacity:1!important;display:flex;align-items:center;gap:6px;margin:4px 0 0!important}
+#inv .sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(232,190,110,.45),transparent)}
+#inv .slot{border-radius:10px!important;border:0!important;padding:7px!important;background:radial-gradient(circle at 50% 38%,rgba(255,220,160,.07),transparent 65%),linear-gradient(#1e1108,#2a170a)!important;
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.85),inset 0 -1px 0 rgba(255,220,160,.08),0 1px 0 rgba(255,220,160,.07)!important;animation:pocketIn .32s cubic-bezier(.2,1.4,.4,1) both;animation-delay:calc(var(--i,0)*18ms);transition:transform .15s}
+#inv .slot::before{content:"";position:absolute;inset:2px;border-radius:8px;border:1px dashed rgba(232,190,110,.22);pointer-events:none}
+#inv .slot img{filter:drop-shadow(0 2px 1px rgba(0,0,0,.7));transition:transform .2s}
+#inv .slot span{right:-3px!important;bottom:-3px!important;min-width:18px;height:16px;padding:0 4px;border-radius:8px;font:700 10px Georgia,serif!important;line-height:16px;text-align:center;color:#2a1405!important;text-shadow:none!important;background:linear-gradient(#ffe2a0,#c9963e);box-shadow:0 1px 2px rgba(0,0,0,.6)}
+#inv .slot span:empty{display:none}
+#inv .slot.dur::after{content:"";position:absolute;inset:-1px;border-radius:11px;padding:2.5px;background:conic-gradient(var(--dc) calc(var(--p)*1%),rgba(0,0,0,.45) 0);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+#inv .slot.dur span{display:none}
+#inv .slot.sel{transform:translateY(-3px) scale(1.06);background:radial-gradient(circle at 50% 38%,rgba(255,210,120,.28),transparent 70%),linear-gradient(#3a2210,#2a170a)!important;box-shadow:0 0 0 2px #f0c46a,0 6px 14px rgba(0,0,0,.7),0 0 18px rgba(240,180,76,.45)!important;z-index:2}
+#inv .slot.sel img{transform:scale(1.08) rotate(-4deg)}
+#inv .slot.sel::before{border-color:transparent;background:linear-gradient(110deg,transparent 35%,rgba(255,240,200,.35) 50%,transparent 65%);background-size:250% 100%;animation:glint 1.6s ease-in-out infinite}
+@keyframes glint{from{background-position:120% 0}to{background-position:-60% 0}}
+@keyframes pocketIn{from{opacity:0;transform:translateY(8px) scale(.85)}to{opacity:1;transform:none}}
+#inv .slot.eq{box-shadow:inset 0 2px 5px rgba(0,0,0,.85),0 0 0 1.5px #6aa84a!important}
+#inv .slot.eq.sel{box-shadow:0 0 0 2px #9be08b,0 6px 14px rgba(0,0,0,.7),0 0 18px rgba(120,220,100,.45)!important}
+#inv .slot.c-food{background:radial-gradient(circle at 50% 38%,rgba(230,110,80,.14),transparent 65%),linear-gradient(#1e1108,#2a170a)!important}
+#inv .slot.c-water{background:radial-gradient(circle at 50% 38%,rgba(90,170,230,.16),transparent 65%),linear-gradient(#1e1108,#2a170a)!important}
+#inv .slot.c-med{background:radial-gradient(circle at 50% 38%,rgba(120,220,120,.15),transparent 65%),linear-gradient(#1e1108,#2a170a)!important}
+#inv .slot.c-tool{background:radial-gradient(circle at 50% 38%,rgba(200,200,220,.12),transparent 65%),linear-gradient(#1e1108,#2a170a)!important}
+#inv .slot.c-lore{background:radial-gradient(circle at 50% 38%,rgba(200,150,255,.16),transparent 65%),linear-gradient(#1e1108,#2a170a)!important}
+#inv .pocket{width:var(--slot);height:var(--slot);border-radius:10px;box-shadow:inset 0 2px 4px rgba(0,0,0,.6);border:1px dashed rgba(232,190,110,.14);box-sizing:border-box;animation:pocketIn .32s both;animation-delay:calc(var(--i,0)*18ms)}
+#inv .empty{font:italic 12px 'IM Fell English',Georgia,serif!important;color:#c9ad7a}
+/* etiqueta de pergaminho */
+#inv #detail{position:relative;margin-top:14px;padding:14px 14px 10px!important;gap:6px!important;border-radius:6px 6px 10px 10px;background:radial-gradient(ellipse at 20% 0%,rgba(255,255,255,.35),transparent 50%),linear-gradient(#f1e2bd,#dfc68f)!important;color:#3a2614!important;
+  box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(120,70,20,.35),inset 0 0 26px rgba(150,95,30,.25);max-height:calc(100vh - 128px)!important;transform:rotate(.6deg);animation:tagIn .45s .1s cubic-bezier(.2,1.3,.4,1) both}
+@keyframes tagIn{from{opacity:0;transform:translateY(-16px) rotate(-4deg)}to{opacity:1;transform:rotate(.6deg)}}
+#inv #detail::before{content:"";position:absolute;top:-16px;left:24px;width:2px;height:20px;background:#8a6a3a;box-shadow:0 0 0 1px rgba(0,0,0,.2)}
+#inv #detail::after{content:"";position:absolute;top:5px;left:19px;width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#6a4a2a,#2a1a0a);box-shadow:inset 0 1px 2px rgba(0,0,0,.6)}
+#inv .dhead{display:flex;align-items:center;gap:10px;padding-left:22px}
+#inv .medal{flex:none;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 40% 35%,#5a3418,#2a160a);box-shadow:0 0 0 2px #b8893e,0 0 0 4px rgba(90,50,20,.35),0 3px 8px rgba(0,0,0,.5)}
+#inv .medal img{width:36px;height:36px;image-rendering:pixelated;filter:drop-shadow(0 2px 1px rgba(0,0,0,.6))}
+#inv #detail h3{font:700 16px 'Cinzel',Georgia,serif!important;color:#5a1e0e!important;line-height:1.15}
+#inv #dqty{font:italic 12px 'IM Fell English',Georgia,serif!important;color:#6a4a2a;opacity:1!important}
+#inv .dbar{height:6px;border-radius:3px;background:rgba(90,50,20,.25);overflow:hidden;margin-top:3px}
+#inv .dbar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#c9963e,#f0c46a)}
+#inv #detail p{font:italic 13px 'IM Fell English',Georgia,serif!important;color:#3a2614!important;opacity:1!important;line-height:1.3}
+#inv .fx{background:rgba(90,140,60,.18)!important;color:#2e5a1e!important;border:1px solid rgba(60,110,40,.35)!important;border-radius:10px!important;font:600 11px Georgia,serif!important;padding:1px 7px!important}
+#inv .fx.neg{background:rgba(160,50,30,.14)!important;color:#8a2a12!important;border-color:rgba(140,40,20,.35)!important}
+#inv #dneed span{border-radius:10px!important;font:600 11px Georgia,serif!important}
+#inv #hbrow{color:#6a4a2a;font:italic 12px 'IM Fell English',Georgia,serif;display:flex;align-items:center;gap:6px}
+#inv #hbrow button{width:30px!important;height:30px!important;min-width:0!important;padding:0!important;border-radius:50%!important;background:radial-gradient(circle at 40% 35%,#6a4426,#3a2410)!important;color:#ffe2b0!important;border:1.5px solid #b8893e!important;font:700 12px Georgia,serif!important;box-shadow:0 2px 0 rgba(60,30,10,.6)!important}
+#inv #hbrow button.on{background:radial-gradient(circle at 40% 35%,#c9762a,#7a3a10)!important;box-shadow:0 0 10px rgba(240,160,60,.6)!important}
+#inv .acts{gap:6px!important;flex-wrap:wrap}
+#inv .acts .btn{height:34px!important;padding:0 14px!important;border-radius:17px!important;font:700 11.5px 'Cinzel',Georgia,serif!important;letter-spacing:.12em;color:#fff1cf!important;border:1.5px solid #3a1a08!important;background:radial-gradient(ellipse at 50% 20%,#b0461e,#6a1e0a)!important;box-shadow:0 3px 0 #2a0e04,inset 0 1px 0 rgba(255,200,150,.35)!important}
+#inv .acts #drop{background:radial-gradient(ellipse at 50% 20%,#6a5a48,#3a3028)!important}
+#inv .acts #equip{background:radial-gradient(ellipse at 50% 20%,#4a7a2a,#24400e)!important}
+#inv .acts .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #2a0e04!important}
+@media (max-height:360px){#doll{width:112px}#doll .frame{width:112px}#inv .medal{width:44px;height:44px}#inv .medal img{width:30px;height:30px}}
+@media (max-width:640px){#doll{display:none}#inv .invbody{grid-template-columns:auto minmax(0,1fr)!important}}
+`;
+  document.head.appendChild(css);
+  const box=document.querySelector('#inv .invbox'),hd=box.querySelector('header');
+  hd.querySelector('b').textContent='Alforje';
+  const strap=document.createElement('div');strap.className='strap';strap.innerHTML='<div class="sb"></div><em></em>';
+  hd.insertBefore(strap,$('invcap'));
+  // ícones nas abas
+  const TI={all:'backpack',mat:'wood',food:'berry',water:'canteen_clean',med:'herb',tool:'axe',craft:null};
+  document.querySelectorAll('#tabs .tab').forEach(b=>{const id=TI[b.dataset.t];const src=id&&ITEMS[id]?ITEMS[id].icon:(b.dataset.t==='craft'&&$('bookimg')?$('bookimg').src:null);if(src){const im=document.createElement('img');im.src=src;im.alt='';b.prepend(im);}});
+  // figura com os encaixes
+  const doll=document.createElement('div');doll.id='doll';
+  doll.innerHTML='<div class="frame"><svg viewBox="0 0 60 100" id="dollsvg"></svg>'+
+    [['back','Costas'],['armor','Armadura'],['body','Casaco'],['off','Escudo'],['hand','Mão']].map(([k,n])=>'<button class="so" data-k="'+k+'"><i>'+n+'</i></button>').join('')+
+    '</div><div class="dst"></div>';
+  const body=box.querySelector('.invbody');body.insertBefore(doll,body.firstChild);
+  doll.addEventListener('click',e=>{const b=e.target.closest('.so');if(!b)return;const s=EQ[b.dataset.k];if(s&&inv.indexOf(s)>=0){tab='all';selStack=s;renderInv();}else toast('Nada equipado em '+b.querySelector('i').textContent.toLowerCase()+'.');});
+  // cabeça da etiqueta: medalha com o ícone
+  const det=$('detail'),h3=$('dname'),q=$('dqty');
+  const head=document.createElement('div');head.className='dhead';head.innerHTML='<div class="medal"><img alt="" id="dmedal"></div><div class="dht" style="min-width:0;flex:1"></div>';
+  det.insertBefore(head,h3);head.querySelector('.dht').append(h3,q);
+  const bar=document.createElement('div');bar.className='dbar';bar.innerHTML='<i></i>';head.querySelector('.dht').appendChild(bar);
+})();
+const hexI=c=>'rgb('+c.map(v=>Math.round(Math.min(1,v)*255)).join(',')+')';
+function dollPaint(){
+  const L=LK,arm=EQ.armor&&inv.indexOf(EQ.armor)>=0?ITEMS[EQ.armor.id].col:null,coat=EQ.body&&inv.indexOf(EQ.body)>=0;
+  const sk=hexI(L.skin),hr=hexI(L.hair),tu=hexI(arm||L.tun),tr=hexI(L.tro),cc=coat?(EQ.body.id==='fur_coat'?'#8f7254':EQ.body.id==='alpha_coat'?'#3e3b40':EQ.body.id==='wool_coat'?'#e8e0cc':'#6b4428'):null;
+  const sh=EQ.off&&inv.indexOf(EQ.off)>=0?hexI(ITEMS[EQ.off.id].col):null;
+  $('dollsvg').innerHTML='<ellipse cx="30" cy="97" rx="18" ry="3" fill="rgba(0,0,0,.45)"/>'+
+    '<rect x="21" y="66" width="7" height="24" fill="'+tr+'"/><rect x="32" y="66" width="7" height="24" fill="'+tr+'"/>'+
+    '<rect x="20" y="88" width="9" height="7" rx="2" fill="#3a2614"/><rect x="31" y="88" width="9" height="7" rx="2" fill="#3a2614"/>'+
+    '<path d="M17 36 Q30 30 43 36 L45 70 L15 70 Z" fill="'+tu+'"/>'+(arm?'<path d="M19 40 L41 40 M18 47 L42 47 M18 54 L42 54" stroke="rgba(0,0,0,.25)" stroke-width="1"/>':'')+
+    (cc?'<path d="M15 36 Q30 30 45 36 L47 72 L38 72 L36 44 L24 44 L22 72 L13 72 Z" fill="'+cc+'"/>':'')+
+    '<rect x="15" y="60" width="30" height="4" fill="#4a3018"/>'+
+    '<rect x="10" y="38" width="7" height="24" rx="3" fill="'+(cc||tu)+'"/><rect x="43" y="38" width="7" height="24" rx="3" fill="'+(cc||tu)+'"/>'+
+    '<circle cx="13.5" cy="63" r="3.2" fill="'+sk+'"/><circle cx="46.5" cy="63" r="3.2" fill="'+sk+'"/>'+
+    (sh?'<ellipse cx="9" cy="58" rx="7" ry="9" fill="'+sh+'" stroke="#2a1a0a" stroke-width="1.2"/><circle cx="9" cy="58" r="1.8" fill="#d8b46a"/>':'')+
+    '<rect x="27" y="29" width="6" height="6" fill="'+sk+'"/>'+
+    (L.hood?'<path d="M17 24 Q17 6 30 6 Q43 6 43 24 L43 34 Q30 38 17 34 Z" fill="#52402a"/>':'')+
+    '<ellipse cx="30" cy="20" rx="10" ry="11" fill="'+sk+'"/>'+
+    (L.hood?'':'<path d="M20 19 Q20 8 30 8 Q40 8 40 19 Q36 13 30 13 Q24 13 20 19 Z" fill="'+hr+'"/>')+
+    '<circle cx="26.5" cy="20" r="1.3" fill="#2a1a10"/><circle cx="33.5" cy="20" r="1.3" fill="#2a1a10"/>'+
+    (L.beard?'<path d="M21 22 Q22 33 30 34 Q38 33 39 22 Q36 28 30 28 Q24 28 21 22 Z" fill="'+hr+'"/>':'<path d="M27 26 Q30 28 33 26" stroke="#7a3a2a" stroke-width="1" fill="none"/>');
+  document.querySelectorAll('#doll .so').forEach(b=>{const s=EQ[b.dataset.k],ok=s&&inv.indexOf(s)>=0;b.classList.toggle('has',!!ok);b.classList.toggle('sel',ok&&s===selStack);
+    let im=b.querySelector('img');if(ok){if(!im){im=document.createElement('img');im.alt='';b.prepend(im);}im.src=ITEMS[s.id].icon;}else if(im)im.remove();});
+  const a=EQ.armor&&inv.indexOf(EQ.armor)>=0?ITEMS[EQ.armor.id].def:0,bl=EQ.off&&inv.indexOf(EQ.off)>=0?ITEMS[EQ.off.id].block:0;
+  let warm=0;try{warm=Math.round(gearWarmth());}catch(_){}
+  document.querySelector('#doll .dst').innerHTML='<div>Defesa<b>'+Math.round(a*100)+'%</b></div><div>Bloqueio<b>'+Math.round(bl*100)+'%</b></div><div>Calor<b>+'+warm+'°</b></div><div>Dia<b>'+CLOCK.day+'</b></div>';
+}
+const _renderInvI=renderInv;
+renderInv=function(){
+  _renderInvI();
+  try{
+    const sl=$('slots');let i=0;
+    sl.querySelectorAll('.slot').forEach(b=>{const s=inv[+b.dataset.i];if(!s)return;const d=ITEMS[s.id];b.style.setProperty('--i',i++);b.classList.add('c-'+d.cat);
+      if(d.dur&&!d.doses){const p=Math.max(0,Math.min(100,100*s.dur/d.dur));b.classList.add('dur');b.style.setProperty('--p',p.toFixed(0));b.style.setProperty('--dc',p<20?'#e0503a':p<50?'#e8b04a':'#7fd06a');}});
+    if(tab==='all'&&sl.className!=='list'){for(let k=inv.length;k<MAXST;k++){const e=document.createElement('div');e.className='pocket';e.style.setProperty('--i',i++);sl.appendChild(e);}}
+    const sb=document.querySelector('#inv .strap .sb');sb.innerHTML='';for(let k=0;k<MAXST;k++){const it=document.createElement('i');if(k<inv.length)it.className='f'+(inv.length>=MAXST?' full':'');sb.appendChild(it);}
+    document.querySelector('#inv .strap em').textContent=inv.length+'/'+MAXST;
+    const s=tab==='craft'?null:selStack,def=s?ITEMS[s.id]:null;
+    const r=tab==='craft'?RECIPES.find(x=>x.id===selRec):null;
+    const icon=def?def.icon:r&&r.out&&ITEMS[r.out]?ITEMS[r.out].icon:'';
+    const m=$('dmedal');m.src=icon||'';m.style.visibility=icon?'visible':'hidden';
+    const bar=document.querySelector('#inv .dbar');
+    if(def&&def.dur&&!def.doses){bar.hidden=false;bar.firstChild.style.width=(100*s.dur/def.dur).toFixed(0)+'%';}else bar.hidden=true;
+    dollPaint();
+  }catch(e){}
+};
+/* =====================================================================
    TELA INICIAL NOVA (entrega 3)
    cena de cinema girando em volta da vila ao entardecer · menu em texto
    novidades de cada versão · criar mundo com prévia do mapa
    ===================================================================== */
-const GAMEVER=37;
+const GAMEVER=38;
 const NEWS=[
+ {v:38,t:'Alforje novo',d:'Ajustes',s:'Mochila nova, clima e menos coleta',it:[
+  'Mochila redesenhada: alforje de couro com o seu personagem e os encaixes de equipamento',
+  'Construir não precisa mais de martelo nem de outra ferramenta',
+  'Receitas e construções pedem bem menos material; a corda agora sai 2 por 2 fibras',
+  'O dia ficou mais longo (cerca de 14 minutos)',
+  'Clima novo: temporadas de chuva e longos períodos secos; neblina é rara e só de madrugada',
+  'Debaixo do telhado, o telhado da casa some inteiro e o personagem aparece limpo']},
  {v:37,t:'Armas, fazenda e conquistas',d:'Entrega 4',s:'Armadura, ouro, galinhas, conquistas e mais',it:[
   'Crie seu personagem ao criar o mundo: pele, cabelo, roupa, barba e capuz',
   'Escolha a dificuldade do mundo: fácil, normal ou difícil',
@@ -7939,7 +8156,7 @@ float shadowAt(vec4 s,float ndl){
 void main(){
   // copas, paredes e pedras entre a câmera e o personagem ficam vazadas num círculo suave
   if(uPR>0.){float dd=length(gl_FragCoord.xy-uPS);
-    if(dd<uPR&&gl_FragCoord.z<uPZ&&vW.y>uPY){float k=smoothstep(uPR*.3,uPR,dd);k=k*k*(3.-2.*k);if(k<=bay4(gl_FragCoord.xy))discard;}}
+    if(dd<uPR&&gl_FragCoord.z<uPZ&&vW.y>uPY){float k=smoothstep(uPR*.78,uPR,dd);k=k*k*(3.-2.*k);if(k<=bay4(gl_FragCoord.xy))discard;}}
   float a=vA;
 #ifdef FADE
   if(a<.99&&a<=bayer(gl_FragCoord.xy))discard;
@@ -9753,7 +9970,14 @@ let UNDERF=0;          // 0 livre · 1 debaixo de telhado/piso no térreo · 2 d
 function underCalc(){
   const pi=Math.floor(P.y)*N+Math.floor(P.x),ok=s=>s&&s.st==='done';
   UNDERF=P.lv?(ok(STRL[5][pi])?2:0):((ok(STRL[2][pi])||ok(STRL[3][pi]))?1:0);
+  // telhado (ou piso de cima) sobre o personagem: some o conjunto inteiro dessa construção
+  HIDE.clear();if(!UNDERF)return;
+  const L=UNDERF===2?5:STRL[2][pi]?2:3,q=[pi];HIDE.add(pi);
+  while(q.length&&HIDE.size<400){const i=q.pop(),x=i%N,y=(i/N)|0;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const X=x+dx,Y=y+dy;if(X<0||Y<0||X>=N||Y>=N)continue;const j=Y*N+X;if(HIDE.has(j))continue;
+      if(STRL[2][j]||STRL[3][j]||(UNDERF===2&&STRL[5][j])){HIDE.add(j);q.push(j);}}}
 }
+const HIDE=new Set();
 function tileTop(tx,ty){let m=-99;for(const [a,b] of [[.04,.04],[.96,.04],[.04,.96],[.96,.96],[.5,.5],[.5,.04],[.04,.5],[.96,.5],[.5,.96]])m=Math.max(m,gy(tx+a,ty+b));return m+.01;}
 // lado do piso que fica para fora da parede: corta na linha da parede
 function floorCut(s){
@@ -9777,10 +10001,11 @@ function addStruct(s,dist2){
   let al=1;
   if(d.spr.flat&&L!==2)al=[.22,.5,.75,.95,1][stg];
   const dd=Math.hypot(s.x-P.x,s.y-P.y);
-  if(lv&&!P.lv&&UNDERF===1&&dd<6.5)return;   // dentro do térreo: o andar de cima some para ver a casa por dentro
+  if(lv&&!P.lv&&UNDERF===1&&HIDE.has(s.i))return;   // dentro do térreo: o andar de cima some para ver a casa por dentro
+  if(L===2&&HIDE.has(s.i)&&(UNDERF===1?true:lv===1))return;   // telhado da casa onde você está: some inteiro
   if(L===2){
     if(lv===0&&P.lv)al=dd<4?.25:1;
-    else al=(UNDERF&&dd<5&&lv===(UNDERF-1))?.2:dd<2.2&&!P.lv?.5:1;
+    else al=1;
     if(stg<4)al=Math.min(al,.7);
   }
   let gyv=Math.min(gy(s.x-.45,s.y-.45),gy(s.x+.45,s.y+.45),gy(s.x,s.y))+lv*(LVH+.08);
