@@ -1,0 +1,51 @@
+# Monta o aplicativo Android (APK) com o jogo dentro, toda vez que o jogo for atualizado.
+# O APK fica para baixar em: https://github.com/ivohermogenes16-hash/wildforge/releases/latest
+name: Gerar APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
+      - name: Copiar o jogo para dentro do app
+        run: |
+          mkdir -p android/app/src/main/assets
+          cp index.html android/app/src/main/assets/index.html
+
+      - name: Montar o APK
+        working-directory: android
+        env:
+          VCODE: ${{ github.run_number }}
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Preparar o arquivo
+        run: cp android/app/build/outputs/apk/release/app-release.apk wildforge.apk
+
+      - name: Publicar para download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Wildforge versão ${{ github.run_number }}
+          body: Baixe o arquivo **wildforge.apk** abaixo e instale no Android. Para atualizar, instale por cima da versão antiga (seus mundos continuam).
+          files: wildforge.apk
+          make_latest: true
