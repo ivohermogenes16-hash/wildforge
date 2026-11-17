@@ -7922,12 +7922,204 @@ window.addEventListener('pagehide',()=>{if(MP.on)mpStop();});
 // ao abrir o mundo do amigo pelo código: reconecta
 setTimeout(()=>{try{mpGuestResume();}catch(_){}},400);
 /* =====================================================================
+   JOGAR COM AMIGO (etapas 2 e 3): mundo compartilhado
+   o que um coleta, corta, constrói, planta ou guarda no baú aparece para o outro
+   animais, lobos e bandidos são os do dono do mundo e atacam os dois
+   ===================================================================== */
+const MPD=new Set();let MPDT=0,MPN=0,MPAT=0;
+const mpOn=()=>MP.on&&MP.conn&&MP.conn.open;
+const isGuest=()=>MP.on&&MP.role==='guest';
+const isHost=()=>MP.on&&MP.role==='host';
+function mpDirty(x,y,r){if(!MP.on)return;x=Math.floor(x);y=Math.floor(y);r=r||0;for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<N&&Y<N)MPD.add(Y*N+X);}}
+
+/* ---------- uma casa do mapa: objeto, decoração e construções ---------- */
+function strRec(s){return {t:s.type,r:s.rot|0,lv:s.lv|0,st:s.st,del:{...s.del},o:s.open?1:0,sto:s.store?s.store.map(z=>({...z})):null,ru:s.ruin||0,cr:s.crop?{...s.crop}:null,vl:s.vil?1:0,fu:s.fuel||0,ib:s.ib?1:0,sp:s.sprung||0,eg:s.eggs||0,vf:s.vfarm?1:0};}
+function tileRec(i){const o=objs[i],d=decor[i],ss=[];for(let L=0;L<6;L++){const s=STRL[L][i];if(s)ss.push(strRec(s));}return [i,o?recO(o):0,d?prim(d):0,ss];}
+function regionReady(i){if(!BIGW)return true;const x=i%N,y=(i/N)|0;return !!GENR[Math.floor(y/RS)*NRG+Math.floor(x/RS)];}
+function applyTile(t){
+  const [i,ro,rd,ss]=t,x=i%N,y=(i/N)|0;
+  // objeto e decoração
+  if(!regionReady(i)){PEND_O=PEND_O||{};PEND_D=PEND_D||{};PEND_O[i]=ro||0;PEND_D[i]=rd||0;}
+  else{
+    const old=objs[i];if(old&&old.type==='fire'){const k=FIRES.indexOf(old);if(k>=0)FIRES.splice(k,1);}
+    if(old&&old.key==='cave'&&ro&&ro.key==='cave'){old.amt=ro.amt;}
+    else{let no=null;if(ro){try{no=mkObj(ro);}catch(_){no=null;}}objs[i]=no;if(no&&no.type==='fire')FIRES.push(no);}
+    if(rd){const cur=decor[i];const nd={...rd};const l=DECOR[nd.key];nd.spr=cur&&cur.key===nd.key&&cur.spr?cur.spr:(l?l[0]:null);decor[i]=nd.spr?nd:null;}else decor[i]=null;
+  }
+  // construções: troca tudo o que há nesta casa
+  let wasChest=null;
+  for(let L=0;L<6;L++){const s=STRL[L][i];if(!s)continue;if(chestS===s)wasChest=L;STRL[L][i]=null;const k=STRS.indexOf(s);if(k>=0)STRS.splice(k,1);if(RESP.bed===s)RESP={x:SPAWN.x,y:SPAWN.y};}
+  for(const r of ss){
+    if(!STRUCT[r.t])continue;
+    const s=placeStruct(r.t,x,y,r.r,r.lv);s.st=r.st;s.del=r.del||{};s.open=!!r.o;if(r.sto)s.store=r.sto;
+    if(s.st==='done')s.dps=[];if(r.ru)s.ruin=r.ru;if(r.cr)s.crop=r.cr;if(r.vl)s.vil=1;if(r.fu)s.fuel=r.fu;if(r.ib)s.ib=1;if(r.sp)s.sprung=r.sp;if(r.eg)s.eggs=r.eg;if(r.vf)s.vfarm=1;
+    if(wasChest===STRUCT[r.t].L+(r.lv?3:0)&&s.store){chestS=s;try{renderChest();}catch(_){}}
+  }
+  if(wasChest!==null&&chestS&&STRS.indexOf(chestS)<0){try{closeChest();}catch(_){}}
+  STRV++;refreshSolid(x,y);
+}
+function mpFlushTiles(dt){
+  MPDT-=dt;if(MPDT>0||!MPD.size)return;MPDT=.12;
+  if(!mpOn()){MPD.clear();return;}
+  const L=[];for(const i of MPD){L.push(tileRec(i));if(L.length>=120)break;}
+  for(const t of L)MPD.delete(t[0]);
+  mpSend({t:'tile',L});
+}
+
+/* ---------- marca o que mudou depois de cada ação ---------- */
+const _finishActM=finishAct;
+finishAct=function(){
+  const tg=G.tgt,a=G.act;
+  if(isGuest()&&a&&(a.id==='attack'||a.id==='shoot')&&tg&&tg.ref&&tg.ref.nid){
+    const an=tg.ref,hp0=an.hp,r=_finishActM();
+    if(ANIMALS.indexOf(an)>=0&&an.hp<hp0)mpSend({t:'hit',nid:an.nid,dmg:hp0-an.hp});
+    return r;
+  }
+  const r=_finishActM();
+  if(MP.on){mpDirty(P.x,P.y,3);if(tg&&tg.px!==undefined)mpDirty(tg.px,tg.py,1);}
+  return r;
+};
+const _structStartM=structStart;
+structStart=function(a,tg){const r=_structStartM(a,tg);if(MP.on){mpDirty(P.x,P.y,3);const s=a.s||(tg&&tg.ref);if(s&&s.tx!==undefined)mpDirty(s.tx,s.ty,1);}return r;};
+const _buildBtnM=buildBtn;
+buildBtn=function(idx){const tx=BM&&BM.tx,ty=BM&&BM.ty;const r=_buildBtnM(idx);if(MP.on&&idx===0&&tx!==undefined)mpDirty(tx,ty,1);return r;};
+const _transferM=transfer;
+transfer=function(){const r=_transferM.apply(this,arguments);if(MP.on&&chestS)mpDirty(chestS.tx,chestS.ty,0);return r;};
+const _spawnCarcassM=spawnCarcass;
+spawnCarcass=function(a){const r=_spawnCarcassM(a);if(MP.on)mpDirty(a.x,a.y,2);return r;};
+const _startCraftM=startCraft;
+startCraft=function(r){const x=_startCraftM(r);if(MP.on)mpDirty(P.x,P.y,2);return x;};
+
+/* ---------- animais: o dono do mundo manda, o amigo só mostra ---------- */
+function anRec(a){
+  if(!a.nid)a.nid=++MPN;
+  const r=[a.nid,a.kind,+a.x.toFixed(2),+a.y.toFixed(2),+(a.dx||0).toFixed(2),+(a.dy||0).toFixed(2),(a.mv?1:0)|(a.run?2:0)|(a.tame?4:0)|(a.inside?8:0)|(a.work?16:0),Math.round(a.hp*10)/10,a.c|0,a.wool|0,a.atk>1.1?1:0];
+  if(a.kind==='villager'&&a.v)r.push({id:a.v.id,n:a.v.n,role:a.v.role,look:a.v.look,trade:a.v.trade});
+  return r;
+}
+function mpSendAnimals(dt){
+  MPAT-=dt;if(MPAT>0||!mpOn())return;MPAT=.2;
+  const r=REMOTES[0];if(!r)return;
+  const L=[];for(const a of ANIMALS){if(Math.hypot(a.x-r.x,a.y-r.y)<75)L.push(anRec(a));}
+  mpSend({t:'an',L});
+}
+const GAN=new Map();     // animais do amigo, por número
+function mpRxAnimals(L){
+  const seen=new Set();
+  for(const q of L){
+    const [nid,kind,x,y,dx,dy,f,hp,c,wool,atk,v]=q;seen.add(nid);
+    let a=GAN.get(nid);
+    if(!a||ANIMALS.indexOf(a)<0){
+      const base=AN[kind]||{hp:5};
+      a={kind,key:kind,nid,x,y,k:x+y,hp,t:9,mv:false,run:false,dx,dy,face:1,ph:Math.random()*6,fl:0,animal:true,atk:0,flee:0,c,wool};
+      if(kind==='villager'&&v){a.v=v;a.vid=v.id;a.vc={x,y};}
+      if(kind==='bandit'||kind==='chief'||kind==='dwolf'||kind==='alpha')a.guard=1;
+      GAN.set(nid,a);ANIMALS.push(a);
+    }
+    a.tx=x;a.ty=y;a.dx=dx;a.dy=dy;a.mv=!!(f&1);a.run=!!(f&2);a.tame=!!(f&4);a.inside=!!(f&8);a.work=f&16?1:0;a.hp=hp;a.c=c;a.wool=wool;a.atk=atk?1.5:0;
+    if(v&&a.v&&a.v.id!==v.id){a.v=v;a.vid=v.id;}
+  }
+  for(let i=ANIMALS.length-1;i>=0;i--){const a=ANIMALS[i];if(!a.nid||!seen.has(a.nid)){ANIMALS.splice(i,1);if(a.nid)GAN.delete(a.nid);}}
+}
+const _stepAnimalsM=stepAnimals;
+stepAnimals=function(dt){
+  if(isGuest()){
+    // o resto do mundo (água, nado, armadilhas) segue normal, mas sem mexer nos animais do dono
+    const keep=ANIMALS.splice(0);
+    try{_stepAnimalsM(dt);}finally{ANIMALS.length=0;for(const a of keep)ANIMALS.push(a);}
+    for(const a of ANIMALS){if(a.tx===undefined)continue;const k=Math.min(1,dt*9);
+      if(Math.hypot(a.tx-a.x,a.ty-a.y)>6){a.x=a.tx;a.y=a.ty;}else{a.x+=(a.tx-a.x)*k;a.y+=(a.ty-a.y)*k;}
+      a.k=a.x+a.y;if(a.mv)a.ph+=dt*(a.run?13:5);if(Math.abs(a.dx-a.dy)>.1)a.face=a.dx-a.dy>0?1:-1;}
+    return;
+  }
+  if(!isHost()||!REMOTES[0]){return _stepAnimalsM(dt);}
+  // dono do mundo: inimigos mais perto do amigo vão atrás dele
+  const r=REMOTES[0],chase=[];
+  for(const a of ANIMALS){if(!HOSTILE.has(a.kind)||a.tame)continue;const dr=Math.hypot(a.x-r.x,a.y-r.y),dp=Math.hypot(a.x-P.x,a.y-P.y);if(dr<dp&&dr<11&&!r.tg.sl)chase.push([a,a.x,a.y]);}
+  _stepAnimalsM(dt);
+  for(const [a,x0,y0] of chase){
+    if(ANIMALS.indexOf(a)<0)continue;
+    if(a.kind==='wolf'&&a.flee>0)continue;
+    a.x=x0;a.y=y0;
+    const dx=r.x-a.x,dy=r.y-a.y,d=Math.hypot(dx,dy)||1;
+    if(a.kind==='wolf'&&fireNear(r.x,r.y,3.2)){a.mv=false;continue;}
+    if(d>.85){const sp=(AN[a.kind].sp||3)*(d<6?1:.6);moveA(a,dx,dy,sp,dt);a.run=d<6;}
+    else{a.mv=false;a.run=false;a.dx=dx;a.dy=dy;a.ratk=(a.ratk||0)-dt;
+      if(a.ratk<=0){a.ratk=a.kind==='wolf'?2.1+Math.random()*.7:1.6+Math.random()*.6;
+        const base=a.kind==='wolf'?3.5+Math.random()*3:a.kind==='alpha'?7+Math.random()*4:a.kind==='dwolf'?4.5+Math.random()*3:a.kind==='chief'?7+Math.random()*4:5+Math.random()*3;
+        mpSend({t:'bite',dmg:base,kind:a.kind});a.atk=1.5;}}
+  }
+};
+const HOSTILE=new Set(['wolf','dwolf','alpha','bandit','chief']);
+function mpBitten(m){
+  if(S.dead)return;
+  const nm=AN[m.kind]?AN[m.kind].n:'Um inimigo';
+  let k=defMul();if(k<=0)return;
+  try{k*=coatK();}catch(_){}
+  const dmg=m.dmg*k;S.life=Math.max(0,S.life-dmg);lastCause=m.kind==='bandit'||m.kind==='chief'?'atacado por bandidos':'atacado por lobos';
+  try{(m.kind==='bandit'||m.kind==='chief'?SND.hit:SND.bite)();hurtFx();}catch(_){}
+  if(sleeping)wake(nm+' te atacou!','bad');
+  if(C.bleed<=0&&Math.random()<.2)injure(nm+' te acertou!');else toast(nm+' te acertou! Vida −'+Math.round(dmg),'bad');
+  if(G.on)cancelGather();paintHud();if(S.life<=0)die(lastCause);
+}
+// amigo: abater não acontece aqui, quem decide é o dono do mundo
+const _killAnimalM=killAnimal;
+killAnimal=function(a){
+  if(isGuest()&&a.nid){const i=ANIMALS.indexOf(a);if(i>=0)ANIMALS.splice(i,1);GAN.delete(a.nid);mpSend({t:'kill',nid:a.nid,x:a.x,y:a.y});return;}
+  return _killAnimalM(a);
+};
+// amansar, tosquiar, montar, pegar e soltar animais: avisa o dono
+const _tameM=CUSTOM.tame;
+CUSTOM.tame=function(a,tg){const h=tg&&tg.ref;const r=_tameM(a,tg);if(isGuest()&&h&&h.nid)mpSend({t:'aset',nid:h.nid,trust:h.trust|0,tame:h.tame?1:0});return r;};
+const _shearM=CUSTOM.shear;
+CUSTOM.shear=function(a,tg){const h=tg&&tg.ref;const r=_shearM(a,tg);if(isGuest()&&h&&h.nid)mpSend({t:'aset',nid:h.nid,wool:h.wool|0});return r;};
+const _mountM=CUSTOM.mount;
+CUSTOM.mount=function(a,tg){const h=tg&&tg.ref;const r=_mountM(a,tg);if(isGuest()&&h&&h.nid&&RIDE.h===h){GAN.delete(h.nid);mpSend({t:'take',nid:h.nid});h.nid=0;}return r;};
+const _pickcM=CUSTOM.pickc;
+CUSTOM.pickc=function(a,tg){const h=tg&&tg.ref;const r=_pickcM(a,tg);if(isGuest()&&h&&h.nid&&ANIMALS.indexOf(h)<0){GAN.delete(h.nid);mpSend({t:'take',nid:h.nid});}return r;};
+const _placeTameM=placeTameHorse;
+placeTameHorse=function(r){const a=_placeTameM(r);if(isGuest()){const i=ANIMALS.indexOf(a);if(i>=0)ANIMALS.splice(i,1);mpSend({t:'spawn',r:[a.x,a.y,a.c|0,a.kind,a.wool|0]});}return a;};
+const _dismountM=dismount;
+dismount=function(q){const h=RIDE.h;_dismountM(q);if(isGuest()&&h){const i=ANIMALS.indexOf(h);if(i>=0)ANIMALS.splice(i,1);mpSend({t:'spawn',r:[h.x,h.y,h.c|0,'horse',0]});}};
+function mpHostAnimalMsg(m){
+  const a=ANIMALS.find(q=>q.nid===m.nid);
+  if(m.t==='spawn'){placeTameHorse(m.r);return;}
+  if(!a)return;
+  if(m.t==='hit'){a.hp-=m.dmg;if(HOSTILE.has(a.kind)){a.angry=1;a.alert=6;a.hitT=.3;if(a.kind==='wolf'&&a.hp<=2)a.flee=6;}else a.fl=5;if(a.hp<=0)killAnimal(a);}
+  else if(m.t==='kill'){killAnimal(a);}
+  else if(m.t==='aset'){if(m.trust!==undefined)a.trust=m.trust;if(m.tame){a.tame=true;a.hx=a.x;a.hy=a.y;}if(m.wool!==undefined)a.wool=m.wool;}
+  else if(m.t==='take'){const i=ANIMALS.indexOf(a);if(i>=0)ANIMALS.splice(i,1);}
+}
+
+/* ---------- liga nas mensagens ---------- */
+const _mpRxM=mpRx;
+mpRx=function(m,c){
+  if(m.t==='tile'){MP.lastRx=performance.now();for(const t of m.L){try{applyTile(t);}catch(_){}}return;}
+  if(isGuest()&&m.t==='an'){MP.lastRx=performance.now();mpRxAnimals(m.L);return;}
+  if(isGuest()&&m.t==='bite'){MP.lastRx=performance.now();mpBitten(m);return;}
+  if(isHost()&&(m.t==='hit'||m.t==='kill'||m.t==='aset'||m.t==='take'||m.t==='spawn')){MP.lastRx=performance.now();mpHostAnimalMsg(m);return;}
+  return _mpRxM(m,c);
+};
+const _mpTickM=mpTick;
+mpTick=function(dt){_mpTickM(dt);if(!MP.on)return;mpFlushTiles(dt);if(isHost())mpSendAnimals(dt);};
+// o amigo começa sem animais próprios: tudo vem do dono
+const _mpApplySnapM=mpApplySnap;
+mpApplySnap=function(m){_mpApplySnapM(m);ANIMALS.length=0;GAN.clear();};
+// minas continuam fechadas jogando junto (cada mina recarrega a página)
+/* =====================================================================
    TELA INICIAL NOVA (entrega 3)
    cena de cinema girando em volta da vila ao entardecer · menu em texto
    novidades de cada versão · criar mundo com prévia do mapa
    ===================================================================== */
-const GAMEVER=39;
+const GAMEVER=40;
 const NEWS=[
+ {v:40,t:'Mundo compartilhado',d:'Multijogador · etapas 2 e 3',s:'Tudo o que um faz, o outro vê',it:[
+  'Árvores cortadas, pedras, coletas, fogueiras e carcaças aparecem para os dois',
+  'Construções, portas, baús (com o que tem dentro), hortas e armadilhas são as mesmas',
+  'Lobos, bandidos e animais são os mesmos para os dois e atacam quem estiver mais perto',
+  'Dá para caçar e lutar juntos: o golpe de cada um conta no mesmo animal',
+  'Cavalos, ovelhas e galinhas também são compartilhados',
+  'As minas continuam fechadas enquanto jogam juntos']},
  {v:39,t:'Jogar com amigo',d:'Multijogador · etapa 1',s:'Jogue junto com um amigo pela internet',it:[
   'Dono do mundo: menu de pausa → Jogar com amigo → passe o código de 5 letras',
   'Amigo: tela inicial → Entrar com amigo → digite o código',
