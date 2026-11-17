@@ -1,0 +1,202 @@
+import { esc } from '../util.js';
+import { crest, face } from './art.js';
+import { S, H, render, toast, openSheet, closeSheet, save, myLineup, posTag, wk, shortName } from './app.js';
+import { LiveMatch, FORMATIONS, formOf, MENT, PRESS, available, penalties } from '../engine/match.js';
+import { lineupFor, playSlot, myClub } from '../engine/game.js';
+import { MatchViz } from './viz.js';
+import { ratings } from '../engine/match.js';
+const ratingsOf = (G, club, lu) => { try { return ratings(G, club, lu.xi, 0, club.tact); } catch { return null; } };
+import { userMatchBonus, isDerby, pressBefore, pressAfter, pressDecision, staffQ, resolveDecision } from '../engine/life.js';
+
+let L = null;
+
+export function preMatch(f) {
+  const G = S.G; const c = myClub(G); const youth = G.me.job.youth;
+  const hc = G.clubs[f.h], ac = G.clubs[f.a];
+  const lu = myLineup();
+  const probs = lu.xi.map((id) => G.players[id]).filter((p) => !p || !available(p));
+  const tired = lu.xi.map((id) => G.players[id]).filter((p) => p && p.fit < 65);
+  const opp = G.clubs[f.h === c.id ? f.a : f.h];
+  const oppLu = lineupFor(G, opp, youth);
+  const best = oppLu.xi.map((id) => G.players[id]).filter(Boolean).sort((a, b) => b.ovr - a.ovr).slice(0, 4);
+  const comp = G.comps[f.c];
+  const derby = isDerby(G, f.h, f.a);
+  if (!f._pp && !youth) { const P = pressBefore(G, f); f._pp = true; if (P) f._pm = pressDecision(G, f, P, 'pre').id; }
+  const pm = f._pm != null ? G.inbox.find((x) => x.id === f._pm && !x.done) : null;
+  const ana = staffQ(G, c, 'ana');
+  const R = ratingsOf(G, opp, oppLu);
+  const weak = R ? [['Ataque', R.att], ['Meio', R.ctl], ['Defesa', R.def]].sort((a, b) => a[1] - b[1])[0][0] : '';
+  openSheet(`${derby ? '<div class="derby">🔥 CLÁSSICO</div>' : ''}<div class="xs mut" style="text-align:center">${esc(comp.name)}${f.ko >= 0 ? ' · mata-mata' : ''} · ${wk(f.w)}</div>
+  <div class="match-hero" style="margin:8px 0 12px"><div>${crest(hc, 56)}<div class="nm">${esc(hc.name)}</div></div><div class="vs">VS</div><div>${crest(ac, 56)}<div class="nm">${esc(ac.name)}</div></div></div>
+  ${probs.length ? `<div class="hint bad" style="margin-bottom:8px">⚠️ Há jogador indisponível na escalação.</div>` : ''}
+  ${tired.length ? `<div class="hint warn" style="margin-bottom:8px">😮‍💨 Cansados: ${tired.map((p) => esc(shortName(p.n))).join(', ')}</div>` : ''}
+  ${pm ? `<div class="card flat press-card"><h3>🎤 Coletiva pré-jogo</h3><div class="sm" style="margin-bottom:6px">${esc(pm.body)}</div>${pm.opts.map((o, i) => `<button class="btn sm blk" style="justify-content:flex-start;margin-bottom:4px;text-align:left" data-a="prepress" data-v="${pm.id}:${i}:${f.i}">“${esc(o.l)}”</button>`).join('')}</div>` : ''}
+  ${!youth && ana >= 9 ? `<div class="hint" style="margin-bottom:8px">🔎 Analista (${ana}/20): o ${esc(opp.name)} joga no ${esc(opp.tact.form)} com mentalidade ${['defensiva', 'equilibrada', 'ofensiva'][opp.tact.ment]}. Ponto fraco: <b>${weak}</b>.</div>` : ''}
+  <div class="card flat"><h3>Destaques do adversário · ${esc(opp.tact.form)}</h3><div class="list">${best.map((p) => `<div class="li">${face(p, 28, opp)}<span class="grow b ell">${esc(p.n)}</span>${posTag(p.pos)}<b>${p.ovr}</b></div>`).join('')}</div></div>
+  <div class="col"><button class="btn pri big blk" data-a="golive" data-v="${f.i}">▶ Jogar ao vivo</button>
+  <div class="row"><button class="btn grow" data-a="prelu">Escalação</button><button class="btn grow" data-a="goquick" data-v="${f.i}">⏩ Resultado rápido</button></div></div>`);
+}
+H.prelu = () => { closeSheet(true); S.tab = 'tat'; S.page = null; render(); };
+
+function setup(f) {
+  const G = S.G; const c = myClub(G); const youth = G.me.job.youth;
+  const side = f.h === c.id ? 0 : 1;
+  const lu = myLineup();
+  const tact = youth ? G.me.u20tact : c.tact;
+  const train = youth ? G.me.u20train : c.train;
+  const opp = G.clubs[side ? f.h : f.a];
+  const ol = lineupFor(G, opp, youth);
+  const ub = userMatchBonus(G, c);
+  const mine = { club: c, xi: lu.xi.slice(), bench: lu.bench.slice(), tact: { ...tact }, user: true, extra: (train?.foco === 'tatico' ? 1 : 0) + ub.all, bon: { att: ub.att, def: ub.def } };
+  const theirs = { club: opp, xi: ol.xi.slice(), bench: ol.bench.slice(), tact: { ...opp.tact } };
+  const comp = G.comps[f.c];
+  return { m: new LiveMatch(G, f, side ? [theirs, mine] : [mine, theirs], { neutral: comp.kind === 'cont' && f.ko === comp.koWeeks.length - 1 }), side };
+}
+
+H.goquick = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m } = setup(f); finishMatch(f, m.finish()); };
+H.golive = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m, side } = setup(f); launchLive(f, m, side, S.G.clubs[f.h], S.G.clubs[f.a], null); };
+export function launchLive(f, m, side, hc, ac, done) {
+  const G = S.G;
+  const wrap = document.createElement('div'); wrap.className = 'live-wrap'; wrap.id = 'live';
+  wrap.innerHTML = `<div class="lv">
+   <div class="lv-top">
+     <div class="lv-team">${crest(hc, 30)}<span class="b ell">${esc(hc.name)}</span></div>
+     <div class="lv-score"><span id="lsc">0 – 0</span><span class="lv-min" id="lmin">0'</span></div>
+     <div class="lv-team r"><span class="b ell">${esc(ac.name)}</span>${crest(ac, 30)}</div>
+     <div class="lv-btns"><button class="btn sm" data-a="lnames" title="Nomes">Aa</button><button class="btn sm" data-a="lpause" id="lpb">⏸</button><button class="btn sm" data-a="lspeed" id="lsp">2x</button><button class="btn sm pri" data-a="ltact">Tática</button><button class="btn sm" data-a="lskip">⏭</button></div>
+   </div>
+   <div class="lv-tl"><i id="ltlp"></i><span style="left:50%" class="ht"></span><div id="ltlm"></div></div>
+   <div class="lv-main"><div class="lv-pitch"><canvas id="lcv"></canvas></div>
+     <div class="lv-side"><div id="lstats"></div><div class="feed" id="lfeed"></div><div id="lend"></div></div></div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const cv = wrap.querySelector('#lcv');
+  L = { f, m, side, raf: 0, last: performance.now(), done };
+  L.viz = new MatchViz(cv, G, m, side, {
+    onEvent: (e, quiet) => onEv(e, quiet),
+    onPause: (why) => { if (why === 'int') { L.viz.paused = true; updPause(); toast('Intervalo — ajuste a tática se quiser'); } },
+    onEnd: () => endLive(),
+  });
+  L.onResize = () => L.viz.resize(); window.addEventListener('resize', L.onResize);
+  addFeed({ t: 'ini' }); stats();
+  L.raf = requestAnimationFrame(loop);
+}
+
+function loop(now) {
+  if (!L) return;
+  const dt = (now - L.last) / 1000; L.last = now;
+  L.viz.update(dt); L.viz.draw();
+  const mn = document.getElementById('lmin'); if (mn) mn.textContent = `${L.m.min}'`;
+  const tp = document.getElementById('ltlp'); if (tp) tp.style.width = Math.min(100, L.m.min / 90 * 100) + '%';
+  L.raf = requestAnimationFrame(loop);
+}
+
+function evText(e) {
+  const G = S.G, m = L.m; const nm = (id) => esc(G.players[id]?.n || '');
+  const team = (s) => esc(m.s[s]?.club.name || '');
+  switch (e.t) {
+    case 'ini': return '🟢 Bola rolando!';
+    case 'gol': return `⚽ GOOOL do ${team(e.side)}! ${nm(e.p)}${e.as >= 0 ? ` <span class="mut">(assist. ${nm(e.as)})</span>` : ''}`;
+    case 'def': return `🧤 ${nm(e.gk)} defende o chute de ${nm(e.p)}`;
+    case 'trave': return `😱 Na trave! ${nm(e.p)} quase marca`;
+    case 'fora': return `${nm(e.p)} finaliza para fora`;
+    case 'am': return `🟨 Amarelo para ${nm(e.p)}`;
+    case 'ver': return `🟥 ${nm(e.p)} é expulso${e.second ? ' (2º amarelo)' : ''}!`;
+    case 'les': return `🩹 ${nm(e.p)} sente uma lesão`;
+    case 'sub': return `🔄 ${team(e.side)}: sai ${nm(e.o)}, entra ${nm(e.p)}`;
+    case 'int': return '⏸ Intervalo';
+    case 'fim': return '🏁 Fim de jogo';
+  }
+  return '';
+}
+function addFeed(e) {
+  const el = document.getElementById('lfeed'); if (!el) return;
+  const d = document.createElement('div'); d.className = 'ev ' + e.t + (e.side === L.side ? ' mine' : '');
+  d.innerHTML = `<b class="dim">${e.m != null ? e.m + "'" : ''}</b> ${evText(e)}`;
+  el.prepend(d);
+}
+function onEv(e, quiet) {
+  addFeed(e);
+  if (['gol', 'ver'].includes(e.t)) { const tm = document.getElementById('ltlm'); if (tm) tm.insertAdjacentHTML('beforeend', `<span class="mk ${e.t} ${e.side === L.side ? 'me' : ''}" style="left:${Math.min(100, e.m / 90 * 100)}%">${e.t === 'gol' ? '⚽' : '🟥'}</span>`); }
+  document.getElementById('lsc').textContent = `${L.viz.score[0]} – ${L.viz.score[1]}`;
+  stats();
+  if (quiet) return;
+  if (e.t === 'gol' && navigator.vibrate) navigator.vibrate(e.side === L.side ? [80, 60, 80] : 40);
+  if (e.t === 'les' && e.side === L.side) { L.viz.paused = true; updPause(); toast('Seu jogador se machucou! Faça uma substituição.'); }
+  if (e.t === 'ver' && e.side === L.side) toast('Expulsão! Considere ajustar o time.');
+}
+function stats() {
+  const st = L.m.st; const tot = st.pos[0] + st.pos[1] || 1; const p0 = Math.round(st.pos[0] / tot * 100);
+  const row = (l, a, b) => { const t = a + b || 1; return `<div class="lv-stat"><b>${a}</b><div class="lv-bar"><i style="width:${a / t * 100}%"></i></div><span>${l}</span><div class="lv-bar r"><i style="width:${b / t * 100}%"></i></div><b>${b}</b></div>`; };
+  document.getElementById('lstats').innerHTML = row('Posse %', p0, 100 - p0) + row('Finalizações', st.sh[0], st.sh[1]) + row('No gol', st.ont[0], st.ont[1]) + row('Faltas', st.fal[0], st.fal[1]);
+}
+function updPause() { const b = document.getElementById('lpb'); if (b) b.textContent = L.viz.paused ? '▶' : '⏸'; }
+H.lnames = () => { L.viz.names = !L.viz.names; };
+H.lpause = () => { L.viz.paused = !L.viz.paused; updPause(); };
+H.lspeed = () => { const v = L.viz; v.speed = v.speed === 1 ? 2 : v.speed === 2 ? 4 : v.speed === 4 ? 8 : 1; document.getElementById('lsp').textContent = v.speed + 'x'; };
+H.lskip = () => { L.viz.skipToEnd(); document.getElementById('lsc').textContent = `${L.m.score[0]} – ${L.m.score[1]}`; };
+
+H.ltact = () => {
+  if (!L) return;
+  L.viz.paused = true; updPause();
+  const G = S.G, m = L.m, s = L.side, sd = m.s[s];
+  const form = formOf(sd.tact);
+  const used = m.played[s];
+  openSheet(`<h2>Tática e substituições</h2>
+  <div class="card flat"><h3>Mentalidade</h3><div class="seg" style="margin:0">${MENT.map((x, i) => `<button class="${sd.tact.ment === i ? 'on' : ''}" data-a="lment" data-v="${i}">${x}</button>`).join('')}</div>
+  <h3 style="margin-top:12px">Pressão</h3><div class="seg" style="margin:0">${PRESS.map((x, i) => `<button class="${sd.tact.press === i ? 'on' : ''}" data-a="lpress" data-v="${i}">${x}</button>`).join('')}</div></div>
+  <div class="card flat"><h3><span>Substituições</span><span>${m.subs[s]}/5</span></h3><div class="hint" style="margin-bottom:8px">${L.subOut != null ? 'Agora escolha quem entra.' : 'Toque em quem vai sair.'}</div>
+  <div class="cols2"><div class="list">${sd.xi.map((id, i) => { const p = G.players[id]; if (!p) return ''; const off = m.sent[s].has(id); const inj = m.ev.some((e) => e.t === 'les' && e.p === id); return `<div class="li tap" ${off ? '' : `data-a="lout" data-v="${id}"`} style="${L.subOut === id ? 'background:#f4c54222' : ''}${off ? ';opacity:.4' : ''}"><span class="xs mut" style="width:30px">${form[i][0]}</span><span class="grow b ell">${esc(p.n)} ${inj ? '🩹' : ''}${off ? ' 🟥' : ''}</span><span class="xs">⚡${Math.round(Math.max(30, p.fit - Math.max(0, m.min - 55) * 0.35))}</span><b style="width:24px;text-align:right">${p.ovr}</b></div>`; }).join('')}</div>
+  <div class="list">${sd.bench.map((id) => { const p = G.players[id]; if (!p || used.has(id)) return ''; return `<div class="li tap" data-a="lin" data-v="${id}">${posTag(p.pos)}<span class="grow b ell">${esc(p.n)}</span><b style="width:24px;text-align:right">${p.ovr}</b></div>`; }).join('') || '<div class="empty">Banco vazio</div>'}</div></div></div>
+  <button class="btn pri blk" data-a="lclose">Voltar ao jogo</button>`);
+};
+H.lment = (v) => { L.m.s[L.side].tact.ment = +v; closeSheet(); H.ltact(); };
+H.lpress = (v) => { L.m.s[L.side].tact.press = +v; closeSheet(); H.ltact(); };
+H.lout = (v) => { L.subOut = +v; closeSheet(); H.ltact(); };
+H.lin = (v) => {
+  if (L.subOut == null) { toast('Escolha primeiro quem sai'); return; }
+  const ok = L.m.sub(L.side, L.subOut, +v);
+  if (ok) { addFeed(L.m.ev[L.m.ev.length - 1]); toast('Substituição feita'); } else toast('Não foi possível (limite de 5)');
+  L.subOut = null; closeSheet(); H.ltact();
+};
+H.lclose = () => { closeSheet(); L.viz.paused = false; updPause(); };
+
+function endLive() {
+  const el = document.getElementById('lend');
+  if (el && !el.innerHTML) el.innerHTML = `<button class="btn pri blk" style="margin-top:8px" data-a="lfinish">Ver resumo ›</button>`;
+}
+H.lfinish = () => {
+  const f = L.f, res = L.m.result(), done = L.done;
+  cancelAnimationFrame(L.raf); window.removeEventListener('resize', L.onResize); document.getElementById('live')?.remove();
+  L = null;
+  (done || finishMatch)(f, res);
+};
+
+export function finishMatch(f, res) {
+  const G = S.G;
+  if (f.ko >= 0 && res.hg === res.ag) res.pen = penalties();
+  const w = f.w, sl = f.s, c = myClub(G);
+  playSlot(G, res);
+  save(); render();
+  const hc = G.clubs[f.h], ac = G.clubs[f.a];
+  const ev = f.ev || [];
+  const gl = (side) => ev.filter((e) => e[1] === 0 && e[2] === side).map((e) => `<div class="xs">⚽ ${esc(G.players[e[3]]?.n || '?')} ${e[0]}'</div>`).join('');
+  const others = G.fix.filter((x) => x.c === f.c && x.w === w && x.s === sl && x.i !== f.i && x.hg != null).slice(0, 12);
+  const notas = Object.entries(f.notas || {}).map(([id, n]) => [G.players[id], n]).filter(([p]) => p && p.club === c?.id).sort((a, b) => b[1] - a[1]);
+  const st = f.stats || {};
+  const motm = notas[0];
+  const PQ = !G.me.job?.youth ? pressAfter(G, f) : null; const pq = PQ ? pressDecision(G, f, PQ, 'post') : null;
+  openSheet(`<div class="xs mut" style="text-align:center">${esc(G.comps[f.c].name)}</div>
+   <div class="match-hero" style="margin:6px 0"><div>${crest(hc, 48)}<div class="nm">${esc(hc.name)}</div>${gl(0)}</div><div class="score">${f.hg}–${f.ag}</div><div>${crest(ac, 48)}<div class="nm">${esc(ac.name)}</div>${gl(1)}</div></div>
+   ${f.pen ? `<div style="text-align:center" class="b">Pênaltis: ${f.pen[0]} – ${f.pen[1]}</div>` : ''}
+   ${st.pos ? `<div class="stat-grid" style="margin:8px 0"><div class="stat"><div class="v">${st.pos[0]}%</div><div class="l">posse (casa)</div></div><div class="stat"><div class="v">${st.sh?.[0] ?? 0}–${st.sh?.[1] ?? 0}</div><div class="l">finalizações</div></div><div class="stat"><div class="v">${st.ont ? `${st.ont[0]}–${st.ont[1]}` : '–'}</div><div class="l">no gol</div></div></div>` : ''}
+   ${motm ? `<div class="hint" style="margin-bottom:8px">⭐ Melhor do seu time: <b>${esc(motm[0].n)}</b> (${motm[1].toFixed(1)})</div>` : ''}
+   <div class="cols2"><div class="card flat"><h3>Notas</h3><div class="list">${notas.map(([p, n]) => `<div class="li sm"><span class="grow ell b">${esc(p.n)}</span><span class="pill ${n >= 7.5 ? 'g' : n < 6 ? 'r' : ''}">${n.toFixed(1)}</span></div>`).join('')}</div></div>
+   <div class="card flat"><h3>Outros resultados</h3><div class="list">${others.map((x) => `<div class="li xs">${crest(G.clubs[x.h], 16)}<span class="grow ell">${esc(G.clubs[x.h].short)}</span><b>${x.hg}–${x.ag}</b><span class="grow ell" style="text-align:right">${esc(G.clubs[x.a].short)}</span>${crest(G.clubs[x.a], 16)}</div>`).join('') || '<div class="mut sm">—</div>'}</div></div></div>
+   ${pq ? `<div class="card flat press-card" id="postpress"><h3>🎤 Coletiva pós-jogo</h3><div class="sm" style="margin-bottom:6px">${esc(pq.body)}</div>${pq.opts.map((o, i) => `<button class="btn sm blk" style="justify-content:flex-start;margin-bottom:4px;text-align:left" data-a="postpress" data-v="${pq.id}:${i}">“${esc(o.l)}”</button>`).join('')}</div>` : ''}
+   <button class="btn pri blk big" data-a="sumclose">Continuar</button>`);
+}
+H.sumclose = () => { closeSheet(true); render(); };
+
+H.prepress = (v) => { const G = S.G; const [id, i, fi] = v.split(':').map(Number); const m = G.inbox.find((x) => x.id === id); if (m) toast(resolveDecision(G, m, i), 2500); closeSheet(); preMatch(G.fix[fi]); save(); };
+H.postpress = (v) => { const G = S.G; const [id, i] = v.split(':').map(Number); const m = G.inbox.find((x) => x.id === id); if (m) toast(resolveDecision(G, m, i), 2600); const el = document.getElementById('postpress'); if (el) el.innerHTML = `<div class="sm ok">Resposta dada: “${esc(m.opts[i].l)}”</div>`; save(); };

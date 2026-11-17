@@ -1,0 +1,44 @@
+plugins {
+    id 'com.android.application'
+}
+
+// número da versão vem da montagem no GitHub (cada montagem nova é uma versão nova)
+def vcode = (System.getenv("VCODE") ?: "1") as Integer
+
+android {
+    namespace 'io.github.prancheta'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "io.github.ivohermogenes16.prancheta"
+        minSdk 24
+        targetSdk 34
+        versionCode vcode
+        versionName "1." + vcode
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("../prancheta.keystore")
+            storePassword "prancheta-campo"
+            keyAlias "prancheta"
+            keyPassword "prancheta-campo"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
