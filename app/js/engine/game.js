@@ -284,11 +284,13 @@ function endWeek(G) {
     p.playedW = 0;
     const im = isMine ? itrWeek(G, p) : 1;
     // evolução
-    if (p.club >= 0 && p.ovr < p.pot) {
-      const ageF = p.age <= 20 ? 0.0055 : p.age <= 23 ? 0.004 : p.age <= 27 ? 0.002 : 0.0008;
+    // evolução: mais lenta conforme a idade e o nível; teto de ganho por temporada
+    const capS = (p.age <= 18 ? 8 : p.age <= 20 ? 6 : p.age <= 23 ? 4 : p.age <= 26 ? 3 : 2) - (p.ovr >= 85 ? 2 : p.ovr >= 78 ? 1 : 0);
+    if (p.club >= 0 && p.ovr < p.pot && p.ovr - (p.s0 ?? p.ovr) < Math.max(1, capS)) {
+      const ageF = (p.age <= 18 ? 0.0045 : p.age <= 20 ? 0.004 : p.age <= 23 ? 0.004 : p.age <= 27 ? 0.002 : 0.0007) * (p.ovr >= 85 ? 0.4 : p.ovr >= 80 ? 0.55 : p.ovr >= 75 ? 0.7 : p.ovr >= 68 ? 0.85 : 1);
       const TF = TRAIN_FX[tr.foco] || {}; const fe = (TF.ev || 1) * (TF.young ? (p.age <= 21 ? TF.young : TF.old) : 1) * im;
       p.prog += (p.pot - p.ovr) * ageF * [0.75, 1, 1.25][tr.int] * fe * (p.st.j > 2 ? 1.15 : 0.9) * rf(0.5, 1.5) * devMul(G, p, club);
-      while (p.prog >= 1 && p.ovr < p.pot) { p.ovr++; p.prog -= 1; p.up = G.t; if (G.me.job && p.club === G.me.job.cid) { (G.me.dev ||= []).unshift({ t: G.t, y: G.year, w: G.week, pid: p.id, o: p.ovr }); if (G.me.dev.length > 60) G.me.dev.length = 60; } }
+      while (p.prog >= 1 && p.ovr < p.pot && p.ovr - (p.s0 ?? p.ovr) < Math.max(1, capS)) { p.ovr++; p.prog -= 1; p.up = G.t; if (G.me.job && p.club === G.me.job.cid) { (G.me.dev ||= []).unshift({ t: G.t, y: G.year, w: G.week, pid: p.id, o: p.ovr }); if (G.me.dev.length > 60) G.me.dev.length = 60; } }
     }
     if (isMine && tr.int === 2 && p.itr !== 'fis' && rnd() < 0.004 * injMul(club)) p.inj = Math.max(p.inj, ri(1, 3));
   }

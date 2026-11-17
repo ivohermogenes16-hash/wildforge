@@ -109,3 +109,5 @@ export const SQUADS = {
   'Lanús': 'Nahuel Losada:GOL:32:75;José Canale:LD:29:71;Carlos Izquierdoz:ZAG:37:72;Ezequiel Muñoz:ZAG:35:70;Sasha Marcich:LE:22:72;Agustín Cardozo:VOL:27:72;Ramiro Carrera:MEI:32:72;Marcelino Moreno:MEI:31:74;Eduardo Salvio:PD:35:72;Walter Bou:ATA:33:74;Rodrigo Castillo:ATA:26:74;Dylan Aquino:PE:22:71',
   'San Lorenzo': 'Orlando Gill:GOL:25:73;Gastón Hernández:ZAG:28:71;Jhohan Romaña:ZAG:27:71;Ezequiel Herrera:LD:25:69;Elías Báez:LE:21:70;Nicolás Tripichio:MC:29:70;Ezequiel Cerutti:PE:33:70;Iker Muniain:MEI:33:72;Andrés Vombergar:ATA:31:72;Alexis Cuello:ATA:23:72',
 };
+import { SQUADS2 } from './squads2.js';
+Object.assign(SQUADS, SQUADS2);

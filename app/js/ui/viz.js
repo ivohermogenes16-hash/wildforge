@@ -79,14 +79,17 @@ export class MatchViz {
     if (shot) {
       let i = this.m.s[ps].xi.indexOf(shot.p);
       if (i < 0) i = this.mostAdvanced(ps);
-      const n = rnd() < 0.5 ? 1 : 2;
+      const [bx0] = this.T(ps, this.ball.x, this.ball.y);
+      const n = bx0 > 60 ? 0 : bx0 > 40 ? 1 : 2;
       for (let k = 0; k < n; k++) this.q.push({ t: 'pass', fwd: true });
-      this.q.push({ t: 'setup', s: ps, i }); this.q.push({ t: 'shot', s: ps, i, ev: shot });
+      // distância mínima do chute: gols quase sempre de dentro da área; chutes para fora podem ser de longe
+      const need = { gol: rnd() < 0.1 ? 22 : 9 + rnd() * 7, def: 11 + rnd() * 9, trave: 11 + rnd() * 7, fora: rnd() < 0.5 ? 28 : 14 + rnd() * 8 }[shot.t] || 18; // distância máxima (m) até o gol
+      this.q.push({ t: 'setup', s: ps, i }); this.q.push({ t: 'shot', s: ps, i, ev: shot, need, tries: 0 });
     } else {
       let est = 0;
       while (est < this.minDur) {
-        if (rnd() < 0.35) { const d = 0.6 + rnd() * 1.2; this.q.push({ t: 'carry', dur: d }); est += d; }
-        else { this.q.push({ t: 'pass', fwd: rnd() < 0.55 }); est += 1.3; }
+        if (rnd() < 0.35) { const d = 0.6 + rnd() * 1.2; this.q.push({ t: 'carry', dur: d, nos: true }); est += d; }
+        else { this.q.push({ t: 'pass', fwd: rnd() < 0.55, nos: true }); est += 1.3; }
       }
     }
     const it = evs.find((e) => e.t === 'int'); if (it) { this.q.push({ t: 'event', ev: it }); this.q.push({ t: 'half' }); }
@@ -96,7 +99,7 @@ export class MatchViz {
     let best = 0, bv = -1; this.ents[s].forEach((e, i) => { if (!this.alive(s, i)) return; const [tx] = this.T(s, e.x, e.y); if (tx > bv) { bv = tx; best = i; } });
     return best;
   }
-  chooseReceiver(s, fwd, prefer) {
+  chooseReceiver(s, fwd, prefer, back) {
     const o = this.ball.own; if (!o) return null;
     const c = this.ents[s][o.i]; const [cx] = this.T(s, c.x, c.y);
     let best = null, bv = -1e9;
@@ -105,7 +108,7 @@ export class MatchViz {
       const [tx] = this.T(s, e.x, e.y); const d = Math.hypot(e.x - c.x, e.y - c.y);
       if (d < 6 || d > 42) return;
       let v = -Math.abs(d - 18) * 0.4 + rnd() * 8;
-      v += fwd ? (tx - cx) * 0.6 : (tx - cx > -15 ? 2 : -4);
+      v += back ? (tx < cx - 4 ? 6 : -10) : fwd ? (tx - cx) * 0.6 : (tx - cx > -15 ? 2 : -4);
       if (this.form(s)[i][0] === 'GOL') v -= cx > 30 ? 40 : 6;
       if (prefer === i) v += 50;
       // passe bloqueado por adversário perto da linha
@@ -117,12 +120,21 @@ export class MatchViz {
 
   start(a) {
     const b = this.ball, o = b.own;
+    // minuto sem finalização: se o atacante chega perto do gol, a defesa corta (não fica tocando de lado na cara do gol)
+    if (a.nos && o && (a.t === 'pass' || a.t === 'carry') && this.form(o.s)[o.i][0] !== 'GOL') {
+      const [tx, ty] = this.T(o.s, b.x, b.y);
+      if (tx >= 78 && Math.abs(ty - 34) < 22) { if (rnd() < 0.88) { a.t = 'steal'; a.s = 1 - o.s; } else { a.fwd = false; a.back = true; } }
+    }
     switch (a.t) {
       case 'event': this.h.onEvent(a.ev); if (a.ev.t === 'ver') this.labelFor(a.ev.side, a.ev.p, '🟥'); if (a.ev.t === 'am') this.labelFor(a.ev.side, a.ev.p, '🟨'); a.dur = a.ev.t === 'sub' ? 0.6 : 0.25; break;
       case 'carry': a.dur = a.dur || 1; break;
       case 'pass': {
         if (!o) { a.dur = 0.2; break; }
-        const to = a.to != null ? a.to : this.chooseReceiver(o.s, a.fwd, a.prefer);
+        if (a.to != null && (a.tries || 0) < 6) { // espera o companheiro passar à frente antes do passe final
+          const r0 = this.ents[o.s][a.to]; const [rx] = this.T(o.s, r0.x, r0.y); const [ox] = this.T(o.s, b.x, b.y);
+          if (rx < ox - 1) { this.q.unshift({ ...a, tries: (a.tries || 0) + 1 }); this.q.unshift({ t: 'carry', dur: 0.3 }); a.dur = 0; break; }
+        }
+        const to = a.to != null ? a.to : this.chooseReceiver(o.s, a.fwd, a.prefer, a.back);
         if (to == null) { a.t = 'carry'; a.dur = 0.8; break; }
         this.kick(o.s, to, a.long);
         a.wait = true; break;
@@ -145,7 +157,14 @@ export class MatchViz {
         else { this.q.unshift({ t: 'pass', to: a.i }); this.q.unshift({ t: 'carry', dur: 0.7 }); }
         a.dur = 0; break;
       }
-      case 'shot': this.shoot(a); a.wait = true; break;
+      case 'shot': {
+        // precisa estar com a bola e em posição de finalizar; senão conduz até lá
+        if ((!o || o.s !== a.s) && a.tries < 4) { a.tries++; this.q.unshift({ ...a }); this.q.unshift({ t: 'steal', s: a.s }); a.dur = 0; a.t = 'wait'; break; }
+        if (o && o.i !== a.i && a.tries < 8) { a.tries++; this.q.unshift({ ...a }); this.q.unshift({ t: 'pass', to: a.i }); a.t = 'wait'; a.dur = 0; break; }
+        const [bx, by] = this.T(a.s, b.x, b.y);
+        if (Math.hypot(105 - bx, 34 - by) > a.need && a.tries < 14) { if (this.run && o && this.run.i === o.i && this.run.s === o.s) this.run = null; a.tries++; this.q.unshift({ ...a }); this.q.unshift({ t: 'carry', dur: 0.4, drive: true }); a.t = 'wait'; a.dur = 0; break; }
+        this.shoot(a); a.wait = true; break;
+      }
       case 'celebrate': {
         const sc = this.ents[a.s][a.i]; const [cx, cy] = this.T(a.s, 103, sc.y > PH / 2 ? 66 : 2);
         this.celeb = { s: a.s, i: a.i, x: cx, y: cy }; a.dur = 2.6; this.ball.mode = 'dead'; break;
@@ -284,11 +303,12 @@ export class MatchViz {
       e.x = clamp(e.x + e.vx * dt, -2, PW + 2); e.y = clamp(e.y + e.vy * dt, -2, PH + 2);
       const sp = Math.hypot(e.vx, e.vy); if (sp > 0.4) { e.fx = e.vx / sp; e.fy = e.vy / sp; }
     }
-    // separação
+    // separação (quem conduz para finalizar passa pelo marcador)
+    const drv = this.cur?.drive && this.ball.own ? this.ents[this.ball.own.s][this.ball.own.i] : null;
     const all = this.ents[0].concat(this.ents[1]);
     for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
       const A = all[i], B = all[j]; const dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy);
-      if (d > 0 && d < 3.4) { const push = (3.4 - d) * 0.22; A.x -= dx / d * push; A.y -= dy / d * push; B.x += dx / d * push; B.y += dy / d * push; }
+      if (d > 0 && d < 3.4) { const push = (3.4 - d) * 0.22; const ka = A === drv ? 0 : B === drv ? 2 : 1, kb = B === drv ? 0 : A === drv ? 2 : 1; A.x -= dx / d * push * ka; A.y -= dy / d * push * ka; B.x += dx / d * push * kb; B.y += dy / d * push * kb; }
     }
     // bola grudada no pé
     if (this.ball.mode === 'held' && this.ball.own) {
@@ -328,7 +348,7 @@ export class MatchViz {
     if (this.ball.mode === 'held' && o) { // condução
       const e = this.ents[o.s][o.i]; const [ex, ey] = this.T(o.s, e.x, e.y);
       const isGK = this.form(o.s)[o.i][0] === 'GOL';
-      if (!isGK) out[o.s][o.i] = [...this.T(o.s, Math.min(ex + 7, 97), clamp(ey + (34 - ey) * 0.15 + Math.sin(performance.now() / 700) * 3, 3, 65)), 0.82];
+      if (!isGK) { const drive = this.cur?.drive; out[o.s][o.i] = [...this.T(o.s, Math.min(ex + 7, 97), clamp(ey + (34 - ey) * (drive ? 0.7 : 0.15) + (drive ? 0 : Math.sin(performance.now() / 700) * 3), 3, 65)), drive ? 0.95 : 0.82]; }
       else out[o.s][o.i] = [e.x, e.y, 0.3];
     }
     if (this.ball.mode === 'pass' && this.ball.to) { const r = this.ball.to; out[r.s][r.i] = [this.ball.x1, this.ball.y1, 1.1]; }

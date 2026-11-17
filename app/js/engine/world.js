@@ -22,7 +22,7 @@ export function makePlayer(G, o) {
   const ovr = clamp(Math.round(o.ovr ?? 55), 25, 95);
   let pot = o.pot;
   if (pot == null) {
-    const room = Math.max(0, 25 - age);
+    const room = Math.max(0, 25 - age) + (age >= 22 && age <= 26 ? 1.5 : 0);
     pot = clamp(ovr + Math.round(room * rf(0.6, 2.4) + (age <= 20 ? rf(0, 6) : 0)), ovr, 95);
   }
   const p = {
@@ -97,9 +97,9 @@ export function buildSquad(G, c, extraYouth) {
   const out = [];
   if (real) {
     for (const s of real.split(';')) {
-      const [n, pos, age, ovr] = s.split(':');
+      const [n, pos, age, ovr, nat5] = s.split(':');
       if (!n || !POS.includes(pos)) continue;
-      out.push(makePlayer(G, { n, pos, age: +age, ovr: +ovr, club: c.id, real: true, key: 'r:' + n, nat: guessNat(n, c.country) }));
+      out.push(makePlayer(G, { n, pos, age: +age, ovr: +ovr, club: c.id, real: true, key: nat5 ? `r2:${c.key}:${n}` : 'r:' + n, nat: nat5 || guessNat(n, c.country) }));
     }
   }
   const realLvl = out.length ? out.map((p) => p.ovr).sort((a, b) => b - a).slice(0, 14).reduce((s, x, _, a) => s + x / a.length, 0) : 0;
@@ -163,7 +163,7 @@ export function createWorld(G) {
   // Base sub-20 para todos os clubes brasileiros da Série A e B
   for (const c of G.clubs) if (c.country === 'BR' && (c.league === 'BRA' || c.league === 'BRB')) buildU20(G, c);
   // Dinheiro e patrocínio para fechar a conta
-  for (const c of G.clubs) initFinances(G, c);
+  for (const c of G.clubs) { initFinances(G, c); c.realSq = true; }
 }
 
 // saves antigos: adiciona os países/ligas/clubes novos (entram nas competições na próxima temporada)
@@ -173,6 +173,13 @@ export function expandWorld(G) {
   for (const L of LEAGUES) for (const row of CLUBS[L.id]) {
     if (have.has(row[0])) continue;
     const c = makeClub(G, row, L.id, L.country); buildSquad(G, c); initFinances(G, c); c.fresh = true; n++;
+  }
+  // elencos reais adicionados depois: troca os jogadores gerados desses clubes pelos reais
+  for (const c of G.clubs) {
+    if (c.realSq) continue; c.realSq = true;
+    if (!SQUADS[c.key] || G.players.some((p) => p && p.club === c.id && p.real)) continue;
+    for (const p of G.players) if (p && p.club === c.id && !p.u20) { p.club = -2; p.ret = true; }
+    buildSquad(G, c); c.lineup = null;
   }
   return n;
 }

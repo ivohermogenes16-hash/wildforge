@@ -36,6 +36,7 @@ const SKIN = ['#f6d3b3', '#eec19a', '#e0ac7e', '#c98d5f', '#a86e45', '#8a5533', 
 const HAIR = ['#111', '#1d140e', '#3a2416', '#5b3a22', '#8a5a2b', '#c49a5a', '#d9b36c', '#7a2e12', '#999'];
 
 export function face(p, size = 40, club) {
+  return ''; // sem rostos: o jogo mostra apenas os nomes
   if (!p) return `<span class="face" style="width:${size}px;height:${size}px;display:inline-block"></span>`;
   const img = IMG.get('p:' + p.key);
   if (img) return `<img class="face" src="${img}" width="${size}" height="${size}" alt="">`;

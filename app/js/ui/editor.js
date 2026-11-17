@@ -10,7 +10,7 @@ PAGES.editor = () => {
   const G = S.G;
   const lg = S.edLg || 'BRA';
   const clubs = G.clubs.filter((c) => (lg === 'AMA' ? c.league === 'AMA' : lg === 'OUT' ? !c.league : c.league === lg));
-  return `<div class="hint" style="margin-bottom:12px">Troque nomes, cores, escudos e fotos. As imagens que você enviar ficam salvas só neste aparelho e valem também para novas carreiras.</div>
+  return `<div class="hint" style="margin-bottom:12px">Troque nomes, cores e escudos. Dá para colar a lista real de jogadores de qualquer clube. As imagens que você enviar ficam salvas só neste aparelho e valem também para novas carreiras.</div>
   <select data-ch="edlg" style="margin-bottom:12px">${LEAGUES.map((l) => `<option value="${l.id}" ${lg === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}<option value="AMA" ${lg === 'AMA' ? 'selected' : ''}>Várzea</option><option value="OUT" ${lg === 'OUT' ? 'selected' : ''}>Fora das ligas</option></select>
   <div class="card flat" style="padding:4px 12px"><div class="list">${clubs.map((c) => `<div class="li tap" data-a="edclub" data-v="${c.id}">${crest(c, 34)}<div class="grow"><div class="b ell">${esc(c.name)}</div><div class="xs mut">${IMG.has('c:' + c.key) ? '🖼️ escudo próprio' : 'escudo gerado'}</div></div>›</div>`).join('') || '<div class="empty">Nenhum clube.</div>'}</div></div>`;
 };
@@ -26,6 +26,8 @@ function clubEd(id) {
   <div class="row" style="gap:8px"><div class="field grow"><label>Cor 1</label><input type="color" value="${c.c1}" data-ch="cf" data-id="${c.id}" data-k="c1"></div><div class="field grow"><label>Cor 2</label><input type="color" value="${c.c2}" data-ch="cf" data-id="${c.id}" data-k="c2"></div></div>
   <div class="row" style="gap:8px"><div class="field grow"><label>Estádio</label><input value="${esc(c.stad)}" data-ch="cf" data-id="${c.id}" data-k="stad"></div><div class="field" style="width:100px"><label>Lugares (mil)</label><input type="number" value="${c.cap}" data-ch="cf" data-id="${c.id}" data-k="cap"></div></div>
   <div class="field"><label>Reputação (1–99)</label><input type="number" min="1" max="99" value="${c.rep}" data-ch="cf" data-id="${c.id}" data-k="rep"></div>
+  <div class="card flat"><h3>Colar elenco real</h3><p class="xs mut">Um jogador por linha. Pode ser só o nome, ou "Nome; posição; idade; geral" (ex.: Harry Kane; ATA; 33; 90). Posições: ${POS.join(', ')}. Os nomes substituem os jogadores atuais na ordem da lista abaixo; linhas a mais viram jogadores novos.</p>
+  <textarea id="bulk${c.id}" rows="6" style="width:100%" placeholder="Harry Kane; ATA; 33; 90&#10;Jamal Musiala; MEI; 23; 88"></textarea><button class="btn sm pri blk" style="margin-top:6px" data-a="bulkpl" data-v="${c.id}">Aplicar lista</button></div>
   <div class="card flat" style="padding:4px 12px"><h3 style="margin:8px 0 2px"><span>Jogadores (${sq.length})</span><button class="btn sm" data-a="newpl" data-v="${c.id}">+ Novo</button></h3><div class="list">${sq.map((p) => `<div class="li tap" data-a="edplayer" data-v="${p.id}">${face(p, 32, c)}<span class="grow b ell">${esc(p.n)}${p.u20 ? ' <span class="pill b">Sub-20</span>' : ''}</span>${posTag(p.pos)}<b style="width:26px;text-align:right">${p.ovr}</b></div>`).join('')}</div></div>`;
 }
 H.cf = (v, el) => {
@@ -48,7 +50,7 @@ H.newpl = (v) => {
 H.edplayer = (v) => { closeSheet(true); openSheet(plEd(+v)); };
 function plEd(id) {
   const G = S.G, p = G.players[id]; const c = p.club >= 0 ? G.clubs[p.club] : null;
-  return `<h2>Editar jogador</h2><div class="row" style="gap:12px;margin-bottom:12px">${face(p, 76, c)}<div class="col grow"><label class="btn sm">📷 Enviar foto<input type="file" accept="image/*" hidden data-ch="upface" data-id="${p.id}"></label>${IMG.has('p:' + p.key) ? `<button class="btn sm red" data-a="rmface" data-v="${p.id}">Remover foto</button>` : ''}</div></div>
+  return `<h2>Editar jogador</h2>
   <div class="field"><label>Nome</label><input value="${esc(p.n)}" data-ch="pf" data-id="${p.id}" data-k="n"></div>
   <div class="row" style="gap:8px"><div class="field grow"><label>Posição</label><select data-ch="pf" data-id="${p.id}" data-k="pos">${POS.map((x) => `<option ${p.pos === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div class="field" style="width:90px"><label>Idade</label><input type="number" value="${p.age}" data-ch="pf" data-id="${p.id}" data-k="age"></div></div>
   <div class="row" style="gap:8px"><div class="field grow"><label>Geral</label><input type="number" value="${p.ovr}" data-ch="pf" data-id="${p.id}" data-k="ovr"></div><div class="field grow"><label>Potencial</label><input type="number" value="${p.pot}" data-ch="pf" data-id="${p.id}" data-k="pot"></div></div>
@@ -81,4 +83,20 @@ H.delpl = (v) => {
   if (c) c.lineup = null;
   p.club = -2; p.ret = true; G.short = G.short.filter((x) => x !== p.id);
   closeSheet(); toast('Jogador removido'); render(); save();
+};
+
+H.bulkpl = (v) => {
+  const G = S.G, c = G.clubs[+v]; const txt = document.getElementById('bulk' + c.id)?.value || '';
+  const lines = txt.split(/\n+/).map((l) => l.trim()).filter(Boolean); if (!lines.length) { toast('Cole pelo menos um nome.'); return; }
+  const sq = G.players.filter((p) => p && p.club === c.id).sort((a, b) => (a.u20 - b.u20) || b.ovr - a.ovr);
+  let n = 0;
+  lines.forEach((l, i) => {
+    const [nm, pos, age, ovr] = l.split(/[;,\t]/).map((x) => x.trim());
+    if (!nm) return; const P = (pos || '').toUpperCase();
+    let p = sq[i];
+    if (!p) p = makePlayer(G, { n: nm, pos: POS.includes(P) ? P : 'MC', age: +age || 24, ovr: +ovr || 60, club: c.id, nat: c.country });
+    p.n = nm; if (POS.includes(P)) p.pos = P; if (+age) p.age = clamp(+age, 15, 45); if (+ovr) { p.ovr = clamp(+ovr, 30, 99); p.pot = Math.max(p.pot, p.ovr); p.s0 = p.ovr; p.wage = playerWage(p, c.country); }
+    p.real = true; n++;
+  });
+  c.lineup = null; save(); toast(`${n} jogadores atualizados no ${c.name}`); replaceSheet(clubEd(c.id)); render();
 };

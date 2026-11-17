@@ -391,3 +391,6 @@ main.enter > * { animation: viewIn .2s ease-out; }
 .card h3 > .pill, .card h3 > span.pill, .card h3 > button { flex: none; }
 .nat-pitch .pslot { width: 62px; } .nat-pitch .pslot .dot { width: 34px; height: 34px; font-size: 12px; }
 .nat-pitch .pslot .nm { font-size: 10px; } .nat-pitch .pslot .rl { font-size: 8.5px; }
+/* sem rostos */
+.pf-face { display: none !important; }
+.pf-hero { padding-left: 14px; }
