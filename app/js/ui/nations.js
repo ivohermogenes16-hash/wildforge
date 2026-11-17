@@ -1,10 +1,10 @@
 // Telas das seleções: página da sua seleção, pré-jogo e mundo das seleções
 import { esc, money, POS } from '../util.js';
-import { face, ovrBadge, FLAG } from './art.js';
-import { S, H, VIEWS, render, toast, openSheet, closeSheet, save, posTag, wk, shortName } from './app.js';
+import { face, ovrBadge, FLAG, textOn } from './art.js';
+import { S, H, VIEWS, render, toast, openSheet, closeSheet, save, posTag, wk, shortName, pitchLines } from './app.js';
 import { launchLive } from './live.js';
-import { LiveMatch, FORMATIONS, MENT, PRESS, penalties } from '../engine/match.js';
-import { team, natClub, natLineup, natRecord, natProgress, eligible, autoSquad, nextNatFix, natObjective, qualTable, takeNatJob, natFire, natWage } from '../engine/nations.js';
+import { LiveMatch, FORMATIONS, MENT, PRESS, penalties, formOf } from '../engine/match.js';
+import { team, natClub, natLineup, natRecord, natProgress, eligible, autoSquad, nextNatFix, natObjective, qualTable, takeNatJob, natFire, natWage, natXiOk } from '../engine/nations.js';
 import { CONFS } from '../data/nations.js';
 
 const flagOf = (G, c) => team(G, c).flag;
@@ -58,10 +58,9 @@ VIEWS.nat = () => {
     <div class="card flat tbl-card"><table class="tb"><tr><th></th><th>Pos</th><th class="l">Jogador</th><th>Id</th><th>Ger</th><th>⚡</th><th class="l">Clube</th><th>Jogos/Gols</th></tr>${el.map((p) => `<tr data-a="natpick" data-v="${p.id}" class="${sq.has(p.id) ? 'me' : ''}"><td>${sq.has(p.id) ? '✅' : '⬜'}</td><td>${posTag(p.pos)}</td><td class="l"><b>${esc(p.n)}</b>${p.inj > 0 ? ' 🩹' : ''}</td><td>${p.age}</td><td>${ovrBadge(p.ovr)}</td><td>${Math.round(p.fit)}</td><td class="l sm ell" style="max-width:120px">${p.club >= 0 ? esc(G.clubs[p.club].name) : '<span class="mut">clube no exterior</span>'}</td><td class="sm">${p.intl ? `${p.intl.j}/${p.intl.g}` : '0/0'}</td></tr>`).join('')}</table></div>
     <p class="xs mut">Toque para convocar/desconvocar (máx. 23, pelo menos 3 goleiros). A escalação é montada com os melhores convocados na formação escolhida. Alguns jogadores podem pedir dispensa.</p>`;
   } else if (sub === 'tat') {
-    h += `<div class="card"><h3>Formação</h3><div class="chips" style="flex-wrap:wrap">${Object.keys(FORMATIONS).map((f) => `<span class="chip ${T.tact.form === f ? 'on' : ''}" data-a="natform" data-v="${f}">${f}</span>`).join('')}</div>
+    h += `<div class="cols2" style="grid-template-columns:1.45fr 1fr"><div>${natXiView(G, T)}</div><div class="card"><h3>Formação</h3><div class="chips" style="flex-wrap:wrap">${Object.keys(FORMATIONS).map((f) => `<span class="chip ${T.tact.form === f ? 'on' : ''}" data-a="natform" data-v="${f}">${f}</span>`).join('')}</div>
     <h3 style="margin-top:8px">Mentalidade</h3><div class="seg">${MENT.map((x, i) => `<button class="${T.tact.ment === i ? 'on' : ''}" data-a="nattact" data-v="ment:${i}">${x}</button>`).join('')}</div>
-    <h3>Pressão</h3><div class="seg">${PRESS.map((x, i) => `<button class="${T.tact.press === i ? 'on' : ''}" data-a="nattact" data-v="press:${i}">${x}</button>`).join('')}</div></div>
-    <div class="card"><h3>Provável escalação</h3><div class="list">${natLineup(G, n.code).xi.map((id, i) => { const p = G.players[id]; return p ? `<div class="li sm"><span class="xs mut" style="width:34px">${(FORMATIONS[T.tact.form] || FORMATIONS['4-3-3'])[i][0]}</span><span class="grow b">${esc(p.n)}</span>${ovrBadge(p.ovr)}</div>` : ''; }).join('')}</div></div>`;
+    <h3>Pressão</h3><div class="seg">${PRESS.map((x, i) => `<button class="${T.tact.press === i ? 'on' : ''}" data-a="nattact" data-v="press:${i}">${x}</button>`).join('')}</div><p class="xs mut">A escalação manual se mantém ao trocar a formação: os jogadores ocupam as posições na mesma ordem.</p></div></div>`;
   } else if (sub === 'jogos') {
     const fx = G.nat.fix.filter((f) => f.h === n.code || f.a === n.code);
     h += `<div class="card flat"><div class="list">${fx.map((f) => `<div class="li sm"><span class="xs mut" style="width:46px">${wk(f.w)}</span><span class="grow">${nm(G, f.h)} <b>${f.hg != null ? `${f.hg}–${f.ag}${f.pen ? '*' : ''}` : 'x'}</b> ${nm(G, f.a)}</span><span class="xs mut">${esc(compN(G, f))}</span></div>`).join('') || '<div class="empty">Sem jogos marcados nesta temporada.</div>'}</div></div>`;
@@ -69,6 +68,28 @@ VIEWS.nat = () => {
   h += `<button class="btn sm red blk" style="margin-top:6px" data-a="natquit">Deixar a seleção</button>`;
   return h;
 };
+function natXiView(G, T) {
+  const lu = natLineup(G, T.code); const manual = natXiOk(G, T); const form = formOf(T.tact);
+  const bad = T.xi && !manual;
+  return `<div class="card"><h3><span>Escalação ${manual ? '<span class="pill g">manual</span>' : '<span class="pill">automática</span>'}</span>${manual ? '<button class="btn sm" data-a="natxiauto">⚡ Voltar ao automático</button>' : ''}</h3>
+  ${bad ? '<div class="hint warn">Sua escalação manual tem jogador lesionado ou desconvocado — usando a automática. Toque numa posição para corrigir.</div>' : ''}
+  <div class="pitch nat-pitch">${pitchLines()}${form.map(([pos, x, y], i) => { const p = G.players[lu.xi[i]]; const off = p && p.pos !== pos; const sel = S.natSel === i; return `<div class="pslot" style="left:${7 + y * 86}%;top:${8 + x * 84}%" data-a="natslot" data-v="${i}"><div class="dot ${sel ? 'sel' : ''} ${off ? 'off' : ''}" style="--k:${pos === 'GOL' ? '#f4c542' : T.c1};--t:${pos === 'GOL' ? '#111' : textOn(T.c1)}"><b>${p ? p.ovr : '+'}</b></div><div class="rl ${off ? 'warn' : ''}">${pos}</div><div class="nm">${p ? esc(shortName(p.n)) : '—'}</div></div>`; }).join('')}</div>
+  <p class="xs mut">Toque numa posição e escolha quem joga ali. Só convocados aparecem.</p></div>`;
+}
+H.natslot = (v) => {
+  const G = S.G; const T = team(G, G.me.nat.code); const i = +v;
+  if (!natXiOk(G, T)) T.xi = natLineup(G, T.code).xi.slice();
+  const pos = formOf(T.tact)[i][0];
+  const ps = T.squad.map((id) => G.players[id]).filter(Boolean).sort((a, b) => (b.pos === pos) - (a.pos === pos) || b.ovr - a.ovr);
+  openSheet(`<h2>Quem joga de ${pos}?</h2><div class="list">${ps.map((p) => `<div class="li tap ${T.xi[i] === p.id ? 'on' : ''}" data-a="natslot2" data-v="${i}:${p.id}">${posTag(p.pos)}<span class="grow b ell">${esc(p.n)}${p.inj > 0 ? ' 🩹' : ''}</span><span class="xs mut">${T.xi.includes(p.id) ? 'titular' : 'reserva'}</span>${ovrBadge(p.ovr)}</div>`).join('')}</div>`);
+};
+H.natslot2 = (v) => {
+  const G = S.G; const T = team(G, G.me.nat.code); const [i, id] = v.split(':').map(Number);
+  if (G.players[id].inj > 0) { toast('Jogador lesionado'); return; }
+  const j = T.xi.indexOf(id); const out = T.xi[i]; T.xi[i] = id; if (j >= 0 && j !== i) T.xi[j] = out;
+  closeSheet(); render(); save();
+};
+H.natxiauto = () => { team(S.G, S.G.me.nat.code).xi = null; toast('Escalação automática'); render(); save(); };
 H.natpick = (v) => { const G = S.G; const id = +v; let sq = G.me.natSquad || []; if (sq.includes(id)) sq = sq.filter((x) => x !== id); else { if (sq.length >= 23) { toast('Máximo de 23 convocados'); return; } sq = sq.concat(id); } G.me.natSquad = sq; team(G, G.me.nat.code).squad = sq.slice(); render(); save(); };
 H.natauto = () => { const G = S.G; G.me.natSquad = autoSquad(G, G.me.nat.code); team(G, G.me.nat.code).squad = G.me.natSquad.slice(); toast('Convocação automática feita'); render(); save(); };
 H.natform = (v) => { team(S.G, S.G.me.nat.code).tact.form = v; render(); save(); };

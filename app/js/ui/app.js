@@ -71,7 +71,7 @@ export function render() {
     <button class="icon-btn" data-a="go" data-v="inbox">📩${unread ? `<span class="badge">${unread}</span>` : ''}</button>
     <span class="money-pill" data-a="go" data-v="financas">${money(G.me.money)}</span>
     <button class="btn pri cont" data-a="continue">${now ? '▶ Jogo' : 'Continuar'} ›</button></header>
-  <main>${body}</main></div>`;
+  <main class="${same ? '' : 'enter'}">${body}</main></div>`;
   app.dataset.view = S.page || S.tab;
   if (same) app.querySelector('main').scrollTop = sc;
 }
@@ -116,7 +116,7 @@ VIEWS.home = () => {
     else col1 += `<div class="card"><div class="row sm"><span class="grow mut">Sua reputação</span><b>${Math.round(me.rep)}/100</b></div><div class="bar"><i style="width:${me.rep}%;background:linear-gradient(90deg,var(--ac2),var(--gold))"></i></div><div class="xs mut" style="margin-top:6px">Técnico do sub-20: vença e revele talentos para ser notado.</div></div>`;
     const compId = me.job.youth ? 'U20' : c.league; const comp = G.comps[compId];
     if (comp && comp.table[c.id]) col2 += `<div class="card"><h3><span>${esc(comp.short)}</span><span class="form">${comp.table[c.id].form.split('').map((x) => `<i class="${x}"></i>`).join('')}</span></h3>${miniTable(comp, c.id)}</div>`;
-    const last = fixturesOf(G, c.id).filter((f) => f.hg != null && (me.job.youth ? f.c === 'U20' : f.c !== 'U20')).slice(-3).reverse();
+    const last = fixturesOf(G, c.id).filter((f) => f.hg != null && (me.job.youth ? f.c === 'U20' : G.comps[f.c]?.kind !== 'youth')).slice(-3).reverse();
     if (last.length) col2 += `<div class="card"><h3>Últimos resultados</h3><div class="list">${last.map((f) => fixLine(f, c.id)).join('')}</div></div>`;
   }
   if (c) {
@@ -191,7 +191,7 @@ VIEWS.tat = () => {
   const bar = (l, v) => `<div style="margin-bottom:6px"><div class="row xs"><span class="grow mut">${l}</span><b>${Math.round(v)}</b></div><div class="bar"><i style="width:${clamp((v - 40) * 2, 3, 100)}%"></i></div></div>`;
   let right = seg('tat', [['res', 'Jogadores'], ['tat', 'Estilo'], ['treino', 'Treino']]);
   if (S.sub.tat === 'res') {
-    const pool = G.players.filter((p) => p && p.club === c.id && (youth ? p.u20 : !p.u20) && !lu.xi.includes(p.id)).sort((a, b) => (lu.bench.includes(b.id) - lu.bench.includes(a.id)) || b.ovr - a.ovr);
+    const pool = G.players.filter((p) => p && p.club === c.id && (youth ? p.u20 && !p.u17 : !p.u20) && !lu.xi.includes(p.id)).sort((a, b) => (lu.bench.includes(b.id) - lu.bench.includes(a.id)) || b.ovr - a.ovr);
     right += `<div class="hint" style="margin-bottom:8px">${S.sel ? '👉 Agora toque no jogador que vai entrar.' : '✋ Arraste os jogadores no campo para trocar de lugar ou mudar a posição. Arraste pelo ⠿ para colocar um reserva.'}</div><div class="list">${pool.map((p) => `<div class="li tap" data-a="pickp" data-v="${p.id}"><span class="grip" data-dragp="${p.id}">⠿</span>${posTag(p.pos)}<div class="grow"><div class="b ell">${esc(p.n)}</div><div class="xs mut">${lu.bench.includes(p.id) ? '🪑 Banco · ' : ''}⚡${Math.round(p.fit)} ${!available(p) ? '<span class="bad">indisponível</span>' : ''}</div></div>${ovrBadge(p.ovr)}</div>`).join('')}</div>`;
   } else if (S.sub.tat === 'tat') {
     right += `<div class="card flat">${bar('Ataque', R.att)}${bar('Meio-campo', R.ctl)}${bar('Defesa', R.def)}</div>
@@ -199,10 +199,7 @@ VIEWS.tat = () => {
     <div class="field"><label>Pressão</label><div class="seg" style="margin:0">${PRESS.map((m, i) => `<button class="${tact.press === i ? 'on' : ''}" data-a="tact" data-v="press:${i}">${m}</button>`).join('')}</div></div>
     <p class="xs mut">Ofensiva cria mais chances, mas expõe a defesa. Pressão alta domina o meio e cansa mais.</p>`;
   } else {
-    const tr = youth ? (G.me.u20train ||= { foco: 'equilibrado', int: 1 }) : c.train;
-    const F = [['equilibrado', 'Equilibrado', 'Desenvolvimento normal.'], ['tecnico', 'Técnico', '+12% evolução dos jogadores.'], ['fisico', 'Físico', 'Recupera mais o fôlego.'], ['tatico', 'Tático', '+1 de força em todos os jogos.']];
-    right += `<div class="list">${F.map(([k, l, d]) => `<div class="li tap" data-a="train" data-v="foco:${k}"><div class="grow"><div class="b">${l}</div><div class="xs mut">${d}</div></div>${tr.foco === k ? '<span class="ok xb">✓</span>' : ''}</div>`).join('')}</div>
-    <div class="field" style="margin-top:8px"><label>Intensidade</label><div class="seg" style="margin:0">${['Leve', 'Normal', 'Pesada'].map((m, i) => `<button class="${tr.int === i ? 'on' : ''}" data-a="train" data-v="int:${i}">${m}</button>`).join('')}</div></div><p class="xs mut">Pesada acelera a evolução, mas cansa e pode lesionar.</p>`;
+    right += trainView(G, c, youth);
   }
   const forms = Object.keys(FORMATIONS).concat(tact.custom ? ['Personalizada'] : []);
   return `<div class="tact-wrap"><div class="tact-l"><div class="chips">${forms.map((f) => `<span class="chip ${tact.form === f ? 'on' : ''}" data-a="form" data-v="${f}">${f}</span>`).join('')}</div>${pitch}<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm grow" data-a="autolu">⚡ Escalar automático</button>${tact.form === 'Personalizada' ? '<button class="btn sm" data-a="resetform">↺ Formação padrão</button>' : ''}</div></div><div class="tact-r card flat">${right}</div></div>`;
@@ -222,6 +219,21 @@ H.pickp = (v) => {
   S.sel = null; render(); save();
 };
 H.tact = (v) => { const [k, n] = v.split(':'); mySide().tact[k] = +n; render(); save(); };
+function trainView(G, c, youth) {
+  const tr = youth ? (G.me.u20train ||= { foco: 'equilibrado', int: 1 }) : c.train;
+  const sq = G.players.filter((p) => p && p.club === c.id && (youth ? p.u20 && !p.u17 : !p.u20));
+  const fit = sq.length ? Math.round(sq.reduce((s, p) => s + p.fit, 0) / sq.length) : 0;
+  const inj = sq.filter((p) => p.inj > 0); const evo = sq.filter((p) => p.ovr > (p.s0 ?? p.ovr));
+  const risk = tr.int === 2 ? (c.infra?.med || 2) >= 4 ? 'Médio' : 'Alto' : tr.int === 1 ? 'Baixo' : 'Mínimo';
+  const pre = G.me.pre && G.me.pre.y === G.year ? PRE[G.me.pre.k] : null; const pb = G.me.preBon && G.t < G.me.preBon.until ? G.me.preBon : null;
+  const ind = sq.filter((p) => p.itr);
+  return `<div class="card flat"><h3>Relatório do treino</h3><div class="train-kpi"><div><b class="${fit < 75 ? 'warn' : 'ok'}">${fit}%</b><span>Fôlego médio</span></div><div><b class="${inj.length > 2 ? 'bad' : ''}">${inj.length}</b><span>Lesionados</span></div><div><b class="ok">${evo.length}</b><span>Evoluíram</span></div><div><b>${risk}</b><span>Risco de lesão</span></div></div>
+    ${pre ? `<div class="hint" style="margin-top:8px">${pre.n}${pb ? ` · efeito ${pb.all > 0 ? '+' : ''}${String(pb.all).replace('.', ',')} de força por mais ${pb.until - G.t} sem.` : ' · efeito encerrado'}</div>` : '<div class="xs mut" style="margin-top:6px">Pré-temporada: decidida no início de cada temporada.</div>'}
+    ${inj.length ? `<div class="xs mut" style="margin-top:6px">🩹 ${inj.map((p) => `${esc(shortName(p.n))} (${p.inj} sem.)`).join(', ')}</div>` : ''}</div>
+  <div class="card flat"><h3>Treino coletivo</h3><div class="train-grid">${Object.entries(TRAIN_FX).map(([k, x]) => `<div class="tcard ${tr.foco === k ? 'on' : ''}" data-a="train" data-v="foco:${k}"><b>${x.n}</b><span>${x.d}</span></div>`).join('')}</div>
+  <div class="field" style="margin-top:8px"><label>Intensidade</label><div class="seg" style="margin:0">${['Leve', 'Normal', 'Pesada'].map((m, i) => `<button class="${tr.int === i ? 'on' : ''}" data-a="train" data-v="int:${i}">${m}</button>`).join('')}</div></div><p class="xs mut">Leve recupera mais fôlego e evolui menos (-25%). Pesada evolui +25%, cansa e pode lesionar.</p></div>
+  <div class="card flat"><h3>Treino individual (${ind.length})</h3><div class="list">${sq.slice().sort((a, b) => !!b.itr - !!a.itr || b.ovr - a.ovr).map((p) => `<div class="li tap sm" data-a="itr" data-v="${p.id}">${posTag(p.pos)}<span class="grow b ell">${esc(p.n)}</span><span class="xs ${p.itr ? 'ok' : 'mut'}">${p.itr ? (p.itr.startsWith('pos:') ? `→ ${p.itr.slice(4)} ${p.posL || 0}/10` : ITR[p.itr].n) : '—'}</span></div>`).join('')}</div></div>`;
+}
 H.train = (v) => { const { G, c, youth } = mySide(); const tr = youth ? G.me.u20train : c.train; const [k, n] = v.split(':'); tr[k] = k === 'int' ? +n : n; render(); save(); };
 
 // ---------- JOGOS ----------
@@ -234,7 +246,7 @@ function calView() {
   const G = S.G, c = myClub(G);
   if (!c) return '<div class="empty">Sem clube no momento.</div>';
   const youth = G.me.job.youth;
-  const fx = fixturesOf(G, c.id).filter((f) => (youth ? f.c === 'U20' : f.c !== 'U20'));
+  const fx = fixturesOf(G, c.id).filter((f) => (youth ? f.c === 'U20' : G.comps[f.c]?.kind !== 'youth'));
   const half = Math.ceil(fx.length / 2);
   return `<div class="cols2"><div class="card flat" style="padding:4px 12px"><div class="list">${fx.slice(0, half).map((f) => fixLine(f, c.id)).join('') || '<div class="empty">Sem jogos.</div>'}</div></div><div class="card flat" style="padding:4px 12px"><div class="list">${fx.slice(half).map((f) => fixLine(f, c.id)).join('')}</div></div></div>`;
 }
@@ -399,6 +411,7 @@ document.addEventListener('pointercancel', (e) => endDrag(e, true));
 // ---------- decisões (diretoria, vestiário, imprensa, comercial) ----------
 import { resolveDecision } from '../engine/life.js';
 import { takeNatJob, nextNatFix } from '../engine/nations.js';
+import { TRAIN_FX, ITR, PRE } from '../engine/life.js';
 import { acceptLoanOffer } from '../engine/market2.js';
 import { coachWage } from '../engine/econ.js';
 H.decide = (v) => {

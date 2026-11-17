@@ -25,6 +25,7 @@ export function doLoan(G, p, to, type, fee, share) {
 export function endLoan(G, p, buy) {
   const L = p.loan; if (!L) return;
   const F = G.clubs[L.from], T = G.clubs[p.club];
+  if (!T || !F || p.club < 0) { p.loan = null; return; }
   if (buy) {
     T.money -= L.fee; T.fin.tout += L.fee; F.money += L.fee; F.fin.tin += L.fee;
     p.loan = null; p.con = Math.max(p.con, G.year + 3); p.wage = Math.max(p.wage, playerWage(p, T.country));

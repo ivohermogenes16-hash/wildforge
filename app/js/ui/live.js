@@ -63,10 +63,10 @@ export function launchLive(f, m, side, hc, ac, done) {
      <div class="lv-team">${crest(hc, 30)}<span class="b ell">${esc(hc.name)}</span></div>
      <div class="lv-score"><span id="lsc">0 – 0</span><span class="lv-min" id="lmin">0'</span></div>
      <div class="lv-team r"><span class="b ell">${esc(ac.name)}</span>${crest(ac, 30)}</div>
-     <div class="lv-btns"><button class="btn sm" data-a="lnames" title="Nomes">Aa</button><button class="btn sm" data-a="lpause" id="lpb">⏸</button><button class="btn sm" data-a="lspeed" id="lsp">2x</button><button class="btn sm pri" data-a="ltact">Tática</button><button class="btn sm" data-a="lskip">⏭</button></div>
+     <div class="lv-btns"><button class="btn sm" data-a="lnames" title="Nomes">Aa</button><button class="btn sm" data-a="lrep" id="lrp" title="Replays">🎬</button><button class="btn sm" data-a="lpause" id="lpb">⏸</button><button class="btn sm" data-a="lspeed" id="lsp">2x</button><button class="btn sm pri" data-a="ltact">Tática</button><button class="btn sm" data-a="lskip">⏭</button></div>
    </div>
    <div class="lv-tl"><i id="ltlp"></i><span style="left:50%" class="ht"></span><div id="ltlm"></div></div>
-   <div class="lv-main"><div class="lv-pitch"><canvas id="lcv"></canvas></div>
+   <div class="lv-main"><div class="lv-pitch"><canvas id="lcv"></canvas><div class="lv-nar" id="lnar"></div></div>
      <div class="lv-side"><div id="lstats"></div><div class="feed" id="lfeed"></div><div id="lend"></div></div></div>
   </div>`;
   document.body.appendChild(wrap);
@@ -76,7 +76,10 @@ export function launchLive(f, m, side, hc, ac, done) {
     onEvent: (e, quiet) => onEv(e, quiet),
     onPause: (why) => { if (why === 'int') { L.viz.paused = true; updPause(); toast('Intervalo — ajuste a tática se quiser'); } },
     onEnd: () => endLive(),
+    onReplay: (on) => { const w = document.querySelector('.lv-pitch'); if (w) w.classList.toggle('rp', on); },
   });
+  cv.addEventListener('click', () => L?.viz.skipReplay());
+  L.lastNar = 0;
   L.onResize = () => L.viz.resize(); window.addEventListener('resize', L.onResize);
   addFeed({ t: 'ini' }); stats();
   L.raf = requestAnimationFrame(loop);
@@ -86,34 +89,55 @@ function loop(now) {
   if (!L) return;
   const dt = (now - L.last) / 1000; L.last = now;
   L.viz.update(dt); L.viz.draw();
+  if (L.m.min !== L.lastMin) { L.lastMin = L.m.min; narrate(); }
+  if (L.narT && now > L.narT) { const n = document.getElementById('lnar'); if (n) n.classList.remove('on'); L.narT = 0; }
   const mn = document.getElementById('lmin'); if (mn) mn.textContent = `${L.m.min}'`;
   const tp = document.getElementById('ltlp'); if (tp) tp.style.width = Math.min(100, L.m.min / 90 * 100) + '%';
   L.raf = requestAnimationFrame(loop);
 }
 
+const pk = (a) => a[Math.floor(Math.random() * a.length)];
 function evText(e) {
   const G = S.G, m = L.m; const nm = (id) => esc(G.players[id]?.n || '');
   const team = (s) => esc(m.s[s]?.club.name || '');
+  const sc = () => `${L.viz.score[0]} a ${L.viz.score[1]}`;
   switch (e.t) {
-    case 'ini': return '🟢 Bola rolando!';
-    case 'gol': return `⚽ GOOOL do ${team(e.side)}! ${nm(e.p)}${e.as >= 0 ? ` <span class="mut">(assist. ${nm(e.as)})</span>` : ''}`;
-    case 'def': return `🧤 ${nm(e.gk)} defende o chute de ${nm(e.p)}`;
-    case 'trave': return `😱 Na trave! ${nm(e.p)} quase marca`;
-    case 'fora': return `${nm(e.p)} finaliza para fora`;
-    case 'am': return `🟨 Amarelo para ${nm(e.p)}`;
-    case 'ver': return `🟥 ${nm(e.p)} é expulso${e.second ? ' (2º amarelo)' : ''}!`;
-    case 'les': return `🩹 ${nm(e.p)} sente uma lesão`;
+    case 'ini': return pk(['🟢 Bola rolando! Começa o jogo.', '🟢 Apita o árbitro, está valendo!', '🟢 Rola a bola para mais um capítulo dessa história.']);
+    case 'gol': return `⚽ ${pk(['GOOOOL', 'É GOL', 'GOLAÇO', 'Balança a rede'])} do ${team(e.side)}! ${pk([`${nm(e.p)} não perdoa`, `${nm(e.p)} manda para o fundo da rede`, `${nm(e.p)} bate com categoria`, `${nm(e.p)} aparece livre e marca`])}${e.as >= 0 ? ` <span class="mut">(assist. ${nm(e.as)})</span>` : ''}. ${sc()}!`;
+    case 'def': return pk([`🧤 Que defesa de ${nm(e.gk)}! ${nm(e.p)} parou no goleiro`, `🧤 ${nm(e.p)} chuta e ${nm(e.gk)} espalma`, `🧤 ${nm(e.gk)} voa e segura o chute de ${nm(e.p)}`]);
+    case 'trave': return pk([`😱 NA TRAVE! ${nm(e.p)} acerta o poste`, `😱 Explode no travessão! ${nm(e.p)} quase marca`, `😱 Que azar, ${nm(e.p)}! A bola bate na trave`]);
+    case 'fora': return pk([`${nm(e.p)} finaliza para fora`, `${nm(e.p)} arrisca de longe… por cima`, `${nm(e.p)} pega mal na bola e manda à linha de fundo`, `Perigo! ${nm(e.p)} tira tinta da trave`]);
+    case 'am': return pk([`🟨 Amarelo para ${nm(e.p)}`, `🟨 Falta dura de ${nm(e.p)}, cartão amarelo`, `🟨 ${nm(e.p)} reclama e leva o amarelo`]);
+    case 'ver': return `🟥 ${nm(e.p)} é expulso${e.second ? ' (2º amarelo)' : ''}! ${team(e.side)} com um a menos.`;
+    case 'les': return `🩹 ${nm(e.p)} sente uma lesão e pede atendimento`;
     case 'sub': return `🔄 ${team(e.side)}: sai ${nm(e.o)}, entra ${nm(e.p)}`;
-    case 'int': return '⏸ Intervalo';
-    case 'fim': return '🏁 Fim de jogo';
+    case 'int': return `⏸ Intervalo: ${team(0)} ${sc()} ${team(1)}`;
+    case 'fim': return `🏁 Fim de jogo! ${team(0)} ${sc()} ${team(1)}`;
+    case 'nar': return `🎙️ ${e.txt}`;
   }
   return '';
+}
+function narrate() {
+  const m = L.m, mn = m.min; if (mn - L.lastNar < 7 || mn < 4 || mn >= 90) return;
+  if (Math.random() > 0.55) return;
+  const st = m.st; const tot = st.pos[0] + st.pos[1] || 1; const p0 = st.pos[0] / tot;
+  const team = (s) => esc(m.s[s].club.name); const [a, b] = L.viz.score; const dom = p0 > 0.58 ? 0 : p0 < 0.42 ? 1 : -1;
+  const lines = [];
+  if (dom >= 0) lines.push(`${team(dom)} tem ${Math.round((dom ? 1 - p0 : p0) * 100)}% de posse e roda a bola no campo de ataque.`, `${team(dom)} pressiona, o adversário está acuado.`);
+  else lines.push('Jogo equilibrado, muita disputa no meio-campo.', 'As duas equipes se estudam, ninguém quer arriscar.');
+  if (st.sh[0] + st.sh[1] >= 6) { const s = st.sh[0] > st.sh[1] ? 0 : 1; lines.push(`${team(s)} finalizou ${st.sh[s]} vezes até aqui.`); }
+  if (mn >= 75) lines.push(a === b ? 'Reta final e tudo igual! Quem vai arriscar?' : `Reta final: ${team(a > b ? 1 : 0)} se lança ao ataque em busca do ${Math.abs(a - b) === 1 ? 'empate' : 'gol'}.`);
+  if (mn >= 85) lines.push('A torcida está de pé nos minutos finais!');
+  if (a - b >= 2 || b - a >= 2) lines.push(`${team(a > b ? 0 : 1)} administra a vantagem com tranquilidade.`);
+  if (mn > 40 && mn < 46) lines.push('Fim do primeiro tempo se aproximando.');
+  L.lastNar = mn; const e = { t: 'nar', m: mn, txt: pk(lines) }; addFeed(e);
 }
 function addFeed(e) {
   const el = document.getElementById('lfeed'); if (!el) return;
   const d = document.createElement('div'); d.className = 'ev ' + e.t + (e.side === L.side ? ' mine' : '');
-  d.innerHTML = `<b class="dim">${e.m != null ? e.m + "'" : ''}</b> ${evText(e)}`;
+  const tx = evText(e); d.innerHTML = `<b class="dim">${e.m != null ? e.m + "'" : ''}</b> ${tx}`;
   el.prepend(d);
+  if (['gol', 'trave', 'def', 'ver', 'nar', 'int', 'fim'].includes(e.t)) { const n = document.getElementById('lnar'); if (n) { n.innerHTML = tx.replace(/<[^>]+>/g, ''); n.className = 'lv-nar on ' + e.t; L.narT = performance.now() + 3200; } }
 }
 function onEv(e, quiet) {
   addFeed(e);
@@ -200,3 +224,4 @@ H.sumclose = () => { closeSheet(true); render(); };
 
 H.prepress = (v) => { const G = S.G; const [id, i, fi] = v.split(':').map(Number); const m = G.inbox.find((x) => x.id === id); if (m) toast(resolveDecision(G, m, i), 2500); closeSheet(); preMatch(G.fix[fi]); save(); };
 H.postpress = (v) => { const G = S.G; const [id, i] = v.split(':').map(Number); const m = G.inbox.find((x) => x.id === id); if (m) toast(resolveDecision(G, m, i), 2600); const el = document.getElementById('postpress'); if (el) el.innerHTML = `<div class="sm ok">Resposta dada: “${esc(m.opts[i].l)}”</div>`; save(); };
+H.lrep = () => { const v = L.viz; v.replays = !v.replays; const b = document.getElementById('lrp'); if (b) b.style.opacity = v.replays ? 1 : 0.4; toast(v.replays ? 'Replays dos gols ligados' : 'Replays desligados'); };

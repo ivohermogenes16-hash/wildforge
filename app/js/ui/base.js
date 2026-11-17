@@ -1,7 +1,8 @@
 import { esc, money, POS } from '../util.js';
 import { crest, face, ovrBadge, FLAG } from './art.js';
-import { S, H, VIEWS, render, toast, openSheet, closeSheet, replaceSheet, save, posTag, squadTable, clubOf, potRange } from './app.js';
-import { myClub } from '../engine/game.js';
+import { S, H, VIEWS, render, toast, openSheet, closeSheet, replaceSheet, save, posTag, squadTable, clubOf, potRange, fixLine } from './app.js';
+import { myClub, u17Pool } from '../engine/game.js';
+import { standings, fixturesOf } from '../engine/season.js';
 import { REGIONS, startScout, prospects, prospectFee, signProspect, youthMarket, youthPrice, buyYouth, releaseYouth, fundBase, ensureBase, baseBudget } from '../engine/youth.js';
 
 VIEWS.base = () => {
@@ -13,11 +14,12 @@ VIEWS.base = () => {
   const head = `<div class="card base-head"><div class="row" style="gap:14px;flex-wrap:wrap"><div class="grow"><div class="xs mut">Orçamento da base (temporada)</div><div class="xb" style="font-size:22px">${money(c.yb)}</div></div>
    ${G.me.scout ? `<span class="pill b">🔭 Olheiro em ${esc(REGIONS.find((r) => r.id === G.me.scout.region).name)} · ${G.me.scout.left} sem.</span>` : '<span class="pill">Nenhum olheiro viajando</span>'}
    ${!j.youth ? `<button class="btn sm" data-a="fundbase">💸 Reforçar orçamento</button>` : ''}</div></div>
-  <div class="seg">${[['elenco', 'Jogadores da base'], ['olheiros', `Olheiros${prospects(G).length ? ` (${prospects(G).length})` : ''}`], ['mercado', 'Outras bases']].map(([k, l]) => `<button class="${sub === k ? 'on' : ''}" data-a="sub" data-v="base:${k}">${l}</button>`).join('')}</div>`;
+  <div class="seg">${[['elenco', 'Sub-20'], ['sub17', `Sub-17${u17Pool(G, c.id).length ? ` (${u17Pool(G, c.id).length})` : ''}`], ['olheiros', `Olheiros${prospects(G).length ? ` (${prospects(G).length})` : ''}`], ['mercado', 'Outras bases']].map(([k, l]) => `<button class="${sub === k ? 'on' : ''}" data-a="sub" data-v="base:${k}">${l}</button>`).join('')}</div>`;
   if (sub === 'elenco') {
-    const ps = G.players.filter((p) => p && p.club === c.id && p.u20);
+    const ps = G.players.filter((p) => p && p.club === c.id && p.u20 && !p.u17);
     return head + (ps.length ? squadTable(ps, { mine: true }) : '<div class="empty">Base vazia. Mande olheiros ou contrate de outras bases.</div>') + `<p class="xs mut">${j.youth ? 'Destaques podem ser indicados ao profissional pelo perfil do jogador.' : 'Promova jogadores ao profissional pelo perfil.'} Aos 21 anos o jogador deixa a base.</p>`;
   }
+  if (sub === 'sub17') return head + sub17View(G, c);
   if (sub === 'olheiros') {
     const ps = prospects(G);
     return head + `<div class="cols2"><div class="card flat"><h3>Enviar olheiro</h3><p class="xs mut">O olheiro viaja por algumas semanas e indica garotos de 15 a 17 anos. Cada semana custa do orçamento da base. Joias raras aparecem!</p>
@@ -29,6 +31,20 @@ VIEWS.base = () => {
   return head + `<div class="row" style="gap:8px;margin-bottom:10px"><select data-ch="yfpos" style="width:auto"><option value="">Todas as posições</option>${POS.map((x) => `<option ${f.pos === x ? 'selected' : ''}>${x}</option>`).join('')}</select><select data-ch="yfc" style="width:auto"><option value="">Todos os países</option>${[['BR', 'Brasil'], ['AR', 'Argentina'], ['EN', 'Inglaterra'], ['ES', 'Espanha'], ['IT', 'Itália']].map(([k, l]) => `<option value="${k}" ${f.country === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
   <div class="card flat tbl-card"><table class="tb"><tr><th>Pos</th><th class="l">Jogador</th><th>Id</th><th>Ger</th><th>Pot</th><th class="l">Clube</th><th>Preço</th></tr>${ps.map((p) => `<tr data-a="player" data-v="${p.id}"><td>${posTag(p.pos)}</td><td class="l"><span class="row" style="gap:6px">${face(p, 22, clubOf(p))}<b class="ell" style="max-width:150px">${esc(p.n)}</b>${p.u20 ? '<span class="pill b">base</span>' : ''}</span></td><td>${p.age}</td><td>${ovrBadge(p.ovr)}</td><td class="ok b">${potRange(p)}</td><td class="l"><span class="row" style="gap:6px">${crest(clubOf(p), 18)}<span class="ell sm" style="max-width:110px">${esc(clubOf(p).name)}</span></span></td><td class="sm">${money(youthPrice(G, p))}</td></tr>`).join('')}</table></div>`;
 };
+function sub17View(G, c) {
+  const ps = u17Pool(G, c.id); const comp = G.comps.U17;
+  if (!comp || !comp.clubs.includes(c.id)) return `${ps.length ? squadTable(ps, { mine: true }) : ''}<div class="empty">O ${esc(c.name)} não disputa o Brasileirão Sub-17 (só clubes da Série A). Os garotos treinam e evoluem mesmo assim.</div>`;
+  const tab = standings(G, comp, 0); const pos = tab.indexOf(c.id) + 1; const t = comp.table[c.id];
+  const fx = fixturesOf(G, c.id).filter((f) => f.c === 'U17');
+  const done = fx.filter((f) => f.hg != null).slice(-5).reverse(); const nx = fx.find((f) => f.hg == null);
+  const top = ps.slice().sort((a, b) => (b.j17 || 0) - (a.j17 || 0) || b.pot - a.pot);
+  return `<div class="cols2"><div><div class="card"><h3><span>Brasileirão Sub-17</span><span class="pill ${pos <= 4 ? 'g' : ''}">${pos}º lugar</span></h3>
+    <div class="row" style="gap:16px;justify-content:space-around;text-align:center"><div><div class="xb" style="font-size:20px">${t.pts}</div><div class="xs mut">pontos</div></div><div><div class="xb" style="font-size:20px">${t.w}-${t.d}-${t.l}</div><div class="xs mut">V-E-D</div></div><div><div class="xb" style="font-size:20px">${t.gf}:${t.ga}</div><div class="xs mut">gols</div></div></div>
+    ${comp.champion != null ? `<div class="hint" style="margin-top:6px">🏆 Campeão: ${esc(G.clubs[comp.champion].name)}</div>` : ''}</div>
+    <div class="card flat"><h3>Jogos</h3><div class="list">${nx ? fixLine(nx, c.id) : ''}${done.map((f) => fixLine(f, c.id)).join('') || '<div class="xs mut">Ainda sem jogos.</div>'}</div></div>
+    <div class="card flat"><h3>Classificação</h3><table class="tb">${tab.slice(0, 20).map((id, i) => `<tr class="${id === c.id ? 'me' : ''}"><td>${i + 1}</td><td class="l ell" style="max-width:130px">${esc(G.clubs[id].name)}</td><td>${comp.table[id].p}</td><td>${comp.table[id].gf - comp.table[id].ga}</td><td class="b">${comp.table[id].pts}</td></tr>`).join('')}</table></div></div>
+    <div>${squadTable(top, { mine: true })}<p class="xs mut">A Sub-17 joga sozinha com o melhor time disponível — quem joga mais evolui mais. No perfil do garoto você pode subir para o Sub-20 (aos 18 ele sobe automático). Título dá R$ 150 mil para a base.</p></div></div>`;
+}
 H.yfpos = (v) => { S.yf.pos = v; render(); };
 H.yfc = (v) => { S.yf.country = v; render(); };
 H.scout = (v) => {

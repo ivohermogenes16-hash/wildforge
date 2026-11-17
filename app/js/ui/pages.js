@@ -13,12 +13,13 @@ import { invest, netWorth, foundClub, FOUND_COST, APT_PRICE, inject, safQuote, b
 import { LEAGUES } from '../data/leagues.js';
 import { clubLevel } from '../engine/world.js';
 import { attrs, youthPrice } from '../engine/youth.js';
-import { revealPlayer } from '../engine/life.js';
+import { revealPlayer, ITR } from '../engine/life.js';
 
 // ---------- Avançar ----------
 H.continue = () => {
   const G = S.G;
   if (G.inbox.some((m) => m.kind === 'press' && !m.done && !m.expired && G.t - m.t < 1)) { const m = G.inbox.find((x) => x.kind === 'press' && !x.done); toast('Responda a coletiva antes'); H.msg(String(m.id)); return; }
+  const pre = G.inbox.find((m) => m.pre && !m.done && !m.expired); if (pre) { toast('Defina a pré-temporada antes'); H.msg(String(pre.id)); return; }
   const before = G.inbox.length; const y0 = G.year;
   let n = 0;
   while (n < 4) {
@@ -46,9 +47,9 @@ H.player = (v) => {
   const val = playerValue(p);
   let acts = '';
   if (seniorMine && !p.u20 && p.loan) acts = `<div class="hint">🔁 ${esc(LOAN_T[p.loan.type])} do ${esc(G.clubs[p.loan.from].name)} até o fim de ${p.loan.until}${p.loan.type !== 'simples' ? ` · compra: ${money(p.loan.fee)}` : ''}. Você paga ${Math.round(p.loan.share * 100)}% do salário.</div>`;
-  else if (seniorMine && !p.u20) acts = `<div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn sm grow" data-a="renew" data-v="${p.id}">📄 Renovar</button><button class="btn sm grow" data-a="list" data-v="${p.id}">${p.lst ? 'Tirar da venda' : '💲 Pôr à venda'}</button><button class="btn sm grow" data-a="loanlst" data-v="${p.id}">${p.loanLst ? 'Cancelar empréstimo' : '🔁 Emprestar'}</button><button class="btn sm red grow" data-a="release" data-v="${p.id}">Dispensar</button></div>`;
-  else if (seniorMine && p.u20) acts = `<div class="row"><button class="btn sm pri grow" data-a="promote" data-v="${p.id}">⬆️ Promover ao profissional</button><button class="btn sm red grow" data-a="relyouth" data-v="${p.id}">Dispensar</button></div>`;
-  else if (j && j.youth && mine) acts = `<div class="row"><button class="btn sm pri grow" data-a="recommend" data-v="${p.id}">⭐ Indicar ao profissional</button><button class="btn sm red grow" data-a="relyouth" data-v="${p.id}">Dispensar</button></div>`;
+  else if (seniorMine && !p.u20) acts = `${itrBtn(p)}<div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn sm grow" data-a="renew" data-v="${p.id}">📄 Renovar</button><button class="btn sm grow" data-a="list" data-v="${p.id}">${p.lst ? 'Tirar da venda' : '💲 Pôr à venda'}</button><button class="btn sm grow" data-a="loanlst" data-v="${p.id}">${p.loanLst ? 'Cancelar empréstimo' : '🔁 Emprestar'}</button><button class="btn sm red grow" data-a="release" data-v="${p.id}">Dispensar</button></div>`;
+  else if (seniorMine && p.u20) acts = `${catBtn(p)}<div class="row"><button class="btn sm pri grow" data-a="promote" data-v="${p.id}">⬆️ Promover ao profissional</button><button class="btn sm red grow" data-a="relyouth" data-v="${p.id}">Dispensar</button></div>`;
+  else if (j && j.youth && mine) acts = `${catBtn(p)}${itrBtn(p)}<div class="row"><button class="btn sm pri grow" data-a="recommend" data-v="${p.id}">⭐ Indicar ao profissional</button><button class="btn sm red grow" data-a="relyouth" data-v="${p.id}">Dispensar</button></div>`;
   else if (j && !j.youth && !p.u20) acts = `<div class="row"><button class="btn sm grow" data-a="short" data-v="${p.id}">${sh ? '★ Observando' : '☆ Observar'}</button><button class="btn sm pri grow" data-a="bid" data-v="${p.id}">${p.club < 0 ? 'Contratar' : 'Fazer proposta'}</button></div>`;
   if (j && !j.youth && !mine && p.club >= 0 && !p.u20 && !p.loan) acts += `<button class="btn sm blk" style="margin-top:6px" data-a="loanin" data-v="${p.id}">🔁 Pedir empréstimo</button>`;
   if (p.loan && !seniorMine) acts = `<div class="hint" style="margin-bottom:6px">🔁 Emprestado pelo ${esc(G.clubs[p.loan.from].name)} até ${p.loan.until}.</div>` + acts;
@@ -109,14 +110,14 @@ H.release = (v) => {
 };
 H.cs = () => closeSheet();
 H.release2 = (v) => { const c = release(S.G, S.G.players[+v]); toast(`Dispensado (${money(c)})`); closeSheet(); render(); save(); };
-H.promote = (v) => { const G = S.G, p = G.players[+v]; revealPlayer(G, p); p.u20 = false; p.wage = Math.max(p.wage, 1500); p.con = G.year + 3; myClub(G).lineup = null; toast(`${p.n} promovido!`); closeSheet(); render(); save(); };
+H.promote = (v) => { const G = S.G, p = G.players[+v]; revealPlayer(G, p); p.u20 = false; p.u17 = false; p.wage = Math.max(p.wage, 1500); p.con = G.year + 3; myClub(G).lineup = null; toast(`${p.n} promovido!`); closeSheet(); render(); save(); };
 H.recommend = (v) => {
   const G = S.G, p = G.players[+v]; const c = G.clubs[p.club];
   if (p._rec === G.year) { toast('Você já indicou ele nesta temporada'); return; }
   p._rec = G.year;
   const sq = G.players.filter((x) => x && x.club === c.id && !x.u20 && x.pos === p.pos).sort((a, b) => a.ovr - b.ovr);
   const worst = sq[0]?.ovr ?? 0;
-  if (p.ovr >= worst - 3 || p.pot >= clubLevel(c.rep) + 4) { revealPlayer(G, p); p.u20 = false; p.con = G.year + 3; p.wage = 1500; G.me.rep = clamp(G.me.rep + 1, 1, 99); toast(`✅ O técnico do profissional aprovou! ${p.n} subiu.`); }
+  if (p.ovr >= worst - 3 || p.pot >= clubLevel(c.rep) + 4) { revealPlayer(G, p); p.u20 = false; p.u17 = false; p.con = G.year + 3; p.wage = 1500; G.me.rep = clamp(G.me.rep + 1, 1, 99); toast(`✅ O técnico do profissional aprovou! ${p.n} subiu.`); }
   else toast('❌ O técnico do profissional achou que ele ainda não está pronto.');
   closeSheet(); render(); save();
 };
@@ -411,3 +412,21 @@ function loanHtml() {
 H.lnt = (v) => { S.ln.type = v; replaceSheet(loanHtml()); };
 H.lns = (v) => { S.ln.share = +v; document.getElementById('lns').textContent = Math.round(+v * 100) + '%'; };
 H.lnok = () => { const G = S.G; const r = loanRequest(G, G.players[S.ln.p], S.ln.type, S.ln.share); toast(r.why, 3200); if (r.ok) { closeSheet(true); render(); save(); } };
+
+// ---------- categoria (Sub-17 / Sub-20) e treino individual ----------
+function catBtn(p) {
+  if (p.u17) return `<button class="btn sm blk" style="margin-bottom:6px" data-a="cat" data-v="${p.id}:20">⬆️ Subir para o Sub-20</button>`;
+  if (p.u20 && p.age <= 17 && S.G.comps.U17?.clubs.includes(p.club)) return `<button class="btn sm blk" style="margin-bottom:6px" data-a="cat" data-v="${p.id}:17">⬇️ Mandar para o Sub-17 (ganhar minutos)</button>`;
+  return '';
+}
+H.cat = (v) => { const G = S.G; const [id, k] = v.split(':'); const p = G.players[+id]; p.u17 = k === '17'; if (G.me.u20lineup) G.me.u20lineup = null; toast(p.u17 ? `${p.n} vai jogar no Sub-17` : `${p.n} subiu para o Sub-20`); closeSheet(); render(); save(); };
+function itrBtn(p) {
+  const t = p.itr; const lab = !t ? 'Nenhum' : t.startsWith('pos:') ? `Nova posição: ${t.slice(4)} (${p.posL || 0}/10 sem.)` : ITR[t].n;
+  return `<div class="li tap" style="margin-bottom:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px" data-a="itr" data-v="${p.id}"><span>🎯</span><div class="grow"><div class="xs mut">Treino individual</div><div class="b sm">${esc(lab)}</div></div><span class="mut">›</span></div>`;
+}
+H.itr = (v) => {
+  const p = S.G.players[+v];
+  openSheet(`<h2>Treino individual · ${esc(p.n)}</h2><div class="list">${[['', 'Nenhum', 'Segue só o treino coletivo.']].concat(Object.entries(ITR).filter(([k]) => k !== 'pos').map(([k, x]) => [k, x.n, x.d])).map(([k, n, d]) => `<div class="li tap" data-a="itr2" data-v="${p.id}:${k}"><div class="grow"><div class="b">${n}</div><div class="xs mut">${d}</div></div>${(p.itr || '') === k ? '<span class="ok xb">✓</span>' : ''}</div>`).join('')}</div>
+  <h3 style="margin-top:10px">${ITR.pos.n}</h3><p class="xs mut">${ITR.pos.d}</p><div class="chips" style="flex-wrap:wrap">${POS.filter((x) => x !== p.pos && (x === 'GOL') === (p.pos === 'GOL')).map((x) => `<span class="chip ${p.itr === 'pos:' + x ? 'on' : ''}" data-a="itr2" data-v="${p.id}:pos:${x}">${x}</span>`).join('')}</div>`);
+};
+H.itr2 = (v) => { const [id, ...k] = v.split(':'); const p = S.G.players[+id]; const t = k.join(':'); if (t !== p.itr) p.posL = 0; p.itr = t || null; toast('Treino individual definido'); closeSheet(true); H.player(id); render(); save(); };

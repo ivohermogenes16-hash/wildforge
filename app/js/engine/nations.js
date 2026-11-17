@@ -133,7 +133,11 @@ export function nextNatFix(G) { const n = G.me.nat; if (!n) return null; return 
 export function natLineup(G, code) {
   const T = team(G, code); if (!T.squad.length) T.squad = autoSquad(G, code);
   const pool = T.squad.map((id) => G.players[id]).filter(Boolean);
+  if (G.me.nat?.code === code && natXiOk(G, T)) return { xi: T.xi.slice(), bench: pool.filter((p) => !T.xi.includes(p.id) && available(p)).sort((a, b) => b.ovr - a.ovr).slice(0, 9).map((p) => p.id) };
   return autoLineup(G, natClub(G, code), false, false, pool);
+}
+export function natXiOk(G, T) {
+  return !!T.xi && T.xi.length === 11 && new Set(T.xi).size === 11 && T.xi.every((id) => T.squad.includes(id) && available(G.players[id]));
 }
 export function natRecord(G, f, res) {
   f.hg = res.hg; f.ag = res.ag;

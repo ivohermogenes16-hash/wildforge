@@ -37,7 +37,7 @@ export function squadOf(G, cid, youth) { return G.players.filter((p) => p && p.c
 // Escalação automática gulosa
 export function autoLineup(G, club, youth, keepFit = true, pool0 = null) {
   const form = formOf(club.tact);
-  let pool = (pool0 || squadOf(G, club.id, youth)).filter(available);
+  let pool = (pool0 || squadOf(G, club.id, youth).filter((p) => !youth || !p.u17)).filter(available);
   if (!pool0 && !youth && pool.length < 14) pool = pool.concat(squadOf(G, club.id, true).filter(available).sort((a, b) => b.ovr - a.ovr).slice(0, 14 - pool.length));
   const used = new Set(); const xi = new Array(form.length).fill(-1);
   const order = form.map((f, i) => i).sort((a, b) => (form[a][0] === 'GOL' ? -1 : 0) - (form[b][0] === 'GOL' ? -1 : 0));

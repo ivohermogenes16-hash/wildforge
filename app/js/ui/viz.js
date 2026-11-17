@@ -7,6 +7,7 @@ const PW = 105, PH = 68, M = 4;
 const rnd = Math.random;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const SHOT = ['gol', 'def', 'trave', 'fora'];
+const RP_DT = 0.06, RP_SLOW = 2.2;
 const NUM = { GOL: 1, LD: 2, ZAG: 4, LE: 6, VOL: 5, MC: 8, MEI: 10, PD: 7, PE: 11, ATA: 9 };
 
 function hexRgb(h) { const n = parseInt((h || '#888').slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
@@ -16,7 +17,7 @@ export class MatchViz {
   constructor(cv, G, m, userSide, hooks) {
     this.cv = cv; this.ctx = cv.getContext('2d'); this.G = G; this.m = m; this.us = userSide; this.h = hooks;
     this.speed = 2; this.paused = false; this.q = []; this.cur = null; this.score = [0, 0]; this.done = false;
-    this.minDur = 2.8; this.half = 1; this.run = null; this.gkT = null; this.banner = null; this.label = null; this.flash = 0;
+    this.minDur = 2.8; this.half = 1; this.run = null; this.gkT = null; this.banner = null; this.label = null; this.flash = 0; this.hist = []; this._ra = 0; this.rp = null; this.replays = true; this.parts = []; this.net = null; this.shake = 0;
     const hc = m.s[0].club, ac = m.s[1].club;
     let a1 = ac.c1, a2 = ac.c2;
     if (cdist(hc.c1, ac.c1) < 110) { a1 = cdist(hc.c1, ac.c2) > 110 ? ac.c2 : (cdist(hc.c1, '#ffffff') > 150 ? '#ffffff' : '#111111'); a2 = ac.c1; }
@@ -149,7 +150,11 @@ export class MatchViz {
         const sc = this.ents[a.s][a.i]; const [cx, cy] = this.T(a.s, 103, sc.y > PH / 2 ? 66 : 2);
         this.celeb = { s: a.s, i: a.i, x: cx, y: cy }; a.dur = 2.6; this.ball.mode = 'dead'; break;
       }
-      case 'kickoff': this.celeb = null; this.kickoff(a.s, true); a.dur = 0.8; break;
+      case 'replay': {
+        if (!this.replays || !this.rbuf || this.rbuf.length < 10) { a.dur = 0; break; }
+        this.rp = { buf: this.rbuf, f: 0 }; this.label = null; this.trail = []; this.h.onReplay?.(true); a.dur = this.rbuf.length * RP_DT * RP_SLOW; break;
+      }
+      case 'kickoff': if (this.rp) this.h.onReplay?.(false); this.rp = null; this.rbuf = null; this.celeb = null; this.kickoff(a.s, true); a.dur = 0.8; break;
       case 'half': this.h.onPause('int'); this.kickoff(1, true); a.dur = 0.5; break;
       case 'end': this.done = true; this.h.onEnd(); a.dur = 999; break;
       case 'gk': { // goleiro repõe
@@ -206,14 +211,16 @@ export class MatchViz {
         this.score[s]++; this.flash = 2.2; this.banner = { s, p: this.pid(s, b.shooter.i) };
         this.h.onEvent(b.ev);
         this.ball = { x: b.x1, y: b.y1, z: 0, mode: 'dead', own: null };
-        this.q.unshift({ t: 'kickoff', s: 1 - s }); this.q.unshift({ t: 'celebrate', s, i: b.shooter.i });
+        this.q.unshift({ t: 'kickoff', s: 1 - s }); this.q.unshift({ t: 'replay' }); this.q.unshift({ t: 'celebrate', s, i: b.shooter.i });
+        this.rbuf = this.hist.slice(-95).concat([this.snap()]);
+        this.net = { x: b.x1, y: b.y1, t: 1.4 }; this.boom(b.x1, b.y1, this.kit[s]);
       } else if (b.out === 'def') {
         this.h.onEvent(b.ev);
         const gi = this.form(1 - s).findIndex((f) => f[0] === 'GOL');
         this.ball = { x: b.x1, y: b.y1, z: 0, mode: 'held', own: { s: 1 - s, i: gi } };
         this.q.unshift({ t: 'gk', s: 1 - s });
       } else if (b.out === 'trave') {
-        this.h.onEvent(b.ev);
+        this.h.onEvent(b.ev); this.shake = 0.45;
         this.ball = { x: b.x1, y: b.y1, z: 0.5, mode: 'free', own: null, vx: -this.dir(s) * (7 + rnd() * 5), vy: (rnd() - 0.5) * 10, t: 0 };
       } else {
         this.h.onEvent(b.ev);
@@ -222,6 +229,9 @@ export class MatchViz {
       }
     }
   }
+  snap() { const b = this.ball; return { b: [b.x, b.y, b.z], e: this.ents.map((T) => T.map((e) => [e.x, e.y, e.fx, e.fy])) }; }
+  applySnap(sn) { if (!sn) return; this.ball = { x: sn.b[0], y: sn.b[1], z: sn.b[2], mode: 'dead', own: null }; sn.e.forEach((T, s) => T.forEach((v, i) => { const e = this.ents[s][i]; e.x = v[0]; e.y = v[1]; e.fx = v[2]; e.fy = v[3]; e.vx = e.vy = 0; })); }
+  boom(x, y, k) { for (let n = 0; n < 70; n++) { const an = rnd() * 7, v = 6 + rnd() * 22; this.parts.push({ x, y, vx: Math.cos(an) * v, vy: Math.sin(an) * v, t: 1.6 + rnd(), c: [k.f, k.s, '#ffffff', '#f4c542'][n % 4], r: 0.35 + rnd() * 0.5 }); } }
   labelFor(s, pid, icon) { const i = this.m.s[s].xi.indexOf(pid); if (i >= 0) this.label = { s, i, t: 2, icon }; }
 
   // ---------- simulação visual ----------
@@ -231,12 +241,20 @@ export class MatchViz {
     const steps = Math.ceil(total / 0.035); const dt = total / steps;
     for (let k = 0; k < steps; k++) this.tick(dt);
     if (this.flash > 0) this.flash -= total / this.speed;
+    const rt = Math.min(0.1, rdt);
+    for (const p of this.parts) { p.x += p.vx * rt; p.y += p.vy * rt; p.vx *= 1 - 2.2 * rt; p.vy *= 1 - 2.2 * rt; p.t -= rt; }
+    this.parts = this.parts.filter((p) => p.t > 0);
+    if (this.net) { this.net.t -= rt; if (this.net.t <= 0) this.net = null; }
+    if (this.shake > 0) this.shake -= rt;
   }
   tick(dt) {
     // ações
     if (!this.cur) { if (!this.q.length) this.plan(); this.cur = this.q.shift(); if (this.cur) this.start(this.cur); }
     const a = this.cur;
     if (a) { a.el += dt; if (!a.wait && a.el >= (a.dur ?? 0)) this.cur = null; }
+    if (this.rp) { this.rp.f = Math.min(this.rp.buf.length - 1, this.rp.f + dt / (RP_DT * RP_SLOW)); this.applySnap(this.rp.buf[Math.floor(this.rp.f)]); return; }
+    // gravação para o replay
+    this._ra += dt; if (this._ra >= RP_DT) { this._ra = 0; this.hist.push(this.snap()); if (this.hist.length > 130) this.hist.shift(); }
     // bola
     const b = this.ball;
     if (b.mode === 'pass' || b.mode === 'shot') {
@@ -327,6 +345,27 @@ export class MatchViz {
 
   // ---------- desenho ----------
   draw() {
+    const { ctx, cv } = this; const s = this.sc; const X = (x) => (x + M) * s, Y = (y) => (y + M) * s;
+    ctx.save();
+    if (this.shake > 0) ctx.translate((rnd() - 0.5) * s * 1.6 * this.shake, (rnd() - 0.5) * s * 1.6 * this.shake);
+    if (this.rp) {
+      const z = 1.75; const fx = clamp(X(this.ball.x), cv.width / z / 2, cv.width - cv.width / z / 2), fy = clamp(Y(this.ball.y), cv.height / z / 2, cv.height - cv.height / z / 2);
+      ctx.translate(cv.width / 2, cv.height / 2); ctx.scale(z, z); ctx.translate(-fx, -fy);
+    }
+    this.drawScene();
+    for (const p of this.parts) { ctx.globalAlpha = Math.min(1, p.t); ctx.fillStyle = p.c; ctx.fillRect(X(p.x) - p.r * s, Y(p.y) - p.r * s, p.r * 2 * s, p.r * 1.3 * s); }
+    ctx.globalAlpha = 1;
+    if (this.net) { const g = this.net; const side = g.x > PW / 2 ? 1 : 0; const gx = side ? PW : -2.2; const a = Math.min(1, g.t); ctx.fillStyle = `rgba(255,255,255,${0.35 * a})`; const wob = Math.sin(g.t * 26) * 0.5 * a; ctx.fillRect(X(gx + (side ? wob : -wob)), Y(PH / 2 - 3.66), 2.2 * s, 7.32 * s); }
+    ctx.restore();
+    if (this.rp) {
+      const h = cv.height * 0.09; ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(0, 0, cv.width, h); ctx.fillRect(0, cv.height - h, cv.width, h);
+      ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(s * 3, h / 2, s * 0.9, 0, 7); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(s * 2.6)}px system-ui`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('REPLAY', s * 4.8, h / 2);
+      ctx.textAlign = 'right'; ctx.font = `600 ${Math.round(s * 1.9)}px system-ui`; ctx.fillText('câmera lenta · toque no campo para pular', cv.width - s * 2, cv.height - h / 2);
+    }
+  }
+  skipReplay() { if (this.rp && this.cur?.t === 'replay') this.cur.el = 1e9; }
+  drawScene() {
     const { ctx, cv } = this; const s = this.sc;
     const X = (x) => (x + M) * s, Y = (y) => (y + M) * s;
     ctx.drawImage(this.bg(), 0, 0);
@@ -369,7 +408,7 @@ export class MatchViz {
         ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(nm, lx, ly);
       }
     }
-    if (this.flash > 0 && this.banner) {
+    if (this.flash > 0 && this.banner && !this.rp) {
       const a = Math.min(1, this.flash);
       ctx.fillStyle = `rgba(0,0,0,${0.45 * a})`; ctx.fillRect(0, cv.height * 0.36, cv.width, cv.height * 0.28);
       ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -418,6 +457,7 @@ export class MatchViz {
     this._bg = o; return o;
   }
   skipToEnd() {
+    if (this.rp) { this.rp = null; this.h.onReplay?.(false); }
     for (const a of [this.cur, ...this.q]) { if (!a) continue; if (a.ev && a.t !== 'event' && a.ev.t !== 'gol' && a.ev.t !== 'fim') continue; if (a.ev && a.ev.t !== 'fim') this.h.onEvent(a.ev, true); }
     if (this.ball.mode === 'shot' && this.ball.out !== 'gol') {}
     this.q = []; this.cur = null;

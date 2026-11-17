@@ -126,6 +126,18 @@ function guessNat(n, country) {
   return country;
 }
 
+export function buildU17(G, c) {
+  const L = 44 + c.rep * 0.13;
+  const q = { GOL: 2, LD: 1, ZAG: 3, LE: 1, VOL: 2, MC: 2, MEI: 2, PE: 1, PD: 1, ATA: 3 };
+  for (const pos of POS) for (let i = 0; i < q[pos]; i++) {
+    const age = ri(15, 17);
+    const p = makePlayer(G, { n: genName('BR'), pos, age, ovr: L + gauss() * 4 - (17 - age) * 2, club: c.id, u20: true, nat: 'BR', wage: 150 + ri(0, 4) * 50 });
+    p.u17 = true; p.pot = clamp(p.ovr + ri(10, 32), p.ovr, 93);
+  }
+}
+export function ensureU17(G) {
+  for (const c of G.clubs) if (c.league === 'BRA' && !G.players.some((p) => p && p.club === c.id && p.u17)) buildU17(G, c);
+}
 export function buildU20(G, c) {
   const L = 49 + c.rep * 0.14;
   const ids = [];

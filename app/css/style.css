@@ -323,3 +323,71 @@ table.tb.sq td, table.tb.sq th { padding: 3px 4px; }
 .aw { padding: 4px 0; border-bottom: 1px solid #ffffff0a; } .aw b { font-size: 11px; color: var(--mut); }
 @media (max-width: 760px) { .infra-grid { grid-template-columns: 1fr 1fr; } }
 .rail button { padding: 3px 0 3px; } .rail button svg { width: 17px; height: 17px; }
+
+/* ======================= v5 — visual premium ======================= */
+:root { --glow: 0 0 0 1px #2fe08a33, 0 8px 26px #2fe08a1f; }
+body { background:
+  radial-gradient(60% 50% at 100% 0%, #13402c40 0%, transparent 65%),
+  radial-gradient(50% 50% at 0% 100%, #0e2a3a3a 0%, transparent 60%),
+  repeating-linear-gradient(135deg, #ffffff03 0 2px, transparent 2px 9px), var(--bg); }
+/* barra superior e trilho */
+.top { background: linear-gradient(180deg, #0b1513ee, #0b151300); backdrop-filter: blur(6px); }
+.top .t1 { font-family: 'Barlow Condensed', system-ui; font-size: 17px; letter-spacing: .5px; text-transform: uppercase; }
+.rail { background: linear-gradient(180deg, #0c1714, #070d0c); border-right: 1px solid #ffffff0a; }
+.rail button.on svg { filter: drop-shadow(0 0 6px #2fe08a88); }
+.rail button:active { transform: scale(.94); }
+/* cartões */
+.card { position: relative; border: 1px solid #ffffff0d; background: linear-gradient(180deg, #16271f 0%, #0f1a17 70%); }
+.card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 1px; border-radius: var(--r) var(--r) 0 0; background: linear-gradient(90deg, transparent, #2fe08a55, transparent); opacity: .55; pointer-events: none; }
+.card h3 { font-family: 'Barlow Condensed', system-ui; font-size: 13.5px; letter-spacing: 1.4px; color: #9ab6ac; }
+.card h3 > span:first-child::before, .card > h3:not(:has(span))::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 2px; background: var(--ac); margin-right: 6px; vertical-align: middle; box-shadow: 0 0 8px var(--ac); }
+.card.flat::before { opacity: .25; }
+.hero-card { border-color: #ffffff18; box-shadow: 0 10px 30px #0006, inset 0 1px 0 #ffffff12; }
+/* botões e abas */
+.btn { transition: transform .08s, filter .15s, background .15s; }
+.btn.pri { background: linear-gradient(180deg, #4ff5a6, #1cbf72 60%, #129a5a); text-shadow: 0 1px 0 #ffffff55; }
+.btn.pri:active { filter: brightness(.92); }
+.btn.cont { box-shadow: var(--glow); animation: pulse 2.6s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 1px #2fe08a55, 0 8px 30px #2fe08a40; } }
+.seg { background: #0a1311; border-color: #ffffff0d; }
+.seg button.on { background: linear-gradient(180deg, #1d3229, #15241f); color: #fff; box-shadow: inset 0 -2px 0 var(--ac), 0 2px 8px #0005; }
+.chip.on { box-shadow: 0 0 10px #2fe08a33; }
+/* tabelas */
+.tb th { text-transform: uppercase; letter-spacing: .6px; font-size: 9.5px; }
+.tb tr:nth-child(even) td { background: #ffffff04; }
+.tb tr[data-a]:active td { background: #2fe08a14; }
+.tb tr.me td { background: linear-gradient(90deg, #2fe08a2a, #2fe08a0d) !important; }
+.ovr { box-shadow: inset 0 -2px 0 #0003, 0 2px 6px #0004; font-family: 'Barlow Condensed', system-ui; font-size: 14.5px; }
+.stat .v, .score, .xb[style*="font-size:2"] { font-family: 'Barlow Condensed', system-ui; }
+.li.tap { border-radius: 8px; transition: background .12s; }
+.li.on { background: #2fe08a14; }
+main.enter > * { animation: viewIn .2s ease-out; }
+@keyframes viewIn { from { opacity: .4; transform: translateY(4px); } }
+.hint.warn { background: #ff9f4318; border: 1px solid #ff9f4344; color: var(--org); }
+/* treino */
+.train-kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+.train-kpi > div { background: #0a1311; border: 1px solid #ffffff0d; border-radius: 10px; padding: 7px 4px; }
+.train-kpi b { display: block; font: 800 19px 'Barlow Condensed', system-ui; }
+.train-kpi span { font-size: 9.5px; color: var(--mut); text-transform: uppercase; letter-spacing: .5px; }
+.train-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.tcard { border: 1px solid #ffffff10; background: #0a1311; border-radius: 10px; padding: 7px 9px; display: flex; flex-direction: column; gap: 2px; }
+.tcard b { font-size: 12.5px; } .tcard span { font-size: 10.5px; color: var(--mut); line-height: 1.25; }
+.tcard.on { border-color: #2fe08a77; background: linear-gradient(180deg, #2fe08a1c, #0a1311); box-shadow: 0 0 14px #2fe08a22; }
+.tcard.on b::after { content: ' ✓'; color: var(--ac); }
+.tcard:active { transform: scale(.98); }
+/* seleção */
+.nat-pitch { aspect-ratio: 1.42; background: repeating-linear-gradient(90deg, #1d6b3f 0 10%, #1a6139 10% 20%); box-shadow: inset 0 0 60px #0006; border-radius: 12px; }
+/* partida ao vivo: narração e replay */
+.lv-pitch { position: relative; }
+.lv-nar { position: absolute; left: 50%; bottom: 10px; transform: translate(-50%, 20px); max-width: 88%; padding: 6px 12px; border-radius: 10px; background: #000000c4; border: 1px solid #ffffff1c; font-size: 12px; font-weight: 700; text-align: center; opacity: 0; transition: .25s; pointer-events: none; backdrop-filter: blur(3px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-nar.on { opacity: 1; transform: translate(-50%, 0); }
+.lv-nar.gol { background: linear-gradient(90deg, #12a35e, #2fe08a); color: #04140c; font-size: 13px; border: 0; }
+.lv-nar.trave, .lv-nar.ver { background: #ff5a5fd8; }
+.lv-pitch.rp canvas { box-shadow: 0 0 0 2px #ff3b3b88, 0 10px 30px #0008; }
+.feed .ev.nar { color: #b9cfc6; font-style: italic; }
+.feed .ev.gol { background: linear-gradient(90deg, #2fe08a26, transparent); border-radius: 6px; }
+.card h3 { gap: 8px; }
+.card h3 > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.card h3 > .pill, .card h3 > span.pill, .card h3 > button { flex: none; }
+.nat-pitch .pslot { width: 62px; } .nat-pitch .pslot .dot { width: 34px; height: 34px; font-size: 12px; }
+.nat-pitch .pslot .nm { font-size: 10px; } .nat-pitch .pslot .rl { font-size: 8.5px; }

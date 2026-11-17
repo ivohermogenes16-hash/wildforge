@@ -1,6 +1,7 @@
 import { LEAGUES } from '../data/leagues.js';
 import { shuffle } from '../util.js';
 import { SEASON_WEEKS } from './econ.js';
+import { ensureU17 } from './world.js';
 
 export const CUPS = [
   { id: 'CDB', name: 'Copa do Brasil', short: 'Copa do Brasil', country: 'BR', from: ['BRA', 'BRB', 'BRC'], extra: ['BRD', 4], prize: 70e6 },
@@ -55,6 +56,12 @@ function scheduleRR(G, comp, double, weekSpan, slot) {
   comp.games = double ? (comp.groups[0].length - 1) * 2 : comp.groups[0].length - 1;
 }
 
+export function setupU17(G, from) {
+  ensureU17(G);
+  const ids = G.clubs.filter((c) => c.league === 'BRA').map((c) => c.id);
+  const cu = newComp({ id: 'U17', kind: 'youth', name: 'Brasileirão Sub-17', short: 'Sub-17', country: 'BR', clubs: ids, groups: [ids] });
+  scheduleRR(G, cu, false, [from, Math.min(SEASON_WEEKS - 2, Math.max(from + 19, SEASON_WEEKS - 6))], 0); G.comps.U17 = cu;
+}
 export function setupSeason(G) {
   G.fix = []; G.comps = {}; G.week = 0; G.slot = 0;
   const repSort = (a, b) => G.clubs[b].rep - G.clubs[a].rep;
@@ -83,6 +90,7 @@ export function setupSeason(G) {
   const u20 = G.clubs.filter((c) => c.league === 'BRA').map((c) => c.id);
   const cu = newComp({ id: 'U20', kind: 'youth', name: 'Brasileirão Sub-20', short: 'Sub-20', country: 'BR', clubs: u20, groups: [u20] });
   scheduleRR(G, cu, true, [0, SEASON_WEEKS - 4], 1); G.comps.U20 = cu;
+  setupU17(G, 2);
   // Liga amadora (clube próprio)
   const ama = G.clubs.filter((c) => c.league === 'AMA').map((c) => c.id);
   if (ama.length >= 4) {

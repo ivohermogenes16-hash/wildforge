@@ -260,7 +260,63 @@ export function userMatchBonus(G, c) {
   const sp = G.me.spec || {};
   const staff = (staffQ(G, c, 'aux') - 8) * 0.06 + (staffQ(G, c, 'ana') - 8) * 0.05;
   const chem = ((c.chem ?? 60) - 60) / 18;
-  return { all: clamp(staff + chem, -2.5, 2.5), att: (sp.of || 0) * 0.8, def: (sp.df || 0) * 0.8 };
+  const tr = (G.me.job?.youth ? G.me.u20train : c.train) || {};
+  const tf = TRAIN_FX[tr.foco] || {};
+  const pre = G.me.preBon && G.t < G.me.preBon.until ? G.me.preBon.all : 0;
+  return { all: clamp(staff + chem + pre, -3, 3), att: (sp.of || 0) * 0.8 + (tf.att || 0), def: (sp.df || 0) * 0.8 + (tf.def || 0) };
+}
+// focos de treino coletivo: efeito real nas partidas (att/def) e na evolução (ev)/recuperação (rec)
+export const TRAIN_FX = {
+  equilibrado: { n: 'Equilibrado', d: 'Desenvolvimento normal, sem pontos fracos.' },
+  tecnico: { n: 'Técnico', d: '+12% de evolução dos jogadores.', ev: 1.12 },
+  fisico: { n: 'Físico', d: 'Recupera +3 de fôlego por semana; evolução um pouco menor.', ev: 0.95, rec: 3 },
+  tatico: { n: 'Tático', d: '+1 de força em todos os jogos.' },
+  ofensivo: { n: 'Finalização', d: '+1,2 no ataque nos jogos; evolução -5%.', att: 1.2, ev: 0.95 },
+  defensivo: { n: 'Defensivo', d: '+1,2 na defesa nos jogos; evolução -5%.', def: 1.2, ev: 0.95 },
+  bolaparada: { n: 'Bola parada', d: '+0,6 no ataque e +0,4 na defesa (escanteios e faltas).', att: 0.6, def: 0.4 },
+  jovens: { n: 'Foco nos jovens', d: 'Jogadores até 21 anos evoluem +25%; os mais velhos, -10%.', young: 1.25, old: 0.9 },
+};
+// treino individual
+export const ITR = {
+  evol: { n: 'Evolução acelerada', d: '+25% de evolução, mas cansa (-3 de fôlego/semana).' },
+  fis: { n: 'Condicionamento físico', d: '+5 de fôlego por semana e menos risco de lesão.' },
+  rec: { n: 'Recuperação de lesão', d: 'Volta mais rápido de lesões (não evolui enquanto isso).' },
+  pos: { n: 'Aprender nova posição', d: 'Em ~10 semanas passa a jogar na posição escolhida (perde 1–2 de geral).' },
+};
+export function itrWeek(G, p) {
+  const t = p.itr; if (!t) return 1;
+  if (t === 'evol') { p.fit = Math.max(30, p.fit - 3); return 1.25; }
+  if (t === 'fis') { p.fit = Math.min(100, p.fit + 5); return 1; }
+  if (t === 'rec') { if (p.inj > 0 && (G.t % 2 === 0)) p.inj = Math.max(0, p.inj - 1); if (p.inj <= 0) p.itr = null; return 0.5; }
+  if (t.startsWith('pos:')) {
+    p.posL = (p.posL || 0) + 1;
+    if (p.posL >= 10) { const np = t.slice(4); const old = p.pos; p.pos = np; p.ovr = Math.max(30, p.ovr - ri(1, 2)); p.itr = null; p.posL = 0; msg(G, 'Comissão técnica', `🔁 ${p.n} agora é ${np}`, `Depois de semanas de treino, ${p.n} aprendeu a jogar de ${np} (antes ${old}).`); }
+    return 0.9;
+  }
+  return 1;
+}
+// ---------------- pré-temporada ----------------
+export const PRE = {
+  ct: { n: '🏋️ Intertemporada no CT', d: 'Foco físico e tático: elenco 100% e +0,8 de força nas 6 primeiras semanas. Custo para o clube.' },
+  exc: { n: '✈️ Excursão internacional', d: 'Jogos no exterior: muito dinheiro e torcida, mas o cansaço da viagem tira 0,4 de força nas 4 primeiras semanas.' },
+  tor: { n: '⚽ Torneio de pré-temporada', d: 'Três amistosos: +10 de entrosamento, moral alta e +0,5 de força nas 6 primeiras semanas.' },
+  des: { n: '😴 Pré-temporada curta', d: 'Mais descanso: moral sobe, mas o time começa fora de forma (-0,8 de força nas 5 primeiras semanas).' },
+};
+export function preseason(G) {
+  const c = myJobClub(G); if (!c) return;
+  const cost = Math.round(c.rep * 9000 / 1000) * 1000;
+  decision(G, 'Preparador físico', `📋 Pré-temporada ${G.year}`, `Como vamos preparar o elenco para a temporada ${G.year}? A escolha vale para as primeiras semanas e mexe com físico, entrosamento e finanças.\n\nIntertemporada no CT custa ${money(cost)}.`,
+    Object.entries(PRE).map(([k, v]) => ({ l: `${v.n} — ${v.d}`, act: 'pre', k })), { def: 3, weeks: 1, pre: true });
+}
+function applyPre(G, k) {
+  const c = myJobClub(G); const me = G.me; const youth = me.job.youth;
+  const sq = G.players.filter((p) => p && p.club === c.id && !!p.u20 === !!youth);
+  const opp = () => pick(G.clubs.filter((x) => x.league && x.id !== c.id && Math.abs(x.rep - c.rep) < 15)) || c;
+  me.pre = { y: G.year, k };
+  if (k === 'ct') { const cost = Math.round(c.rep * 9000 / 1000) * 1000; c.money -= cost; c.fin.other = (c.fin.other || 0) + cost; for (const p of sq) p.fit = 100; me.preBon = { all: 0.8, until: G.t + 6 }; c.chem = clamp((c.chem ?? 60) + 4, 0, 100); return `Intertemporada no CT feita (${money(cost)}). Elenco voando: +0,8 de força nas próximas 6 semanas.`; }
+  if (k === 'exc') { const inc = Math.round((c.rep * c.rep * 450 + 200000) / 10000) * 10000; c.money += inc; c.fin.other = (c.fin.other || 0) - inc; c.fans = clamp((c.fans ?? 50) + 6, 0, 100); me.preBon = { all: -0.4, until: G.t + 4 }; const r = [0, 1, 2].map(() => `${c.name} ${ri(0, 3)}x${ri(0, 2)} ${opp().name}`); return `Excursão rendeu ${money(inc)} e +6 de torcida.\nJogos: ${r.join(' · ')}`; }
+  if (k === 'tor') { c.chem = clamp((c.chem ?? 60) + 10, 0, 100); for (const p of sq) p.mor = clamp(p.mor + 5, 0, 100); me.preBon = { all: 0.5, until: G.t + 6 }; c.money += 300000; const r = [0, 1, 2].map(() => `${c.name} ${ri(0, 3)}x${ri(0, 2)} ${opp().name}`); return `Torneio de pré-temporada: ${r.join(' · ')}. Entrosamento +10.`; }
+  for (const p of sq) { p.mor = clamp(p.mor + 8, 0, 100); p.fit = Math.min(p.fit, 85); } me.preBon = { all: -0.8, until: G.t + 5 }; return 'Pré-temporada curta: elenco descansado e feliz, mas fora de forma nas primeiras semanas.';
 }
 export const injMul = (c) => 1.2 - (c?.infra?.med || 2) * 0.08;
 export const recovBonus = (G, c) => (c ? (staffQ(G, c, 'fis') - 8) * 0.35 : 0);
@@ -505,6 +561,7 @@ export function resolveDecision(G, m, i, auto) {
     case 'apaziguar': if (Math.random() < 0.6 + (me.spec?.ge || 0) * 0.1) { c.chem = clamp(c.chem + 5, 0, 100); out = 'Os dois fizeram as pazes.'; } else { c.chem = clamp(c.chem - 3, 0, 100); out = 'A conversa não resolveu.'; } break;
     case 'firmeza': if (me.rep > 55 || c.board.conf > 60) { c.chem = clamp(c.chem + 2, 0, 100); out = 'Sua autoridade foi respeitada.'; } else { c.chem = clamp(c.chem - 6, 0, 100); if (P) P.rel = clamp(P.rel - 10, 0, 100); out = 'Parte do elenco ficou contra você.'; } break;
     case 'incentivo': if (Math.random() < 0.55 + P.rel / 200 + (me.spec?.mo || 0) * 0.08) { P.mor = clamp(P.mor + 18, 0, 100); P.rel = clamp(P.rel + 5, 0, 100); out = `${P.n} voltou animado.`; } else { P.mor = clamp(P.mor + 4, 0, 100); out = `${P.n} melhorou um pouco.`; } break;
+    case 'pre': out = applyPre(G, o.k); break;
     case 'buyOpt': if (P && P.loan) { P.loan.buy = true; out = `Você vai comprar ${P.n} por ${money(P.loan.fee)} ao fim da temporada.`; } break;
     case 'spons': { if (c) { const s = c.spons.find((x) => x.slot === o.slot); if (s) { s.n = o.sn; s.val = o.val; s.until = G.year + o.y; syncSpon(c); out = `🤝 Contrato com ${o.sn}: ${money(o.val)}/temporada até ${s.until}.`; } } break; }
   }

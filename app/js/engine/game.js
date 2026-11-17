@@ -11,6 +11,7 @@ import { migrate, appointAI, coachLeaves, aiCoachResult, coachChampion, titleWei
 import { BOARD_TYPES } from './world.js';
 import { initNations, natSetupYear, natSlot, natWeek, natSeasonEnd } from './nations.js';
 import { marketWeek, loansSeasonEnd } from './market2.js';
+import { TRAIN_FX, itrWeek, preseason } from './life.js';
 
 export function newGame(opts) {
   const G = { v: 1, year: START_YEAR, week: 0, slot: 0, t: 0, inbox: [], news: [], events: [], vac: [], short: [], seen: {}, qual: null };
@@ -24,6 +25,7 @@ export function newGame(opts) {
   setupSeason(G);
   natSetupYear(G);
   takeJob(G, opts.club, opts.mode !== 'livre', true);
+  preseason(G);
   G.news.push({ t: 0, txt: `${G.me.name} assume o ${opts.mode !== 'livre' ? 'sub-20 do ' : ''}${G.clubs[opts.club].name}. Começa a temporada ${G.year}!` });
   welcome(G);
   return G;
@@ -48,7 +50,7 @@ export function myCompIds(G) { return G.me.job?.youth ? ['U20'] : null; }
 export function isUserFix(G, f) {
   const j = G.me.job; if (!j) return false;
   if (f.h !== j.cid && f.a !== j.cid) return false;
-  return j.youth ? f.c === 'U20' : f.c !== 'U20';
+  return j.youth ? f.c === 'U20' : f.c !== 'U20' && f.c !== 'U17';
 }
 export function userFixNow(G) { return G.fix.find((f) => f.w === G.week && f.s === G.slot && f.hg == null && isUserFix(G, f)); }
 export function nextUserFix(G) {
@@ -111,18 +113,20 @@ export function lineupFor(G, club, youth) {
   return autoLineup(G, { ...club, tact }, youth);
 }
 
+export function u17Pool(G, cid) { return G.players.filter((p) => p && p.club === cid && p.u17); }
+export function u17Lineup(G, club) { return autoLineup(G, { ...club, tact: G.me.job?.cid === club.id ? (G.me.u17tact || club.tact) : club.tact }, true, true, u17Pool(G, club.id)); }
 export function playSlot(G, userRes) {
   buildIndex(G);
   G.events = [];
   if (G.nat) natSlot(G);
   const fixes = G.fix.filter((f) => f.w === G.week && f.s === G.slot && f.hg == null);
   for (const f of fixes) {
-    const youth = f.c === 'U20';
+    const youth = f.c === 'U20' || f.c === 'U17';
     const hc = G.clubs[f.h], ac = G.clubs[f.a];
     let res;
     if (userRes && isUserFix(G, f)) res = userRes;
     else {
-      const hl = lineupFor(G, hc, youth), al = lineupFor(G, ac, youth);
+      const hl = f.c === 'U17' ? u17Lineup(G, hc) : lineupFor(G, hc, youth), al = f.c === 'U17' ? u17Lineup(G, ac) : lineupFor(G, ac, youth);
       const comp = G.comps[f.c];
       res = quickSim(G, f, hc, ac, hl.xi, al.xi, { neutral: comp.kind === 'cont' && f.ko === comp.koWeeks.length - 1 });
       res.xi = [hl.xi, al.xi]; res.played = [new Set(hl.xi), new Set(al.xi)];
@@ -141,10 +145,11 @@ function applyMatch(G, f, res) {
   f.hg = res.hg; f.ag = res.ag;
   const comp = G.comps[f.c];
   if (f.ko >= 0 && f.hg === f.ag) f.pen = res.pen || penalties();
+  if (f.c === 'U17') for (const s of [0, 1]) for (const id of (res.played?.[s] || [])) { const p = G.players[id]; if (p) p.j17 = (p.j17 || 0) + 1; }
   f.ev = res.ev.filter((e) => e.t === 'gol' || e.t === 'ver').map((e) => [e.m, e.t === 'gol' ? 0 : 1, e.side, e.p]);
   recordResult(G, f);
   const clubs = [G.clubs[f.h], G.clubs[f.a]];
-  const youth = f.c === 'U20';
+  const youth = f.c === 'U20' || f.c === 'U17';
   // suspensões cumpridas
   for (const c of clubs) { const sq = G._idx?.get(c.id); if (sq) for (const p of (youth ? sq.y : sq.s)) if (p.sus > 0) p.sus--; }
   const played = res.played || [new Set(res.xi?.[0] || []), new Set(res.xi?.[1] || [])];
@@ -222,7 +227,8 @@ function onEvent(G, e) {
   c.money += prize; c.fin.prize += prize;
   if (comp.runnerUp != null) { const r = G.clubs[comp.runnerUp]; r.money += prize * 0.45; r.fin.prize += prize * 0.45; }
   const j = G.me.job;
-  const userWon = j && j.cid === e.club && (j.youth ? comp.id === 'U20' : comp.id !== 'U20');
+  const userWon = j && j.cid === e.club && (j.youth ? comp.id === 'U20' : comp.kind !== 'youth');
+  if (comp.id === 'U17' && j && j.cid === e.club) { c.yb = (c.yb || 0) + 150000; G.me.pop = clamp((G.me.pop || 0) + 2, 0, 100); msg(G, 'Base', '🏆 Sub-17 campeão!', `A Sub-17 do ${c.name} conquistou o ${comp.name}! O orçamento da base ganhou R$ 150 mil e os garotos ficam mais valorizados.`); for (const p of u17Pool(G, c.id)) p.mor = clamp(p.mor + 10, 0, 100); }
   if (!userWon && comp.kind !== 'youth') coachChampion(G, c, comp);
   if (userWon) {
     G.me.titles.push({ y: G.year, c: comp.name, club: c.name, w: titleWeight(comp) }); G.me.xp = (G.me.xp || 0) + 40 + titleWeight(comp) * 3; G.me.pop = clamp((G.me.pop || 0) + 6, 0, 100); c.fans = clamp((c.fans || 50) + 8, 0, 100);
@@ -256,18 +262,19 @@ function endWeek(G) {
     const club = G.clubs[p.club];
     const isMine = G.me.job && p.club === G.me.job.cid && !!p.u20 === !!G.me.job.youth;
     const tr = isMine ? (p.u20 ? G.me.u20train || club.train : train) : { foco: 'equilibrado', int: 1 };
-    p.fit = Math.min(100, p.fit + [19, 14, 10][tr.int] + (isMine ? recovBonus(G, club) + (tr.foco === 'fisico' ? 3 : 0) : 0));
+    p.fit = Math.min(100, p.fit + [19, 14, 10][tr.int] + (isMine ? recovBonus(G, club) + (TRAIN_FX[tr.foco]?.rec || 0) : 0));
     p.mor += (65 - p.mor) * 0.06;
     if (!p.playedW && p.ovr >= 70 && club && !p.u20) p.mor -= 0.6;
     p.playedW = 0;
+    const im = isMine ? itrWeek(G, p) : 1;
     // evolução
     if (p.club >= 0 && p.ovr < p.pot) {
       const ageF = p.age <= 20 ? 0.0055 : p.age <= 23 ? 0.004 : p.age <= 27 ? 0.002 : 0.0008;
-      const fe = tr.foco === 'fisico' ? 0.95 : tr.foco === 'tecnico' ? 1.12 : 1;
+      const TF = TRAIN_FX[tr.foco] || {}; const fe = (TF.ev || 1) * (TF.young ? (p.age <= 21 ? TF.young : TF.old) : 1) * im;
       p.prog += (p.pot - p.ovr) * ageF * [0.75, 1, 1.25][tr.int] * fe * (p.st.j > 2 ? 1.15 : 0.9) * rf(0.5, 1.5) * devMul(G, p, club);
       while (p.prog >= 1 && p.ovr < p.pot) { p.ovr++; p.prog -= 1; p.up = G.t; if (G.me.job && p.club === G.me.job.cid) { (G.me.dev ||= []).unshift({ t: G.t, y: G.year, w: G.week, pid: p.id, o: p.ovr }); if (G.me.dev.length > 60) G.me.dev.length = 60; } }
     }
-    if (isMine && tr.int === 2 && rnd() < 0.004 * injMul(club)) p.inj = Math.max(p.inj, ri(1, 3));
+    if (isMine && tr.int === 2 && p.itr !== 'fis' && rnd() < 0.004 * injMul(club)) p.inj = Math.max(p.inj, ri(1, 3));
   }
   if (inWindow(G)) aiTransferWeek(G);
   else if (rnd() < 0.15) aiTransferWeek(G, true);
@@ -470,6 +477,7 @@ function endSeason(G) {
       retiredToCoach(G, p);
       p.club = -2; p.ret = true;
     }
+    if (p.u17 && p.age >= 18) { p.u17 = false; if (G.me.job && p.club === G.me.job.cid) news(G, `🌱 ${p.n} sobe da Sub-17 para a Sub-20.`); }
     if (p.u20 && p.age > 20 && p.club >= 0) { // sai do sub-20
       const c = G.clubs[p.club];
       if (p.ovr >= clubLevel(c.rep) - 10) { p.u20 = false; p.wage = playerWage(p, c.country); p.con = G.year + 3; news(G, `🌱 ${p.n} é promovido ao profissional do ${c.name}.`); }
@@ -505,7 +513,7 @@ function endSeason(G) {
   if (G.nat) natSetupYear(G);
   // sub-20: novos clubes da Série A recebem base
   for (const c of G.clubs) if (c.league === 'BRA' && !G.players.some((p) => p && p.club === c.id && p.u20)) buildU20(G, c);
-  if (me.job) { setObjective(G); msg(G, 'Diretoria', `Temporada ${G.year}`, `Nova temporada! Objetivo: ${me.obj.text}.`); }
+  if (me.job) { setObjective(G); msg(G, 'Diretoria', `Temporada ${G.year}`, `Nova temporada! Objetivo: ${me.obj.text}.`); preseason(G); }
   news(G, `📅 Começa a temporada ${G.year}.`);
   // ofertas de fim de temporada
   if (me.job?.youth || !me.job || me.rep > 30) {
@@ -528,7 +536,7 @@ function youthIntake(G) {
     const n = sq.length < 22 ? 22 - sq.length + 2 : ri(1, 3);
     const youthClub = G.players.some((p) => p && p.club === c.id && p.u20);
     if (youthClub) {
-      for (let i = 0; i < 6; i++) { const pos = pick(Object.keys(QUOTA)); const p = makePlayer(G, { n: genName('BR'), pos, age: 16, ovr: 45 + c.rep * 0.12 + gauss() * 4, club: c.id, u20: true, wage: 300 }); p.pot = clamp(p.ovr + ri(10, 32), p.ovr, 93); }
+      const has17 = c.league === 'BRA'; for (let i = 0; i < 6; i++) { const pos = pick(Object.keys(QUOTA)); const p = makePlayer(G, { n: genName('BR'), pos, age: has17 ? 15 : 16, ovr: 45 + c.rep * 0.12 + gauss() * 4, club: c.id, u20: true, wage: 300 }); if (has17) p.u17 = true; p.pot = clamp(p.ovr + ri(10, 32), p.ovr, 93); }
       // completa vagas do profissional
       const need = Math.max(0, 22 - sq.length);
       for (let i = 0; i < need; i++) { const p = makePlayer(G, { n: genName(c.country), pos: pick(Object.keys(QUOTA)), age: ri(19, 29), ovr: L - ri(2, 8), club: c.id, nat: c.country }); void p; }
