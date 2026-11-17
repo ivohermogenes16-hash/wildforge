@@ -1,3 +1,5 @@
+import { playerExtra, scoutNetView } from './universe.js';
+import { onPromote } from '../engine/universe.js';
 import { esc, money, clamp, POS, POS_NAME } from '../util.js';
 import { crest, face, ovrBadge, FLAG } from './art.js';
 import { S, H, PAGES, PAGES_T, PAGES_BACK, VIEWS, render, toast, openSheet, closeSheet, replaceSheet, save, playerRow, posTag, clubTag, stars, wk, potRange, myComps } from './app.js';
@@ -74,7 +76,7 @@ H.player = (v) => {
       ${p.inj > 0 ? `<div class="kv"><span class="mut">Lesão</span><b class="bad">${p.inj} sem.</b></div>` : ''}${p.sus > 0 ? `<div class="kv"><span class="mut">Suspenso</span><b class="bad">${p.sus} jogo(s)</b></div>` : ''}
       <div class="kv"><span class="mut">Temporada</span><b>${st.j}J ${st.g}G ${st.a}A</b></div>${st.j ? `<div class="kv"><span class="mut">Nota média</span><b>${(st.ns / st.j).toFixed(1)}</b></div>` : ''}<div class="kv"><span class="mut">No jogo</span><b>${p.tot.j}J ${p.tot.g}G</b></div><div class="kv"><span class="mut">Seleção ${FLAG[p.nat] || ''}</span><b>${p.intl ? `${p.intl.j}J ${p.intl.g}G` : '—'}</b></div></div></div>
   </div>
-  ${acts}<button class="btn sm blk ghost" style="margin-top:6px" data-a="edplayer" data-v="${p.id}">✏️ Editar nome / foto / dados</button>`);
+  ${playerExtra(G, p)}${acts}<button class="btn sm blk ghost" style="margin-top:6px" data-a="edplayer" data-v="${p.id}">✏️ Editar nome / foto / dados</button>`);
 };
 function ring(o, pot, d) {
   const C = 2 * Math.PI * 26, f = Math.max(0, Math.min(1, (o - 30) / 65));
@@ -110,14 +112,14 @@ H.release = (v) => {
 };
 H.cs = () => closeSheet();
 H.release2 = (v) => { const c = release(S.G, S.G.players[+v]); toast(`Dispensado (${money(c)})`); closeSheet(); render(); save(); };
-H.promote = (v) => { const G = S.G, p = G.players[+v]; revealPlayer(G, p); p.u20 = false; p.u17 = false; p.wage = Math.max(p.wage, 1500); p.con = G.year + 3; myClub(G).lineup = null; toast(`${p.n} promovido!`); closeSheet(); render(); save(); };
+H.promote = (v) => { const G = S.G, p = G.players[+v]; revealPlayer(G, p); onPromote(G, p); p.u20 = false; p.u17 = false; p.wage = Math.max(p.wage, 1500); p.con = G.year + 3; myClub(G).lineup = null; toast(`${p.n} promovido!`); closeSheet(); render(); save(); };
 H.recommend = (v) => {
   const G = S.G, p = G.players[+v]; const c = G.clubs[p.club];
   if (p._rec === G.year) { toast('Você já indicou ele nesta temporada'); return; }
   p._rec = G.year;
   const sq = G.players.filter((x) => x && x.club === c.id && !x.u20 && x.pos === p.pos).sort((a, b) => a.ovr - b.ovr);
   const worst = sq[0]?.ovr ?? 0;
-  if (p.ovr >= worst - 3 || p.pot >= clubLevel(c.rep) + 4) { revealPlayer(G, p); p.u20 = false; p.u17 = false; p.con = G.year + 3; p.wage = 1500; G.me.rep = clamp(G.me.rep + 1, 1, 99); toast(`✅ O técnico do profissional aprovou! ${p.n} subiu.`); }
+  if (p.ovr >= worst - 3 || p.pot >= clubLevel(c.rep) + 4) { revealPlayer(G, p); onPromote(G, p); p.u20 = false; p.u17 = false; p.con = G.year + 3; p.wage = 1500; G.me.rep = clamp(G.me.rep + 1, 1, 99); toast(`✅ O técnico do profissional aprovou! ${p.n} subiu.`); }
   else toast('❌ O técnico do profissional achou que ele ainda não está pronto.');
   closeSheet(); render(); save();
 };
@@ -199,8 +201,9 @@ PAGES.market = () => {
   const ww = weeklyWages(G, c.id), wb = wageBudget(G, c);
   let h = `<div class="card"><div class="row"><div class="grow"><div class="xs mut">Caixa do clube</div><div class="xb" style="font-size:20px">${money(c.money)}</div></div><div style="text-align:right"><div class="xs mut">Folha / teto semanal</div><div class="b ${ww > wb ? 'bad' : ''}">${money(ww)} / ${money(wb)}</div></div></div><div class="xs ${inWindow(G) ? 'ok' : 'warn'}" style="margin-top:8px">${inWindow(G) ? '🟢 Janela de transferências aberta' : '🔴 Janela fechada — só jogadores livres (abre nas semanas 1–6 e 23–26)'}</div></div>`;
   const bids = G.inbox.filter((m) => m.kind === 'bid' && !m.done && !m.expired);
-  h += `<div class="seg">${[['busca', 'Buscar'], ['obs', `Observados (${G.short.length})`], ['prop', `Propostas${bids.length ? ` (${bids.length})` : ''}`], ['venda', 'À venda'], ['emp', 'Empréstimos'], ['news', 'Notícias']].map(([k, l]) => `<button class="${S.sub.mk === k ? 'on' : ''}" data-a="sub" data-v="mk:${k}">${l}</button>`).join('')}</div>`;
+  h += `<div class="seg">${[['busca', 'Buscar'], ['obs', `Observados (${G.short.length})`], ['prop', `Propostas${bids.length ? ` (${bids.length})` : ''}`], ['venda', 'À venda'], ['olh', 'Olheiros'], ['emp', 'Empréstimos'], ['news', 'Notícias']].map(([k, l]) => `<button class="${S.sub.mk === k ? 'on' : ''}" data-a="sub" data-v="mk:${k}">${l}</button>`).join('')}</div>`;
   if (S.sub.mk === 'busca') h += searchView();
+  else if (S.sub.mk === 'olh') h += scoutNetView(G);
   else if (S.sub.mk === 'obs') h += `<div class="card flat" style="padding:4px 12px"><div class="list">${G.short.map((id) => playerRow(G.players[id], { club: true })).join('') || '<div class="empty">Toque em ☆ Observar no perfil de um jogador.</div>'}</div></div>`;
   else if (S.sub.mk === 'prop') h += `<div class="card flat" style="padding:4px 12px"><div class="list">${bids.map((m) => `<div class="li tap" data-a="msg" data-v="${m.id}">${crest(G.clubs[m.from], 30)}<div class="grow"><div class="b ell">${esc(G.players[m.pid]?.n || '')}</div><div class="xs mut">${esc(G.clubs[m.from].name)} oferece ${money(m.fee)}</div></div>›</div>`).join('') || '<div class="empty">Nenhuma proposta. Coloque jogadores à venda para atrair interessados.</div>'}</div></div>`;
   else if (S.sub.mk === 'emp') { const out = G.players.filter((p) => p && p.loan && p.loan.from === c.id), inn = G.players.filter((p) => p && p.loan && p.club === c.id), lst = G.players.filter((p) => p && p.club === c.id && p.loanLst);

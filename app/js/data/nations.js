@@ -71,3 +71,5 @@ export const NAMES_EXTRA = {
   KR: { first: 'Min-jun Seo-jun Do-yun Ji-ho Ha-jun Jun-woo Hyun-woo Ji-hoon Sung-min Tae-hwan'.split(' '), last: 'Kim Lee Park Choi Jung Kang Cho Yoon Jang Lim'.split(' ') },
 };
 export const NAME_POOL_OF = { UY: 'AR', CO: 'ES', EC: 'ES', CL: 'AR', PY: 'AR', MX: 'ES', US: 'EN', AU: 'EN', BE: 'NL' };
+import { NAMES2 } from './leagues2.js';
+Object.assign(NAMES_EXTRA, NAMES2);

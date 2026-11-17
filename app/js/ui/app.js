@@ -2,7 +2,7 @@ import { esc, money, POS_LINE, clamp } from '../util.js';
 import { crest, face, ovrBadge, ICONS, FLAG, ovrColor, textOn } from './art.js';
 import { saveGame } from '../store.js';
 import { SEASON_WEEKS, playerValue } from '../engine/econ.js';
-import { myClub, userFixNow, nextUserFix, playSlot, strength, lineupFor, answerPress, takeJob } from '../engine/game.js';
+import { myClub, userFixNow, nextUserFix, playSlot, strength, lineupFor, answerPress, takeJob, setObjective } from '../engine/game.js';
 import { standings, fixturesOf } from '../engine/season.js';
 import { FORMATIONS, MENT, PRESS, ratings, autoLineup, available, formOf, roleAt } from '../engine/match.js';
 
@@ -51,7 +51,7 @@ export function playerRow(p, o = {}) {
 }
 
 // ---------- estrutura ----------
-const NAV = [['home', 'Início', 'home'], ['sq', 'Elenco', 'squad'], ['tat', 'Tática', 'tact'], ['base', 'Base', 'base'], ['jg', 'Jogos', 'cal'], ['mk', 'Mercado', 'mkt'], ['clube', 'Clube', 'club'], ['carreira', 'Carreira', 'career'], ['nat', 'Seleção', 'flag'], ['mundo', 'Mundo', 'world'], ['more', 'Mais', 'more']];
+const NAV = [['home', 'Início', 'home'], ['sq', 'Elenco', 'squad'], ['tat', 'Tática', 'tact'], ['base', 'Base', 'base'], ['jg', 'Jogos', 'cal'], ['mk', 'Mercado', 'mkt'], ['clube', 'Clube', 'club'], ['carreira', 'Carreira', 'career'], ['nat', 'Seleção', 'flag'], ['neg', 'Negócios', 'biz'], ['mundo', 'Mundo', 'world'], ['more', 'Mais', 'more']];
 export const PAGES = {}; export const PAGES_T = {}; export const PAGES_BACK = {};
 export function render() {
   const G = S.G; if (!G) return;
@@ -329,7 +329,7 @@ H.msgact = (v) => {
   const G = S.G; const [id, a] = v.split(':'); const m = G.inbox.find((x) => x.id === +id); if (!m) return;
   if (m.kind === 'job') {
     if (a === 'yes') { closeSheet(); H.jobneg(m.id); return; }
-    m.done = true;
+    m.done = true; onRefuseJob(G, m.cid);
   } else if (m.kind === 'natjob') { if (a === 'yes') { takeNatJob(G, m.code); toast(`🌍 Você é o técnico da seleção!`, 3000); } m.done = true; }
   else if (m.kind === 'loanoff') { if (a === 'yes') toast(acceptLoanOffer(G, m)); m.done = true; }
   else if (m.kind === 'agent') { m.done = true; if (a === 'ver') { closeSheet(); H.player(String(m.pid)); render(); save(); return; } }
@@ -411,6 +411,7 @@ document.addEventListener('pointercancel', (e) => endDrag(e, true));
 // ---------- decisões (diretoria, vestiário, imprensa, comercial) ----------
 import { resolveDecision } from '../engine/life.js';
 import { takeNatJob, nextNatFix } from '../engine/nations.js';
+import { jobInfo, onRefuseJob } from '../engine/universe.js';
 import { TRAIN_FX, ITR, PRE } from '../engine/life.js';
 import { acceptLoanOffer } from '../engine/market2.js';
 import { coachWage } from '../engine/econ.js';
@@ -422,7 +423,7 @@ H.decide = (v) => {
 H.jobneg = (id) => {
   const G = S.G; const m = G.inbox.find((x) => x.id === +id); if (!m) return;
   const c = G.clubs[m.cid]; const base = coachWage(c.rep, c.country, m.youth);
-  S.jn = { m: m.id, base, wage: base, years: m.youth ? 1 : 2, tries: 0 };
+  S.jn = { m: m.id, base, wage: base, years: m.youth ? 1 : 2, tries: 0, tbon: 0, pbon: 0, tb: 0, obj: 0 };
   openSheet(jobNegHtml());
 };
 function jobNegHtml() {
@@ -431,17 +432,25 @@ function jobNegHtml() {
   <div class="card flat" style="margin-top:10px"><div class="kv"><span class="mut">Oferta do clube</span><b>${money(n.base)}/sem.</b></div>
   <div class="field" style="margin-top:6px"><label>Seu pedido: <b id="jnw">${money(n.wage)}</b>/sem.</label><input type="range" min="${Math.round(n.base * 0.9)}" max="${Math.round(n.base * 1.6)}" step="${Math.max(100, Math.round(n.base / 100))}" value="${n.wage}" data-in="jnw"></div>
   <div class="field"><label>Duração</label><div class="seg" style="margin:0">${[1, 2, 3, 4].map((y) => `<button class="${n.years === y ? 'on' : ''}" data-a="jny" data-v="${y}">${y} ano${y > 1 ? 's' : ''}</button>`).join('')}</div></div>
-  <p class="xs mut">Pedir muito acima da oferta pode fazer o clube recusar. Contratos longos protegem você (multa maior se for demitido).</p></div>
+  ${m.youth ? '' : (() => { const J = jobInfo(G, c.id); return `<div class="field"><label>Bônus por título: <b id="jnt">${money(n.tbon)}</b></label><input type="range" min="0" max="${n.base * 20}" step="${n.base}" value="${n.tbon}" data-in="jnt"></div>
+  <div class="field"><label>Bônus por cumprir a meta: <b id="jnp">${money(n.pbon)}</b></label><input type="range" min="0" max="${n.base * 10}" step="${n.base}" value="${n.pbon}" data-in="jnp"></div>
+  <div class="field"><label>Verba garantida para contratações: <b id="jnb">${money(n.tb)}</b> <span class="xs mut">(caixa do clube: ${money(c.money)})</span></label><input type="range" min="0" max="${Math.max(0, Math.round(c.money * 0.8))}" step="${Math.max(10000, Math.round(Math.abs(c.money) / 50))}" value="${n.tb}" data-in="jnb"></div>
+  <div class="field"><label>Meta da temporada (${esc(J.idt.expect)})</label><div class="seg" style="margin:0">${[[-2, 'Ambiciosa'], [0, 'Padrão'], [2, 'Conservadora']].map(([k, l]) => `<button class="${n.obj === k ? 'on' : ''}" data-a="jno" data-v="${k}">${l}</button>`).join('')}</div></div>`; })()}
+  <p class="xs mut">Pedir muito acima da oferta pode fazer o clube recusar. Meta ambiciosa e contratos longos agradam a diretoria; bônus e verba altos pesam contra.</p></div>
   <div class="row"><button class="btn red grow" data-a="jnno">Recusar proposta</button><button class="btn pri grow" data-a="jnok">Enviar proposta</button></div>`;
 }
+H.jnt = (v) => { S.jn.tbon = +v; document.getElementById('jnt').textContent = money(+v); };
+H.jnp = (v) => { S.jn.pbon = +v; document.getElementById('jnp').textContent = money(+v); };
+H.jnb = (v) => { S.jn.tb = +v; document.getElementById('jnb').textContent = money(+v); };
+H.jno = (v) => { S.jn.obj = +v; replaceSheet(jobNegHtml()); };
 H.jnw = (v) => { S.jn.wage = +v; document.getElementById('jnw').textContent = money(+v); };
 H.jny = (v) => { S.jn.years = +v; replaceSheet(jobNegHtml()); };
-H.jnno = () => { const m = S.G.inbox.find((x) => x.id === S.jn.m); if (m) m.done = true; closeSheet(); render(); save(); };
+H.jnno = () => { const m = S.G.inbox.find((x) => x.id === S.jn.m); if (m) { m.done = true; onRefuseJob(S.G, m.cid); } closeSheet(); render(); save(); };
 H.jnok = () => {
   const G = S.G, n = S.jn, m = G.inbox.find((x) => x.id === n.m), c = G.clubs[m.cid];
-  const ratio = n.wage / n.base; const p = 1 - Math.max(0, ratio - 1) * 2.2 + (G.me.rep - c.rep) / 60 - (n.years >= 4 ? 0.15 : 0);
+  const ratio = n.wage / n.base; const p = 1 - Math.max(0, ratio - 1) * 2.2 + (G.me.rep - c.rep) / 60 - (n.years >= 4 ? 0.15 : 0) - n.tbon / (n.base * 80) - n.pbon / (n.base * 40) - (c.money > 0 ? n.tb / c.money * 0.5 : 0) - n.obj * 0.08;
   if (Math.random() < p) {
-    takeJob(G, m.cid, m.youth, false, { wage: n.wage, years: n.years }); m.done = true;
+    takeJob(G, m.cid, m.youth, false, { wage: n.wage, years: n.years, tbon: n.tbon, pbon: n.pbon, tb: n.tb, objAdj: n.obj }); setObjective(G); m.done = true;
     for (const x of G.inbox) if (x.kind === 'job' && !x.done) x.done = true;
     closeSheet(); toast(`✍️ Você é o novo técnico do ${c.name}! Contrato até ${G.me.job.until}.`, 3200); S.tab = 'home'; S.page = null; render(); save();
   } else if (n.tries++ < 1) { toast('❌ O clube recusou esses termos. Última chance: reduza o pedido.', 3000); n.wage = Math.round((n.wage + n.base) / 2); replaceSheet(jobNegHtml()); }

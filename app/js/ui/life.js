@@ -1,3 +1,4 @@
+import { rivalView, fedView, backView, historyExtra, identFansView, acadView, legacyView } from './universe.js';
 import { natWorldView } from './nations.js';
 // Telas dos sistemas de carreira: Clube (diretoria, finanças, estrutura, comissão), Carreira e Mundo
 import { esc, money, clamp } from '../util.js';
@@ -19,11 +20,13 @@ VIEWS.clube = () => {
   const G = S.G, c = myClub(G);
   if (!c) return '<div class="empty">Você está sem clube. Veja as vagas em Carreira.</div>';
   const sub = S.sub.cl || 'visao';
-  let h = seg('cl', [['visao', 'Visão geral'], ['dir', 'Diretoria'], ['fin', 'Finanças'], ['est', 'Estrutura'], ['com', 'Comissão']]);
+  let h = seg('cl', [['visao', 'Visão geral'], ['dir', 'Diretoria'], ['fin', 'Finanças'], ['est', 'Estrutura'], ['torc', 'Torcida e identidade'], ['acad', 'Academias'], ['com', 'Comissão']]);
   if (sub === 'visao') h += clubOverview(G, c);
   else if (sub === 'dir') h += boardView(G, c);
   else if (sub === 'fin') h += financeView(G, c);
   else if (sub === 'est') h += infraView(G, c);
+  else if (sub === 'torc') h += identFansView(G, c);
+  else if (sub === 'acad') h += acadView(G, c);
   else h += staffView(G, c);
   return h;
 };
@@ -92,11 +95,12 @@ H.stafffire = (k) => { toast(fireStaff(S.G, myClub(S.G), k)); render(); save(); 
 VIEWS.carreira = () => {
   const sub = S.sub.car || 'perfil';
   const G = S.G; const sp = specPoints(G);
-  let h = seg('car', [['perfil', 'Perfil'], ['esp', `Especialidades${sp.free ? ` (${sp.free})` : ''}`], ['vagas', 'Vagas'], ['hist', 'Histórico'], ['conq', 'Conquistas']]);
+  let h = seg('car', [['perfil', 'Perfil'], ['esp', `Especialidades${sp.free ? ` (${sp.free})` : ''}`], ['vagas', 'Vagas'], ['hist', 'Histórico'], ['conq', 'Conquistas'], ['leg', 'Legado']]);
   if (sub === 'perfil') h += profileView(G);
   else if (sub === 'esp') h += specView(G);
   else if (sub === 'vagas') h += vacView(G);
   else if (sub === 'hist') h += histView(G);
+  else if (sub === 'leg') h += legacyView(G);
   else h += achView(G);
   return h;
 };
@@ -136,7 +140,10 @@ function achView(G) {
 // ============================== MUNDO ==============================
 VIEWS.mundo = () => {
   const sub = S.sub.mu || 'news';
-  let h = seg('mu', [['news', 'Notícias'], ['temp', 'Temporadas'], ['tec', 'Treinadores'], ['sel', 'Seleções'], ['hall', 'Hall da Fama'], ['rec', 'Linha do tempo']]);
+  let h = seg('mu', [['news', 'Notícias'], ['temp', 'Temporadas'], ['tec', 'Treinadores'], ['riv', 'Rivalidades'], ['sel', 'Seleções'], ['fed', 'Federações'], ['bast', 'Bastidores'], ['hall', 'Hall da Fama'], ['rec', 'História']]);
+  if (sub === 'riv') return h + rivalView(S.G);
+  if (sub === 'fed') return h + fedView(S.G);
+  if (sub === 'bast') return h + backView(S.G);
   if (sub === 'sel') return h + natWorldView(S.G);
   const G = S.G;
   if (sub === 'news') {
@@ -155,6 +162,7 @@ VIEWS.mundo = () => {
   } else {
     const r = G.rec || {};
     h += `<div class="cols2"><div class="card"><h3>Recordes</h3><div class="kv"><span>⚽ Mais gols numa temporada</span><b>${r.goals ? `${esc(r.goals.n)} · ${r.goals.g} (${r.goals.y})` : '—'}</b></div><div class="kv"><span>💰 Maior transferência</span><b>${r.trans ? `${esc(r.trans.n)} · ${money(r.trans.fee)} (${r.trans.y})` : '—'}</b></div></div>
+    ${historyExtra(G)}
     <div class="card"><h3>Linha do tempo</h3><div class="list">${(G.timeline || []).slice().reverse().slice(0, 80).map((e) => `<div class="li sm"><span class="xs dim" style="width:40px">${e.y}</span><span class="grow">${esc(e.txt)}</span></div>`).join('') || '<div class="xs mut">Os grandes acontecimentos do futebol ficam registrados aqui.</div>'}</div></div></div>`;
   }
   return h;

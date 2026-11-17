@@ -1,3 +1,5 @@
+import { oppStudy, scoutReport, rivalOfClub } from '../engine/universe.js';
+import { coachOf } from '../engine/life.js';
 import { esc } from '../util.js';
 import { crest, face } from './art.js';
 import { S, H, render, toast, openSheet, closeSheet, save, myLineup, posTag, wk, shortName } from './app.js';
@@ -32,6 +34,7 @@ export function preMatch(f) {
   ${tired.length ? `<div class="hint warn" style="margin-bottom:8px">😮‍💨 Cansados: ${tired.map((p) => esc(shortName(p.n))).join(', ')}</div>` : ''}
   ${pm ? `<div class="card flat press-card"><h3>🎤 Coletiva pré-jogo</h3><div class="sm" style="margin-bottom:6px">${esc(pm.body)}</div>${pm.opts.map((o, i) => `<button class="btn sm blk" style="justify-content:flex-start;margin-bottom:4px;text-align:left" data-a="prepress" data-v="${pm.id}:${i}:${f.i}">“${esc(o.l)}”</button>`).join('')}</div>` : ''}
   ${!youth && ana >= 9 ? `<div class="hint" style="margin-bottom:8px">🔎 Analista (${ana}/20): o ${esc(opp.name)} joga no ${esc(opp.tact.form)} com mentalidade ${['defensiva', 'equilibrada', 'ofensiva'][opp.tact.ment]}. Ponto fraco: <b>${weak}</b>.</div>` : ''}
+  ${!youth ? (() => { const st = oppStudy(G, opp); const rv = rivalOfClub(G, opp); const lines = R ? scoutReport(G, opp, R) : []; return `<div class="card flat"><h3>📋 Relatório do adversário</h3>${lines.map((l) => `<div class="xs" style="margin-bottom:3px">• ${esc(l)}</div>`).join('')}${st.extra > 0 ? `<div class="hint warn" style="margin-top:6px">🧠 Eles estudaram você: seu ${esc(st.form)} apareceu em ${Math.round(st.share * 100)}% dos últimos jogos. Vão neutralizá-lo (+${st.extra} de força para eles). Varie a formação!</div>` : st.n >= 5 ? '<div class="xs ok" style="margin-top:4px">✅ Você tem variado a tática: o rival não conseguiu te estudar.</div>' : ''}${rv ? `<div class="hint" style="margin-top:6px">⚔️ ${rv === 2 ? 'Grande rival' : 'Rival'}: ${esc(coachOf(G, opp)?.n || '')}. Jogo com mais repercussão na torcida e na imprensa.</div>` : ''}</div>`; })() : ''}
   <div class="card flat"><h3>Destaques do adversário · ${esc(opp.tact.form)}</h3><div class="list">${best.map((p) => `<div class="li">${face(p, 28, opp)}<span class="grow b ell">${esc(p.n)}</span>${posTag(p.pos)}<b>${p.ovr}</b></div>`).join('')}</div></div>
   <div class="col"><button class="btn pri big blk" data-a="golive" data-v="${f.i}">▶ Jogar ao vivo</button>
   <div class="row"><button class="btn grow" data-a="prelu">Escalação</button><button class="btn grow" data-a="goquick" data-v="${f.i}">⏩ Resultado rápido</button></div></div>`);
@@ -48,7 +51,9 @@ function setup(f) {
   const ol = lineupFor(G, opp, youth);
   const ub = userMatchBonus(G, c);
   const mine = { club: c, xi: lu.xi.slice(), bench: lu.bench.slice(), tact: { ...tact }, user: true, extra: (train?.foco === 'tatico' ? 1 : 0) + ub.all, bon: { att: ub.att, def: ub.def } };
-  const theirs = { club: opp, xi: ol.xi.slice(), bench: ol.bench.slice(), tact: { ...opp.tact } };
+  const st = youth ? { extra: 0 } : oppStudy(G, opp);
+  const theirs = { club: opp, xi: ol.xi.slice(), bench: ol.bench.slice(), tact: { ...opp.tact }, extra: st.extra + (rivalOfClub(G, opp) ? 0.4 : 0) };
+  if (st.counter != null && st.extra > 0) theirs.tact.ment = st.counter;
   const comp = G.comps[f.c];
   return { m: new LiveMatch(G, f, side ? [theirs, mine] : [mine, theirs], { neutral: comp.kind === 'cont' && f.ko === comp.koWeeks.length - 1 }), side };
 }

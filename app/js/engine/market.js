@@ -1,3 +1,4 @@
+import { agentWageMul, agentBlock, onTransfer, onSellYouth, onRelease, aiBudgetMul } from './universe.js';
 import { clamp, ri, rf, rnd, pick, money, shuffle } from '../util.js';
 import { playerValue, playerWage } from './econ.js';
 import { QUOTA } from './world.js';
@@ -12,7 +13,7 @@ function news(G, txt) { G.news.unshift({ t: G.t, y: G.year, w: G.week, txt, cat:
 export function isUserClub(G, cid) { return G.me.job && !G.me.job.youth && G.me.job.cid === cid; }
 export function userControls(G, cid) { return isUserClub(G, cid) || (G.clubs[cid]?.own.user >= 51 && !G.clubs[cid].coach); }
 
-function squad(G, cid) { return G.players.filter((p) => p && p.club === cid && !p.u20); }
+function squad(G, cid) { const e = G._idx?.get(cid); if (e) return e.s.filter((p) => p.club === cid); return G.players.filter((p) => p && p.club === cid && !p.u20); }
 
 // Importância do jogador no elenco (0..1)
 export function importance(G, p) {
@@ -33,6 +34,7 @@ export function wageDemand(G, p, cid) {
   const from = G.clubs[p.club];
   if (from && from.rep > c.rep) w *= 1 + (from.rep - c.rep) / 60;
   w = Math.max(w, p.wage * 1.1);
+  w *= agentWageMul(G, p, c);
   return Math.round(w / 50) * 50;
 }
 // Jogador aceita ir para o clube?
@@ -56,7 +58,8 @@ export function doTransfer(G, p, toCid, fee, wage, years) {
   const from = p.club >= 0 ? G.clubs[p.club] : null; const to = G.clubs[toCid];
   if (from) { from.money += fee; from.fin.tin += fee; if (from.lineup) from.lineup = null; }
   to.money -= fee; to.fin.tout += fee;
-  p.club = toCid; p.wage = wage; p.con = G.year + years; p.lst = false; p.u20 = false; p.mor = 80;
+  if (from && from.id !== toCid) { onTransfer(G, p, from.id, toCid, fee); if (G.me.job && from.id === G.me.job.cid) onSellYouth(G, p); }
+  p.club = toCid; p.wage = wage; p.con = G.year + years; p.lst = false; p.u20 = false; p.u17 = false; p.mor = Math.min(p.mor + 30, 80);
   G.short = G.short.filter((x) => x !== p.id);
   if (to.lineup) to.lineup = null;
   if (fee >= 80e6) tl(G, `💰 ${p.n}: ${from ? from.name : 'livre'} → ${to.name} (${money(fee)})`, 'mercado');
@@ -69,12 +72,15 @@ export function userBid(G, p, fee, swap = null) {
   const me = G.me.job; const club = G.clubs[me.cid];
   if (G.me.freeze && G.me.freeze >= G.t && fee > 0) return { ok: false, why: 'A diretoria congelou as contratações (reunião financeira).' };
   if (fee > club.money) return { ok: false, why: 'O clube não tem dinheiro suficiente.' };
+  if (G.uv?.regs?.ffp && club.money < 0 && fee > 0) return { ok: false, why: 'Fair play financeiro: clubes com caixa negativo não podem contratar.' };
+  { const ab = agentBlock(G, p, club); if (ab) return { ok: false, why: ab }; }
   if (p.club < 0) return { ok: true, free: true };
   if (p.club === club.id) return { ok: false, why: 'Ele já é seu jogador.' };
   const j = willJoin(G, p, club.id); if (!j.ok) return j;
   if (p.loan) return { ok: false, why: `${p.n} está emprestado e não pode ser negociado agora.` };
   if (p.per === 'Leal' && G.clubs[p.club].rep >= club.rep - 10 && rnd() < 0.5) return { ok: false, why: `${p.n} é leal ao ${G.clubs[p.club].name} e não quer sair.` };
   fee += swap ? swapValue(G, swap, p.club) : 0;
+  if (p.prefTo === club.id && p.prefFee && fee >= p.prefFee) return { ok: true };
   const ask = Math.round(askPrice(G, p) * (1.04 - staffQ(G, club, 'dir') * 0.006) / 1000) * 1000;
   if (fee >= ask) return { ok: true };
   if (fee >= ask * 0.88 && rnd() < 0.35) return { ok: true };
@@ -102,6 +108,7 @@ export function renew(G, p, wage, years) {
 }
 export function release(G, p) {
   const c = G.clubs[p.club]; const yrs = Math.max(0, p.con - G.year) + 0.5;
+  if (G.me.job && c.id === G.me.job.cid) onRelease(G, p, c);
   const cost = Math.round(p.wage * 52 * yrs * 0.5);
   c.money -= cost; c.fin.other += cost;
   p.club = -1; p.lst = false; p.u20 = false; c.lineup = null;
@@ -127,7 +134,7 @@ export function aiTransferWeek(G, light) {
     const lvl = sq.map((p) => p.ovr).sort((a, b) => b - a).slice(0, 11);
     const avg = lvl.reduce((s, x) => s + x, 0) / (lvl.length || 1);
     let pos = Object.keys(QUOTA).find((k) => (cnt[k] || 0) < QUOTA[k] - 1) || pick(Object.keys(QUOTA));
-    const budget = Math.max(0, c.money * 0.45);
+    const budget = Math.max(0, c.money * 0.45 * aiBudgetMul(G, c));
     // procura alvos
     let best = null, bs = -1;
     const pool = rnd() < 0.3 ? free : G.players;

@@ -5,7 +5,7 @@
 // semana e fim de temporada.
 // =====================================================================
 import { clamp, ri, rf, rnd, pick, money, hash, seeded, shuffle } from '../util.js';
-import { genName, makePlayer, BOARD_TYPES, initClubLife, initPlayerLife, clubLevel } from './world.js';
+import { genName, makePlayer, BOARD_TYPES, initClubLife, initPlayerLife, clubLevel, expandWorld } from './world.js';
 import { playerWage, playerValue, WAGE_SCALE } from './econ.js';
 import { standings } from './season.js';
 
@@ -42,6 +42,7 @@ const isSenior = (G) => G.me.job && !G.me.job.youth;
 
 // ===================== MIGRAÇÃO / COMPATIBILIDADE =====================
 export function migrate(G) {
+  expandWorld(G);
   G.coaches ||= []; G.hist ||= {}; G.timeline ||= []; G.builds ||= []; G.rec ||= {};
   const me = G.me;
   me.pop ??= 25; me.pp ??= 20; me.xp ??= (me.stats?.j || 0) * 3; me.spec ||= { of: 0, df: 0, jv: 0, ge: 0, mo: 0 };
@@ -562,6 +563,8 @@ export function resolveDecision(G, m, i, auto) {
     case 'firmeza': if (me.rep > 55 || c.board.conf > 60) { c.chem = clamp(c.chem + 2, 0, 100); out = 'Sua autoridade foi respeitada.'; } else { c.chem = clamp(c.chem - 6, 0, 100); if (P) P.rel = clamp(P.rel - 10, 0, 100); out = 'Parte do elenco ficou contra você.'; } break;
     case 'incentivo': if (Math.random() < 0.55 + P.rel / 200 + (me.spec?.mo || 0) * 0.08) { P.mor = clamp(P.mor + 18, 0, 100); P.rel = clamp(P.rel + 5, 0, 100); out = `${P.n} voltou animado.`; } else { P.mor = clamp(P.mor + 4, 0, 100); out = `${P.n} melhorou um pouco.`; } break;
     case 'pre': out = applyPre(G, o.k); break;
+    case 'agRaise': if (P) { P.wage = o.w; out = `${P.n} recebeu o aumento: ${money(o.w)}/sem.`; } break;
+    case 'secretLeak': if (P && Math.random() < 0.5) { P.lst = true; P.sat = clamp(P.sat - 10, 0, 100); out = `${P.n} pediu para ser negociado. O ${G.clubs[o.buyer]?.name || 'interessado'} deve fazer proposta.`; } else out = 'A história esfriou.'; break;
     case 'buyOpt': if (P && P.loan) { P.loan.buy = true; out = `Você vai comprar ${P.n} por ${money(P.loan.fee)} ao fim da temporada.`; } break;
     case 'spons': { if (c) { const s = c.spons.find((x) => x.slot === o.slot); if (s) { s.n = o.sn; s.val = o.val; s.until = G.year + o.y; syncSpon(c); out = `🤝 Contrato com ${o.sn}: ${money(o.val)}/temporada até ${s.until}.`; } } break; }
   }

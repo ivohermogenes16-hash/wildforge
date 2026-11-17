@@ -2,6 +2,7 @@ import { LEAGUES } from '../data/leagues.js';
 import { shuffle } from '../util.js';
 import { SEASON_WEEKS } from './econ.js';
 import { ensureU17 } from './world.js';
+import { CUPS2, CONTS_ALL } from '../data/leagues2.js';
 
 export const CUPS = [
   { id: 'CDB', name: 'Copa do Brasil', short: 'Copa do Brasil', country: 'BR', from: ['BRA', 'BRB', 'BRC'], extra: ['BRD', 4], prize: 70e6 },
@@ -10,10 +11,8 @@ export const CUPS = [
   { id: 'CIT', name: 'Coppa Italia', short: 'Coppa Italia', country: 'IT', from: ['ITA1', 'ITA2'], prize: 20e6 },
   { id: 'CAR', name: 'Copa Argentina', short: 'Copa Argentina', country: 'AR', from: ['ARG1', 'ARG2'], prize: 4e6 },
 ];
-export const CONTS = [
-  { id: 'LIB', name: 'Copa Libertadores', short: 'Libertadores', country: 'SA', prize: 120e6 },
-  { id: 'UCL', name: 'Liga dos Campeões', short: 'Champions', country: 'EU', prize: 500e6 },
-];
+export const CONTS = CONTS_ALL;
+CUPS.push(...CUPS2);
 const CUP_WEEKS = [3, 9, 15, 21, 29, 37];
 const CONT_GROUP_WEEKS = [5, 8, 11, 14, 17, 20];
 const CONT_KO_WEEKS = [25, 33, 41];
@@ -119,7 +118,10 @@ export function setupSeason(G) {
   for (const cont of CONTS) {
     let ids = qual[cont.id];
     if (!ids || ids.length < 16) ids = defaultQual(G, cont.id);
-    ids = ids.filter((id) => G.clubs[id] && G.clubs[id].league).slice(0, 16);
+    const taken = new Set(Object.values(G.comps).filter((k) => k.kind === 'cont').flatMap((k) => k.clubs));
+    ids = [...new Set(ids)].filter((id) => G.clubs[id] && G.clubs[id].league && !taken.has(id)).slice(0, 16);
+    if (ids.length < 16) { const C = cont; for (const [lg] of C.slots) for (const c of G.clubs.filter((x) => x.league === lg && !taken.has(x.id) && !ids.includes(x.id)).sort((a, b) => b.rep - a.rep)) { if (ids.length >= 16) break; ids.push(c.id); } }
+    if (ids.length < 16) continue;
     const comp = newComp({ id: cont.id, kind: 'cont', name: cont.name, short: cont.short, country: cont.country, clubs: ids, prize: cont.prize });
     // potes
     const sorted = ids.slice().sort(repSort);
@@ -136,9 +138,12 @@ export function setupSeason(G) {
 }
 
 export function defaultQual(G, id) {
-  const top = (lg, n) => G.clubs.filter((c) => c.league === lg).sort((a, b) => b.rep - a.rep).slice(0, n).map((c) => c.id);
-  if (id === 'LIB') return top('BRA', 8).concat(top('ARG1', 8));
-  return top('ENG1', 6).concat(top('ESP1', 5), top('ITA1', 5));
+  const C = CONTS.find((x) => x.id === id); const used = new Set();
+  // clubos já colocados numa continental de prioridade maior ficam de fora
+  for (const o of CONTS) { if (o.id === id) break; if (G.comps?.[o.id]) for (const x of G.comps[o.id].clubs) used.add(x); }
+  const out = [];
+  for (const [lg, n] of C.slots) out.push(...G.clubs.filter((c) => c.league === lg && !used.has(c.id)).sort((a, b) => b.rep - a.rep).slice(0, n).map((c) => c.id));
+  return out;
 }
 
 function startKO(G, comp, pairs, r) {

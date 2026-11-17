@@ -1,3 +1,4 @@
+import { agentOf } from './universe.js';
 // =====================================================================
 // MERCADO AVANÇADO — empréstimos (simples, com opção, com obrigação),
 // empresários oferecendo jogadores, rumores e negociações em andamento,
@@ -137,7 +138,7 @@ function agents(G) {
   const p = pick(cands); if (!p) return;
   G.me.cd.agent = G.t;
   const fee = p.club >= 0 ? askPrice(G, p) : 0;
-  msg(G, `Empresário ${pick(['Marcelo Duarte', 'Jorge Mendonça', 'Rafaela Lins', 'Paolo Ricci', 'Hernán Sosa', 'Kevin Ward'])}`, `🕴️ Empresário oferece ${p.n}`, `"Tenho um jogador ideal para vocês: ${p.n}, ${p.age} anos, ${p.pos}, geral ${p.ovr}${p.club >= 0 ? `, do ${G.clubs[p.club].name}` : ', livre no mercado'}."\n${p.club >= 0 ? `Valor pedido pelo clube: ~${money(fee)}.` : 'Sem custo de transferência.'} Salário esperado: ~${money(wageDemand(G, p, cid))}/sem.${p.con <= G.year && p.club >= 0 ? '\nContrato termina no fim da temporada — oportunidade!' : ''}`, { kind: 'agent', pid: p.id });
+  msg(G, `Empresário ${agentOf(G, p)?.n || 'independente'}`, `🕴️ Empresário oferece ${p.n}`, `"Tenho um jogador ideal para vocês: ${p.n}, ${p.age} anos, ${p.pos}, geral ${p.ovr}${p.club >= 0 ? `, do ${G.clubs[p.club].name}` : ', livre no mercado'}."\n${p.club >= 0 ? `Valor pedido pelo clube: ~${money(fee)}.` : 'Sem custo de transferência.'} Salário esperado: ~${money(wageDemand(G, p, cid))}/sem.${p.con <= G.year && p.club >= 0 ? '\nContrato termina no fim da temporada — oportunidade!' : ''}`, { kind: 'agent', pid: p.id });
 }
 
 // ---------------- ganchos ----------------

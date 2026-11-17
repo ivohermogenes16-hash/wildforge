@@ -1,3 +1,4 @@
+import { coValuation } from './business.js';
 import { clamp, gauss, ri, rf, pick, money } from '../util.js';
 import { VARZEA } from '../data/names.js';
 import { clubValuation, coachWage } from './econ.js';
@@ -13,6 +14,7 @@ function news(G, txt) { G.news.unshift({ t: G.t, y: G.year, w: G.week, txt }); }
 export function weeklyPersonal(G) {
   const me = G.me, inv = me.inv;
   if (me.job) me.money += Math.round(me.job.wage * 0.75);
+  if (me.retired) me.money += 0;
   me.money -= 350; // custo de vida
   inv.cdi = Math.round(inv.cdi * 1.0024);
   const r = 0.0022 + gauss() * 0.035;
@@ -27,6 +29,7 @@ export function netWorth(G) {
   const me = G.me, inv = me.inv;
   let v = me.money + inv.cdi + inv.acoes + inv.imoveis * (inv.imovelVal || APT_PRICE);
   for (const c of G.clubs) if (c.own.user > 0) v += clubValuation(G, c) * c.own.user / 100;
+  for (const co of G.biz?.cos || []) if (!co.dead && co.sh > 0) v += coValuation(G, co) * co.sh / 100;
   return v;
 }
 

@@ -27,3 +27,5 @@ export const NAMES = {
 export const FOREIGN = { BR: ['AR', 'ES'], EN: ['ES', 'IT', 'BR'], ES: ['AR', 'BR', 'IT'], IT: ['ES', 'BR', 'AR'], AR: ['BR', 'ES'] };
 
 export const VARZEA = ['Unidos da Vila', 'Estrela do Norte', 'Real Periferia', 'Grêmio Recreativo Boa Vista', 'Juventus da Mooca Alta', 'Botafogo do Morro', 'Ponte do Rio', 'Sete de Setembro', 'Atlético Jardim', 'Leões da Serra', 'União Operária', 'Esporte Clube Bairro Novo'];
+import { ECON2 } from './leagues2.js';
+Object.assign(FOREIGN, ECON2.FOREIGN);

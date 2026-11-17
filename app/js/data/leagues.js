@@ -246,3 +246,7 @@ export const RESERVE = {
   IT: [['Spezia', 'SPE', '#ffffff', '#111111', 54], ['Reggiana', 'REG', '#8e1f2f', '#ffffff', 50], ['Pescara', 'PES', '#4aa3df', '#ffffff', 50], ['Bari', 'BAR', '#ffffff', '#d0021b', 52], ['Salernitana', 'SAL', '#8e1f2f', '#ffffff', 52], ['Brescia', 'BRE', '#1846a8', '#ffffff', 50]],
   AR: [['Arsenal de Sarandí', 'ARS', '#d0021b', '#4aa3df', 42], ['Brown de Adrogué', 'BRO', '#f5d400', '#4aa3df', 34], ['Alvarado', 'ALV', '#1846a8', '#ffffff', 32], ['Deportivo Armenio', 'ARM', '#d0021b', '#1846a8', 30], ['Villa Dálmine', 'VDA', '#7a1a33', '#ffffff', 30], ['Talleres de Remedios de Escalada', 'TRE', '#d0021b', '#ffffff', 30]],
 };
+
+// ---- expansão: novos países, ligas e clubes reais ----
+import { COUNTRIES2, LEAGUES2, CLUBS2 } from './leagues2.js';
+Object.assign(COUNTRIES, COUNTRIES2); LEAGUES.push(...LEAGUES2); Object.assign(CLUBS, CLUBS2);

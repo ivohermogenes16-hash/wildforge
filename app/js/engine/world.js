@@ -3,7 +3,7 @@ import { NAMES, FOREIGN } from '../data/names.js';
 import { SQUADS } from '../data/squads.js';
 import { NAT_OF, NAMES_EXTRA, NAME_POOL_OF } from '../data/nations.js';
 import { ri, rf, pick, rnd, clamp, gauss, POS, hash } from '../util.js';
-import { playerWage } from './econ.js';
+import { playerWage, TICKET } from './econ.js';
 
 export const QUOTA = { GOL: 3, LD: 2, ZAG: 4, LE: 2, VOL: 3, MC: 3, MEI: 2, PE: 2, PD: 2, ATA: 3 };
 export const START_YEAR = 2026;
@@ -103,7 +103,7 @@ export function buildSquad(G, c, extraYouth) {
     }
   }
   const realLvl = out.length ? out.map((p) => p.ovr).sort((a, b) => b - a).slice(0, 14).reduce((s, x, _, a) => s + x / a.length, 0) : 0;
-  const L = real ? realLvl : clubLevel(c.rep) + (['EN', 'ES', 'IT'].includes(c.country) ? 3 : 0);
+  const L = real ? realLvl : clubLevel(c.rep) + (['EN', 'ES', 'IT'].includes(c.country) ? 3 : ['DE', 'FR'].includes(c.country) ? 2 : ['SA'].includes(c.country) ? 1 : 0);
   const count = {}; for (const p of out) count[p.pos] = (count[p.pos] || 0) + 1;
   const small = c.rep < 25;
   for (const pos of POS) {
@@ -166,11 +166,21 @@ export function createWorld(G) {
   for (const c of G.clubs) initFinances(G, c);
 }
 
+// saves antigos: adiciona os países/ligas/clubes novos (entram nas competições na próxima temporada)
+export function expandWorld(G) {
+  const have = new Set(G.clubs.map((c) => c.key));
+  let n = 0;
+  for (const L of LEAGUES) for (const row of CLUBS[L.id]) {
+    if (have.has(row[0])) continue;
+    const c = makeClub(G, row, L.id, L.country); buildSquad(G, c); initFinances(G, c); c.fresh = true; n++;
+  }
+  return n;
+}
 export function initFinances(G, c) {
   const L = LEAGUES.find((l) => l.id === c.league);
   const wages = G.players.reduce((s, p) => (p && p.club === c.id ? s + p.wage : s), 0) * 52;
   const tv = L ? L.tv * (0.55 + 0.9 * c.rep / 100) : 100000;
-  const tick = c.cap * 1000 * clamp(0.35 + c.rep / 180, 0.2, 0.97) * (L ? 19 : 9) * (c.country === 'BR' ? 45 : c.country === 'AR' ? 14 : 200);
+  const tick = c.cap * 1000 * clamp(0.35 + c.rep / 180, 0.2, 0.97) * (L ? 19 : 9) * (c.country === 'BR' ? 45 : c.country === 'AR' ? 14 : ({ EN: 200, ES: 200, IT: 200 })[c.country] ?? TICKET[c.country] ?? 60);
   c.spon = Math.round(Math.max(c.rep * c.rep * 1500, wages * rf(1.05, 1.25) - tv - tick) / 1000) * 1000;
   c.money = Math.round((wages * rf(0.15, 0.45) + c.rep * c.rep * 3000) / 1000) * 1000;
 }

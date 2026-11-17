@@ -1,3 +1,4 @@
+import { aiInMatch } from './universe.js';
 import { clamp, rnd, ri, poisson, weighted, posFit, avg, pick } from '../util.js';
 
 // Formações: posição + coordenadas (x 0..1 largura, y 0..1 do próprio gol ao ataque)
@@ -32,7 +33,7 @@ export function effAt(p, slot, minute = 0) {
   return p.ovr * posFit(p.pos, slot) * (0.8 + 0.2 * fit / 100) * (0.94 + 0.12 * p.mor / 100);
 }
 
-export function squadOf(G, cid, youth) { return G.players.filter((p) => p && p.club === cid && !!p.u20 === !!youth); }
+export function squadOf(G, cid, youth) { const e = G._idx?.get(cid); if (e) return (youth ? e.y : e.s).filter((p) => p.club === cid && !!p.u20 === !!youth); return G.players.filter((p) => p && p.club === cid && !!p.u20 === !!youth); }
 
 // Escalação automática gulosa
 export function autoLineup(G, club, youth, keepFit = true, pool0 = null) {
@@ -141,6 +142,7 @@ export class LiveMatch {
   step() {
     if (this.done) return [];
     this.min++;
+    for (const i of [0, 1]) aiInMatch(this.G, i, this.s[i], this.score, this.min);
     const out = [];
     const R0 = this.R(0), R1 = this.R(1);
     const [l0, l1] = lambdas(R0, R1, this.opt.neutral);
