@@ -3,7 +3,7 @@ import { clamp, ri, rf, rnd, gauss, pick, shuffle, money } from '../util.js';
 import { SEASON_WEEKS, TICKET, coachWage, playerWage, playerValue } from './econ.js';
 import { createWorld, makePlayer, genName, buildU20, clubLevel, START_YEAR, newFin, initFinances, QUOTA } from './world.js';
 import { setupSeason, progressComps, recordResult, standings, koWinner, CUPS, CONTS } from './season.js';
-import { autoLineup, quickSim, penalties, validLineup, FORMATIONS } from './match.js';
+import { autoLineup, quickSim, penalties, validLineup, FORMATIONS, FITPOS } from './match.js';
 import { aiTransferWeek, inWindow, expireContracts, playerInterest } from './market.js';
 import { weeklyPersonal, ownClubWeek, ownSeasonEnd } from './career.js';
 import { ensureBase, scoutWeek, baseBudget } from './youth.js';
@@ -172,7 +172,7 @@ function applyMatch(G, f, res) {
       let mins = 90; const si = (res.ev || []).find((e) => e.t === 'sub' && e.p === +id), so = (res.ev || []).find((e) => e.t === 'sub' && e.o === +id);
       if (si) mins = 90 - si.m; if (so) mins = Math.min(mins, so.m - (si ? si.m : 0)); if (!hasSub && !res.played) mins = 82;
       if (youth) mins *= 0.85;
-      p.fit = Math.max(25, p.fit - fitCost(p, mins));
+      p.fit = res.en && res.en[id] != null ? Math.max(25, Math.round(Math.min(p.fit, res.en[id] + (youth ? 3 : 0)))) : Math.max(25, p.fit - fitCost(p, mins));
       if (p.fit < 62 && rnd() < (62 - p.fit) * 0.004) p.inj = Math.max(p.inj, ri(1, 3)); // músculo cansado se lesiona mais
       p.mor = clamp(p.mor + (won ? 4 : lost ? -4 : 0), 5, 100);
       p.playedW = (p.playedW || 0) + 1;
@@ -232,7 +232,6 @@ function userAfterMatch(G, f, res) {
 }
 
 const comp0 = (G, f) => G.comps[f.c] || {};
-const FITPOS = { GOL: 7, ZAG: 19, LD: 26, LE: 26, ALD: 27, ALE: 27, VOL: 24, MC: 26, MEI: 24, PD: 26, PE: 26, SA: 24, ATA: 22 };
 export function fitCost(p, mins) { const ag = p.age >= 33 ? 1.3 : p.age >= 30 ? 1.15 : p.age <= 21 ? 0.92 : 1; return Math.round((FITPOS[p.pos] || 24) * ag * Math.min(120, mins) / 90 + (rnd() * 6 - 3)); }
 // recuperação a cada meia semana (entre um jogo e outro)
 function recoverHalf(G) {

@@ -107,7 +107,7 @@ function loop(now) {
   if (!L) return;
   const dt = (now - L.last) / 1000; L.last = now;
   L.viz.update(dt); L.viz.draw();
-  if (L.m.min !== L.lastMin) { L.lastMin = L.m.min; narrate(); qsRefresh(); }
+  if (L.m.min !== L.lastMin) { L.lastMin = L.m.min; narrate(); qsRefresh(); if (L.stTab === "en") stats(); }
   if (L.narT && now > L.narT) { const n = document.getElementById('lnar'); if (n) n.classList.remove('on'); L.narT = 0; }
   const mn = document.getElementById('lmin'); if (mn) mn.textContent = `${L.m.min}'`;
   const tp = document.getElementById('ltlp'); if (tp) tp.style.width = Math.min(100, L.m.min / 90 * 100) + '%';
@@ -170,8 +170,17 @@ function onEv(e, quiet) {
 function stats() {
   const st = L.m.st; const tot = st.pos[0] + st.pos[1] || 1; const p0 = Math.round(st.pos[0] / tot * 100);
   const row = (l, a, b) => { const t = a + b || 1; return `<div class="lv-stat"><b>${a}</b><div class="lv-bar"><i style="width:${a / t * 100}%"></i></div><span>${l}</span><div class="lv-bar r"><i style="width:${b / t * 100}%"></i></div><b>${b}</b></div>`; };
-  document.getElementById('lstats').innerHTML = row('Posse %', p0, 100 - p0) + row('Finalizações', st.sh[0], st.sh[1]) + row('No gol', st.ont[0], st.ont[1]) + row('Faltas', st.fal[0], st.fal[1]);
+  const tabs = `<div class="lv-tabs"><span class="${L.stTab !== 'en' ? 'on' : ''}" data-a="lsttab" data-v="st">📊 Estatísticas</span><span class="${L.stTab === 'en' ? 'on' : ''}" data-a="lsttab" data-v="en">⚡ Energia</span></div>`;
+  if (L.stTab === 'en') {
+    const m = L.m, sd = m.s[L.side], form = m.form(L.side), G = S.G;
+    document.getElementById('lstats').innerHTML = tabs + `<div class="en-list">${sd.xi.map((id, k) => { const p = G.players[id]; if (!p || m.sent[L.side].has(id)) return ''; const e = Math.round(m.en[id] ?? p.fit); return `<div class="en-row"><span class="xs mut">${form[k][0]}</span><span class="ell">${esc(shortName(p.n))}</span><div class="en-bar"><i style="width:${e}%;background:${enCol(e)}"></i></div><b style="color:${enCol(e)}">${e}</b></div>`; }).join('')}</div>`;
+    return;
+  }
+  document.getElementById('lstats').innerHTML = tabs + row('Posse %', p0, 100 - p0) + row('Finalizações', st.sh[0], st.sh[1]) + row('No gol', st.ont[0], st.ont[1]) + row('Faltas', st.fal[0], st.fal[1]);
 }
+const enCol = (e) => (e >= 75 ? '#2fe08a' : e >= 60 ? '#f4c542' : e >= 45 ? '#ff9f43' : '#ff5a5f');
+const enTag = (e) => `<span class="xs b" style="color:${enCol(e)};width:34px;text-align:right">⚡${Math.round(e)}</span>`;
+H.lsttab = (v) => { L.stTab = v; stats(); };
 function updPause() { const b = document.getElementById('lpb'); if (b) b.textContent = L.viz.paused ? '▶' : '⏸'; }
 H.lnames = () => { L.viz.names = !L.viz.names; };
 H.lpause = () => { L.viz.paused = !L.viz.paused; updPause(); };
@@ -188,8 +197,8 @@ H.ltact = () => {
   <div class="card flat"><h3>Mentalidade</h3><div class="seg" style="margin:0">${MENT.map((x, i) => `<button class="${sd.tact.ment === i ? 'on' : ''}" data-a="lment" data-v="${i}">${x}</button>`).join('')}</div>
   <h3 style="margin-top:12px">Pressão</h3><div class="seg" style="margin:0">${PRESS.map((x, i) => `<button class="${sd.tact.press === i ? 'on' : ''}" data-a="lpress" data-v="${i}">${x}</button>`).join('')}</div></div>
   <div class="card flat"><h3><span>Substituições</span><span>${m.subs[s]}/5</span></h3><button class="btn sm blk" style="margin-bottom:8px" data-a="lqsheet">⚡ Fazer as trocas sugeridas (${m.suggestSubs(s, 3).length})</button><div class="hint" style="margin-bottom:8px">${L.subOut != null ? 'Agora escolha quem entra.' : 'Toque em quem vai sair.'}</div>
-  <div class="cols2"><div class="list">${sd.xi.map((id, i) => { const p = G.players[id]; if (!p) return ''; const off = m.sent[s].has(id); const inj = m.ev.some((e) => e.t === 'les' && e.p === id); return `<div class="li tap" ${off ? '' : `data-a="lout" data-v="${id}"`} style="${L.subOut === id ? 'background:#f4c54222' : ''}${off ? ';opacity:.4' : ''}"><span class="xs mut" style="width:30px">${form[i][0]}</span><span class="grow b ell">${esc(p.n)} ${inj ? '🩹' : ''}${off ? ' 🟥' : ''}</span><span class="xs">⚡${Math.round(Math.max(30, p.fit - Math.max(0, m.min - 55) * 0.35))}</span><b style="width:24px;text-align:right">${p.ovr}</b></div>`; }).join('')}</div>
-  <div class="list">${sd.bench.map((id) => { const p = G.players[id]; if (!p || used.has(id)) return ''; return `<div class="li tap" data-a="lin" data-v="${id}">${posTag(p.pos)}<span class="grow b ell">${esc(p.n)}</span><b style="width:24px;text-align:right">${p.ovr}</b></div>`; }).join('') || '<div class="empty">Banco vazio</div>'}</div></div></div>
+  <div class="cols2"><div class="list">${sd.xi.map((id, i) => { const p = G.players[id]; if (!p) return ''; const off = m.sent[s].has(id); const inj = m.ev.some((e) => e.t === 'les' && e.p === id); return `<div class="li tap" ${off ? '' : `data-a="lout" data-v="${id}"`} style="${L.subOut === id ? 'background:#f4c54222' : ''}${off ? ';opacity:.4' : ''}"><span class="xs mut" style="width:30px">${form[i][0]}</span><span class="grow b ell">${esc(p.n)} ${inj ? '🩹' : ''}${off ? ' 🟥' : ''}</span>${enTag(m.en[id] ?? p.fit)}<b style="width:24px;text-align:right">${p.ovr}</b></div>`; }).join('')}</div>
+  <div class="list">${sd.bench.map((id) => { const p = G.players[id]; if (!p || used.has(id)) return ''; return `<div class="li tap" data-a="lin" data-v="${id}">${posTag(p.pos)}<span class="grow b ell">${esc(p.n)}</span>${enTag(p.fit)}<b style="width:24px;text-align:right">${p.ovr}</b></div>`; }).join('') || '<div class="empty">Banco vazio</div>'}</div></div></div>
   <button class="btn pri blk" data-a="lclose">Voltar ao jogo</button>`);
 };
 H.lment = (v) => { L.m.s[L.side].tact.ment = +v; closeSheet(); H.ltact(); };

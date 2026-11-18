@@ -45,8 +45,11 @@ export const PRESS = ['Baixa', 'Média', 'Alta'];
 
 export function available(p) { return p && p.inj <= 0 && p.sus <= 0; }
 
-export function effAt(p, slot, minute = 0) {
-  const fit = Math.max(30, p.fit - (minute > 55 ? (minute - 55) * 0.35 : 0));
+// desgaste por minuto em campo (posição, idade, pressão)
+export const FITPOS = { GOL: 7, ZAG: 19, LD: 26, LE: 26, ALD: 27, ALE: 27, VOL: 24, MC: 26, MEI: 24, PD: 26, PE: 26, SA: 24, ATA: 22 };
+export function fitRate(p, tact) { const ag = p.age >= 33 ? 1.3 : p.age >= 30 ? 1.15 : p.age <= 21 ? 0.92 : 1; return (FITPOS[p.pos] || 24) * ag / 90 * (1 + ((tact?.press ?? 1) - 1) * 0.15); }
+export function effAt(p, slot, minute = 0, en = null) {
+  const fit = en != null ? Math.max(15, en) : Math.max(30, p.fit - (minute > 55 ? (minute - 55) * 0.35 : 0));
   return p.ovr * posFit(p.pos, slot) * (0.8 + 0.2 * fit / 100) * (0.94 + 0.12 * p.mor / 100);
 }
 
@@ -88,13 +91,13 @@ export function validLineup(G, club, lu, youth) {
   return true;
 }
 
-export function ratings(G, club, xi, minute = 0, tact = club.tact, extra = 0, bon = null) {
+export function ratings(G, club, xi, minute = 0, tact = club.tact, extra = 0, bon = null, en = null) {
   const form = formOf(tact);
   const lines = { G: [], D: [], M: [], A: [] };
   xi.forEach((id, i) => {
     const p = G.players[id]; if (!p) return;
     const slot = form[i][0];
-    const e = effAt(p, slot, minute);
+    const e = effAt(p, slot, minute, en ? en[id] : null);
     const L = slot === 'GOL' ? 'G' : ['LD', 'LE', 'ZAG'].includes(slot) ? 'D' : ['VOL', 'MC', 'MEI'].includes(slot) ? 'M' : 'A';
     lines[L].push(e);
   });
@@ -152,14 +155,16 @@ export class LiveMatch {
     this.st = { pos: [0, 0], sh: [0, 0], ont: [0, 0], cor: [0, 0], fal: [0, 0] };
     this.ball = { x: 0.5, y: 0.5, own: 0 }; this.played = [new Set(sides[0].xi), new Set(sides[1].xi)];
     this.done = false; this.half = false;
+    this.en = {}; for (const sd of sides) for (const id of sd.xi) { const p = G.players[id]; if (p) this.en[id] = p.fit; }
   }
   form(i) { return formOf(this.s[i].tact); }
-  R(i) { const sd = this.s[i]; return ratings(this.G, sd.club, sd.xi.map((id) => (this.sent[i].has(id) ? -1 : id)), this.min, sd.tact, sd.extra || 0, sd.bon); }
+  R(i) { const sd = this.s[i]; return ratings(this.G, sd.club, sd.xi.map((id) => (this.sent[i].has(id) ? -1 : id)), this.min, sd.tact, sd.extra || 0, sd.bon, this.en); }
   name(id) { const p = this.G.players[id]; return p ? p.n : '—'; }
   push(e) { e.m = this.min; this.ev.push(e); return e; }
   step() {
     if (this.done) return [];
     this.min++;
+    for (const i of [0, 1]) { const sd = this.s[i]; for (const id of sd.xi) { if (this.sent[i].has(id)) continue; const p = this.G.players[id]; if (!p) continue; if (this.en[id] == null) this.en[id] = p.fit; this.en[id] = Math.max(15, this.en[id] - fitRate(p, sd.tact) * (this.min > 45 ? 1.12 : 0.88) * (0.85 + Math.random() * 0.3)); } }
     for (const i of [0, 1]) aiInMatch(this.G, i, this.s[i], this.score, this.min);
     const out = [];
     const R0 = this.R(0), R1 = this.R(1);
@@ -206,7 +211,7 @@ export class LiveMatch {
   sub(i, outId, inId) {
     const sd = this.s[i]; const k = sd.xi.indexOf(outId);
     if (k < 0 || this.subs[i] >= 5 || this.sent[i].has(outId) || this.played[i].has(inId)) return false;
-    sd.xi[k] = inId; sd.bench = sd.bench.filter((x) => x !== inId); this.subs[i]++; this.played[i].add(inId);
+    sd.xi[k] = inId; sd.bench = sd.bench.filter((x) => x !== inId); this.subs[i]++; this.played[i].add(inId); { const q = this.G.players[inId]; if (q) this.en[inId] = q.fit; }
     this.push({ t: 'sub', side: i, p: inId, o: outId });
     return true;
   }
@@ -221,12 +226,12 @@ export class LiveMatch {
     sd.xi.forEach((id, j) => {
       const p = G.players[id]; if (!p || this.sent[i].has(id)) return; const slot = form[j][0];
       if (slot === 'GOL' && !injd.has(id)) return;
-      const live = Math.max(30, p.fit - Math.max(0, this.min - 45) * 0.4);
+      const live = this.en[id] ?? p.fit;
       let need = 0, why = '';
       if (injd.has(id)) { need = 100; why = 'lesionado'; }
       else if (yel.has(id) && this.min >= 55 && ['ZAG', 'VOL', 'LD', 'LE'].includes(p.pos)) { need = 30; why = 'pendurado'; }
       if (this.min >= 55 && live < 70 && need < 40) { need = Math.max(need, 80 - live); why = why || 'cansado'; }
-      cand.push({ j, id, slot, need, why, v: effAt(p, slot, this.min) - (yel.has(id) ? 3 : 0) });
+      cand.push({ j, id, slot, need, why, v: effAt(p, slot, this.min, this.en[id]) - (yel.has(id) ? 3 : 0) });
     });
     const used = new Set();
     cand.sort((x, y) => y.need - x.need || x.v - y.v);
@@ -242,7 +247,7 @@ export class LiveMatch {
         if (v > bv) { bv = v; best = id; }
       }
       if (best == null) continue;
-      if (!c.need && bv < c.v + 2) continue;
+      if (!c.need && (this.min < 46 || bv < c.v + 2)) continue;
       if (c.need && c.need < 100 && bv < c.v - 6) continue;
       used.add(best); out.push({ out: c.id, in: best, why: c.why || 'reforço', gain: Math.round((bv - c.v) * 10) / 10 });
     }
@@ -261,7 +266,7 @@ export class LiveMatch {
   finish(auto) { if (auto) for (const sd of this.s) sd.user = false; while (!this.done) this.step(); return this.result(); }
   result() {
     const tot = this.st.pos[0] + this.st.pos[1] || 1;
-    return { hg: this.score[0], ag: this.score[1], ev: this.ev.filter((e) => ['gol', 'am', 'ver', 'les', 'sub'].includes(e.t)), stats: { pos: [Math.round(this.st.pos[0] / tot * 100), 0], sh: this.st.sh, ont: this.st.ont }, played: this.played, xi: [this.s[0].xi, this.s[1].xi] };
+    return { en: this.en, hg: this.score[0], ag: this.score[1], ev: this.ev.filter((e) => ['gol', 'am', 'ver', 'les', 'sub'].includes(e.t)), stats: { pos: [Math.round(this.st.pos[0] / tot * 100), 0], sh: this.st.sh, ont: this.st.ont }, played: this.played, xi: [this.s[0].xi, this.s[1].xi] };
   }
 }
 

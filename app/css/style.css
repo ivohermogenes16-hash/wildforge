@@ -450,3 +450,8 @@ main.enter > * { animation: viewIn .2s ease-out; }
 .qs-row:active { background: #ffffff18; }
 .qs-out { color: #ff7b7f; } .qs-in { color: #2fe08a; font-weight: 700; }
 .qs-why { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: #ffffff14; color: var(--mut); text-transform: uppercase; } .qs-why.lesionado { background: #ff5a5f33; color: #ff8a8d; } .qs-why.cansado { background: #ff9f4333; color: #ffb877; } .qs-why.pendurado { background: #f4c54233; color: #f4c542; }
+/* ===== energia ao vivo ===== */
+.lv-tabs { display: flex; gap: 4px; margin-bottom: 6px; } .lv-tabs span { flex: 1; text-align: center; font-size: 12px; font-weight: 700; padding: 4px 0; border-radius: 8px; background: #ffffff08; color: var(--mut); cursor: pointer; } .lv-tabs span.on { background: #2fe08a22; color: #2fe08a; }
+.en-list { display: grid; gap: 3px; }
+.en-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 70px 26px; gap: 6px; align-items: center; font-size: 12.5px; }
+.en-bar { height: 7px; border-radius: 4px; background: #ffffff12; overflow: hidden; } .en-bar i { display: block; height: 100%; border-radius: 4px; transition: width .4s; }
