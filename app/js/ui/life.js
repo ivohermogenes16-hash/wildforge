@@ -1,4 +1,4 @@
-import { rivalView, fedView, backView, historyExtra, identFansView, acadView, legacyView } from './universe.js';
+import { rivalView, fedView, backView, historyExtra, identFansView, acadView, legacyView, newsPaperView } from './universe.js';
 import { natWorldView } from './nations.js';
 // Telas dos sistemas de carreira: Clube (diretoria, finanças, estrutura, comissão), Carreira e Mundo
 import { esc, money, clamp } from '../util.js';
@@ -147,9 +147,7 @@ VIEWS.mundo = () => {
   if (sub === 'sel') return h + natWorldView(S.G);
   const G = S.G;
   if (sub === 'news') {
-    const f = S.newsF || '';
-    const list = G.news.filter((n) => !f || n.cat === f || (f === 'titulo' && n.txt.includes('🏆')));
-    h += `<div class="chips">${[['', 'Todas'], ['mercado', 'Mercado'], ['sel', 'Seleções'], ['tec', 'Técnicos'], ['clube', 'Clubes'], ['titulo', 'Títulos']].map(([k, l]) => `<span class="chip ${f === k ? 'on' : ''}" data-a="newsf" data-v="${k}">${l}</span>`).join('')}</div><div class="card flat"><div class="list">${list.slice(0, 80).map((n) => `<div class="li sm"><span class="xs dim" style="width:52px">${wk(n.w)}<br>${n.y}</span><span class="grow">${esc(n.txt)}</span></div>`).join('') || '<div class="empty">Nada por aqui.</div>'}</div></div>`;
+    h += newsPaperView(G);
   } else if (sub === 'temp') {
     const ys = Object.keys(G.hist).sort().reverse();
     h += ys.length ? ys.map((y) => { const H = G.hist[y]; return `<div class="card"><h3>Temporada ${y}</h3><div class="cols2"><div>${H.champs.filter((x) => x.kind !== 'youth' && x.kind !== 'amateur').map((x) => `<div class="kv sm"><span>🏆 ${esc(x.c)}</span><b>${esc(x.club)}</b></div>`).join('')}</div><div>${H.awards.map((a) => `<div class="aw"><b>${esc(a.lg)}</b><div class="xs">⭐ ${esc(a.best?.n || '—')} <span class="mut">${esc(a.best?.club || '')}</span> · ⚽ ${esc(a.top?.n || '—')} (${a.top?.g ?? 0}) · 🌱 ${esc(a.young?.n || '—')} · 🧑‍💼 ${esc(a.coach)}</div></div>`).join('')}</div></div></div>`; }).join('') : '<div class="empty">O histórico aparece ao final da primeira temporada.</div>';

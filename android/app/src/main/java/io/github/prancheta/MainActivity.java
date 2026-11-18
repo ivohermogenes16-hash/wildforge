@@ -20,6 +20,7 @@ import androidx.webkit.WebViewAssetLoader;
 /* O jogo inteiro vem dentro do aplicativo (pasta assets) e roda numa WebView em tela cheia. */
 public class MainActivity extends Activity {
     private WebView web;
+    static volatile boolean inFront = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -59,6 +60,8 @@ public class MainActivity extends Activity {
             }
         });
 
+        web.addJavascriptInterface(new NativeBridge(this), "PranchetaNative");
+        NotifReceiver.channel(this);
         setContentView(web);
         hideBars();
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
@@ -90,12 +93,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        inFront = false;
         if (web != null) { web.onPause(); web.pauseTimers(); }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        inFront = true;
         if (web != null) { web.resumeTimers(); web.onResume(); }
         hideBars();
     }

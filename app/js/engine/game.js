@@ -46,7 +46,7 @@ export function msg(G, from, title, body, extra = {}) {
   G.inbox.unshift({ id: (G.inbox[0]?.id || 0) + 1, t: G.t, y: G.year, w: G.week, from, title, body, read: false, ...extra });
   if (G.inbox.length > 120) G.inbox.length = 120;
 }
-export function news(G, txt, cat = '') { G.news.unshift({ t: G.t, y: G.year, w: G.week, txt, cat }); if (G.news.length > 150) G.news.length = 150; }
+export function news(G, txt, cat = '') { G.news.unshift({ t: G.t, y: G.year, w: G.week, txt, cat }); if (G.news.length > 450) G.news.length = 450; }
 
 export function myClub(G) { return G.me.job ? G.clubs[G.me.job.cid] : null; }
 export function myCompIds(G) { return G.me.job?.youth ? ['U20'] : null; }
@@ -214,6 +214,7 @@ function userAfterMatch(G, f, res) {
     if (my.coach) my.coach.rep = G.me.rep;
   }
   afterUserMatch(G, f, res, pts >= 1.5 && gf >= ga, pts === 0);
+  matchHeadline(G, f, res, my, op, gf, ga);
   if (!j.youth) {
     const k = coachOf(G, op); const derby = derbyOf(G, my.id, op.id); const riv = rivalOfClub(G, op);
     fanMatch(G, my, gf, ga, op, derby || riv > 0 || f.ko >= 0);
@@ -224,6 +225,19 @@ function userAfterMatch(G, f, res) {
 }
 
 const comp0 = (G, f) => G.comps[f.c] || {};
+function matchHeadline(G, f, res, my, op, gf, ga) {
+  const sc = {}; for (const e of res.ev || res.events || []) if (e.t === 'gol' && G.players[e.p]?.club === my.id) sc[e.p] = (sc[e.p] || 0) + 1;
+  const top = Object.entries(sc).sort((a, b) => b[1] - a[1])[0]; const hero = top ? G.players[top[0]] : null;
+  const cp = comp0(G, f).short || comp0(G, f).name || ''; const pl = `${my.name} ${gf}–${ga} ${op.name}`;
+  const d = gf - ga; let t;
+  if (d >= 3) t = pick([`⚽ Show! ${my.name} atropela o ${op.name}`, `⚽ Goleada: ${my.name} não dá chances ao ${op.name}`]);
+  else if (d > 0) t = pick([`⚽ ${my.name} vence o ${op.name}`, `⚽ Vitória do ${my.name} sobre o ${op.name}`, `⚽ ${G.me.name} comemora: ${my.name} bate o ${op.name}`]);
+  else if (d === 0) t = pick([`⚽ ${my.name} e ${op.name} ficam no empate`, `⚽ Empate entre ${my.name} e ${op.name}`]);
+  else if (d <= -3) t = pick([`⚽ Vexame: ${my.name} é goleado pelo ${op.name}`, `⚽ Noite para esquecer: ${op.name} passa por cima do ${my.name}`]);
+  else t = pick([`⚽ ${my.name} perde para o ${op.name}`, `⚽ Tropeço: ${op.name} derrota o ${my.name}`]);
+  t += ` (${pl}${cp ? ', ' + cp : ''})` + (hero && d >= 0 ? `. ${hero.n} ${top[1] >= 3 ? 'faz hat-trick' : top[1] === 2 ? 'marca duas vezes' : 'marca'}${d > 0 ? ' e decide' : ''}.` : '.');
+  news(G, t, 'jogo'); if (G.news[0]) { G.news[0].cl = [my.id, op.id]; G.news[0].mine = 1; }
+}
 function aiCoachAfter(G, f) {
   for (const [cid, gf, ga] of [[f.h, f.hg, f.ag], [f.a, f.ag, f.hg]]) {
     const c = G.clubs[cid]; if (c.coach?.user) continue;

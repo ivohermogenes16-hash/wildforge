@@ -394,3 +394,50 @@ main.enter > * { animation: viewIn .2s ease-out; }
 /* sem rostos */
 .pf-face { display: none !important; }
 .pf-hero { padding-left: 14px; }
+/* banco de reservas */
+.bench-head { display: flex; justify-content: space-between; align-items: center; font: 700 13px 'Barlow Condensed', system-ui; letter-spacing: 1px; text-transform: uppercase; color: #9ab6ac; margin-bottom: 6px; }
+.bench-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.bcard { position: relative; display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 26px; border-radius: 10px; background: linear-gradient(135deg, #1a2c25, #0e1815); border: 1px solid #ffffff12; min-height: 44px; min-width: 0; overflow: hidden; }
+.bcard:active { transform: scale(.98); }
+.bcard.off { opacity: .55; }
+.bcard.empty { justify-content: center; border-style: dashed; background: transparent; }
+.bnum { position: absolute; left: 0; top: 0; bottom: 0; width: 20px; display: flex; align-items: center; justify-content: center; font: 800 12px 'Barlow Condensed', system-ui; background: #2fe08a22; color: var(--ac); border-radius: 10px 0 0 10px; }
+.bcard .grip { padding: 0; font-size: 13px; }
+.bfit { height: 3px; background: #ffffff12; border-radius: 3px; margin-top: 4px; overflow: hidden; } .bfit i { display: block; height: 100%; }
+/* ===== tela inicial 2.0 ===== */
+.title-bg { position: fixed; inset: 0; width: 100vw; height: 100dvh; z-index: 0; }
+.title-screen.t2 { position: relative; z-index: 1; grid-template-columns: 1.15fr 1fr; background: linear-gradient(90deg, #000a 0%, #0006 55%, #0000 100%); }
+.t-badge { display: inline-block; font: 800 11px 'Barlow Condensed', system-ui; letter-spacing: 3px; color: var(--ac); border: 1px solid color-mix(in srgb, var(--ac) 50%, transparent); padding: 4px 10px; border-radius: 999px; background: #0006; }
+.logo.big { font-size: 74px; margin-top: 8px; text-shadow: 0 6px 30px #000, 0 0 40px color-mix(in srgb, var(--ac) 30%, transparent); }
+.t-sub { font-size: 17px; color: #d6e6df; margin-top: 2px; }
+.t-stats { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.t-stats div { background: #000a; border: 1px solid #ffffff14; border-radius: 12px; padding: 6px 12px; backdrop-filter: blur(4px); }
+.t-stats b { display: block; font: 800 20px 'Barlow Condensed', system-ui; color: var(--ac); } .t-stats span { font-size: 10px; color: var(--mut); text-transform: uppercase; letter-spacing: .5px; }
+.t-right { display: flex; flex-direction: column; gap: 8px; background: #0b1210cc; border: 1px solid #ffffff14; border-radius: 18px; padding: 14px; backdrop-filter: blur(8px); box-shadow: 0 20px 60px #000a; }
+.t-save { position: relative; cursor: pointer; border-radius: 14px; padding: 12px 54px 12px 14px; background: linear-gradient(120deg, color-mix(in srgb, var(--c1) 55%, #0b1210), #0b1210 70%); border: 1px solid #ffffff22; box-shadow: inset 0 1px 0 #ffffff14; }
+.t-save:active { transform: scale(.98); }
+.t-play { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--ac); color: #04140c; font-weight: 900; box-shadow: 0 0 20px color-mix(in srgb, var(--ac) 60%, transparent); }
+.t-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.swatch { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #ffffff33; } .swatch.on { border-color: #fff; box-shadow: 0 0 0 3px #ffffff44; }
+@media (max-height: 380px) { .logo.big { font-size: 56px; } .t-stats b { font-size: 16px; } }
+/* ===== jornal ===== */
+.np-mast { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 3px double #ffffff33; padding-bottom: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.np-title { font: 900 28px Georgia, 'Times New Roman', serif; letter-spacing: -0.5px; color: #f2efe6; }
+.np-kick { display: inline-block; font: 800 10px 'Barlow Condensed', system-ui; letter-spacing: 1.5px; color: #0b1210; background: var(--k); padding: 1px 6px; border-radius: 3px; margin-bottom: 4px; }
+.np-img { position: relative; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; background: radial-gradient(120% 120% at 0% 0%, var(--c1), transparent 60%), radial-gradient(120% 120% at 100% 100%, var(--c2), transparent 60%), linear-gradient(160deg, #1a3a2a, #0c1a14); box-shadow: inset 0 0 40px #0008; filter: saturate(.9) contrast(1.05); }
+.np-img::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, #ffffff05 0 1px, transparent 1px 3px); pointer-events: none; }
+.np-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
+.np-crest { position: absolute; top: 50%; transform: translateY(-50%); filter: drop-shadow(0 4px 10px #000a); } .np-crest.l { left: 12%; } .np-crest.r { right: 12%; }
+.np-ico { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 22px; filter: drop-shadow(0 2px 6px #000); }
+.np-img.big .np-ico { font-size: 40px; }
+.np-fee { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); background: #000c; padding: 2px 10px; border-radius: 6px; font: 800 16px 'Barlow Condensed', system-ui; color: #f4c542; }
+.np-lead { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: center; background: #f2efe60a; border: 1px solid #ffffff14; border-radius: 12px; padding: 10px; margin-bottom: 10px; }
+.np-h1 { font: 700 22px/1.15 Georgia, 'Times New Roman', serif; color: #f6f2e8; margin: 2px 0 6px; }
+.np-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.np-card { background: #f2efe608; border: 1px solid #ffffff12; border-radius: 10px; overflow: hidden; }
+.np-card .np-img { border-radius: 0; }
+.np-ct { padding: 6px 8px 8px; }
+.np-h3 { font: 700 13px/1.25 Georgia, 'Times New Roman', serif; color: #eee9dd; margin: 2px 0 4px; }
+.np-mini { display: flex; gap: 8px; align-items: center; padding: 5px 0; border-top: 1px solid #ffffff0b; } .np-mini .np-img { width: 92px; flex: none; }
+@media (max-width: 760px) { .np-grid { grid-template-columns: 1fr 1fr; } }
+.bcard .bpos { line-height: 1; transform: scale(.85); transform-origin: left center; } .bcard .bnm { display: block; font-size: 13px; }

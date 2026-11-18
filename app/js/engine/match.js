@@ -11,8 +11,25 @@ export const FORMATIONS = {
   '3-5-2': [['GOL', .5, .04], ['ZAG', .72, .2], ['ZAG', .5, .18], ['ZAG', .28, .2], ['LD', .9, .48], ['VOL', .5, .4], ['MC', .66, .52], ['MC', .34, .52], ['LE', .1, .48], ['ATA', .62, .8], ['ATA', .38, .8]],
   '5-3-2': [['GOL', .5, .04], ['LD', .9, .3], ['ZAG', .7, .2], ['ZAG', .5, .18], ['ZAG', .3, .2], ['LE', .1, .3], ['VOL', .5, .42], ['MC', .7, .5], ['MC', .3, .5], ['ATA', .62, .78], ['ATA', .38, .78]],
   '3-4-3': [['GOL', .5, .04], ['ZAG', .72, .2], ['ZAG', .5, .18], ['ZAG', .28, .2], ['LD', .9, .48], ['MC', .62, .45], ['MC', .38, .45], ['LE', .1, .48], ['PD', .82, .76], ['ATA', .5, .84], ['PE', .18, .76]],
+  '4-1-2-1-2': [['GOL', .5, .04], ['LD', .85, .25], ['ZAG', .62, .2], ['ZAG', .38, .2], ['LE', .15, .25], ['VOL', .5, .38], ['MC', .72, .52], ['MC', .28, .52], ['MEI', .5, .64], ['ATA', .62, .82], ['ATA', .38, .82]],
+  '4-3-2-1': [['GOL', .5, .04], ['LD', .85, .25], ['ZAG', .62, .2], ['ZAG', .38, .2], ['LE', .15, .25], ['VOL', .5, .4], ['MC', .72, .46], ['MC', .28, .46], ['MEI', .66, .66], ['MEI', .34, .66], ['ATA', .5, .84]],
+  '4-2-2-2': [['GOL', .5, .04], ['LD', .85, .25], ['ZAG', .62, .2], ['ZAG', .38, .2], ['LE', .15, .25], ['VOL', .62, .4], ['VOL', .38, .4], ['MEI', .78, .62], ['MEI', .22, .62], ['ATA', .62, .82], ['ATA', .38, .82]],
+  '4-5-1': [['GOL', .5, .04], ['LD', .85, .25], ['ZAG', .62, .2], ['ZAG', .38, .2], ['LE', .15, .25], ['VOL', .5, .4], ['MC', .68, .5], ['MC', .32, .5], ['PD', .88, .6], ['PE', .12, .6], ['ATA', .5, .82]],
+  '3-4-2-1': [['GOL', .5, .04], ['ZAG', .72, .2], ['ZAG', .5, .18], ['ZAG', .28, .2], ['LD', .9, .46], ['MC', .62, .44], ['MC', .38, .44], ['LE', .1, .46], ['MEI', .66, .66], ['MEI', .34, .66], ['ATA', .5, .84]],
+  '3-4-1-2': [['GOL', .5, .04], ['ZAG', .72, .2], ['ZAG', .5, .18], ['ZAG', .28, .2], ['LD', .9, .46], ['MC', .62, .44], ['MC', .38, .44], ['LE', .1, .46], ['MEI', .5, .64], ['ATA', .62, .82], ['ATA', .38, .82]],
+  '5-4-1': [['GOL', .5, .04], ['LD', .9, .3], ['ZAG', .7, .2], ['ZAG', .5, .18], ['ZAG', .3, .2], ['LE', .1, .3], ['MC', .62, .46], ['MC', .38, .46], ['PD', .85, .6], ['PE', .15, .6], ['ATA', .5, .8]],
 };
 export const MENT = ['Defensiva', 'Equilibrada', 'Ofensiva'];
+// instruções extras do time: cada uma tem efeito nos números do jogo
+export const INSTR = {
+  tempo: { n: 'Ritmo', o: ['Cadenciado', 'Normal', 'Acelerado'], fx: [{ ctl: 1, att: -0.8 }, {}, { att: 1, def: -0.6 }] },
+  larg: { n: 'Largura', o: ['Por dentro', 'Normal', 'Pelas pontas'], fx: [{ ctl: 1, att: -0.4 }, {}, { att: 1, ctl: -0.6 }] },
+  linha: { n: 'Linha defensiva', o: ['Baixa', 'Média', 'Alta'], fx: [{ def: 1.5, att: -1 }, {}, { ctl: 1.2, def: -1.2 }] },
+  passe: { n: 'Passes', o: ['Curtos', 'Mistos', 'Longos'], fx: [{ ctl: 1.5, att: -0.5 }, {}, { att: 1, ctl: -1.5 }] },
+  marc: { n: 'Marcação', o: ['Por zona', 'Individual'], fx: [{}, { def: 0.8, ctl: -0.4 }] },
+  bola: { n: 'Bolas paradas', o: ['Curtas', 'Na área'], fx: [{ ctl: 0.3 }, { att: 0.6 }] },
+};
+export function instrFx(t) { const r = { att: 0, def: 0, ctl: 0 }; for (const [k, d] of Object.entries(INSTR)) { const f = d.fx[t?.[k] ?? (d.o.length === 3 ? 1 : 0)] || {}; for (const x of ['att', 'def', 'ctl']) r[x] += f[x] || 0; } return r; }
 // formação do time (aceita formação personalizada arrastando no campinho)
 export function formOf(t) { return (t && t.form === 'Personalizada' && t.custom && t.custom.length === 11) ? t.custom : FORMATIONS[t?.form] || FORMATIONS['4-3-3']; }
 // função automática pela posição no campo (x = largura 0..1, y = profundidade 0..1)
@@ -85,6 +102,7 @@ export function ratings(G, club, xi, minute = 0, tact = club.tact, extra = 0, bo
   const g = avg(lines.G) || 30, d = avg(lines.D) || 30, m = avg(lines.M) || 30, a = avg(lines.A) || avg(lines.M) || 30;
   let att = 0.5 * a + 0.35 * m + 0.15 * d, def = 0.5 * d + 0.3 * m + 0.2 * g, ctl = m * 0.8 + 0.2 * (a + d) / 2;
   if (bon) { att += bon.att || 0; def += bon.def || 0; }
+  { const ix = instrFx(tact); att += ix.att; def += ix.def; ctl += ix.ctl; }
   const ment = tact.ment - 1; att += ment * 2.5; def -= ment * 2.5;
   ctl += (tact.press - 1) * 1.5;
   const pen = missing * 4;

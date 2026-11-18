@@ -65,6 +65,7 @@ export function doTransfer(G, p, toCid, fee, wage, years) {
   if (fee >= 80e6) tl(G, `💰 ${p.n}: ${from ? from.name : 'livre'} → ${to.name} (${money(fee)})`, 'mercado');
   if (!G.rec) G.rec = {}; if (fee > (G.rec.trans?.fee || 0)) G.rec.trans = { n: p.n, fee, y: G.year, from: from?.name || '—', to: to.name };
   news(G, fee > 0 ? `💰 ${p.n} troca ${from ? from.name : 'sem clube'} pelo ${to.name} por ${money(fee)}.` : `✍️ ${p.n} assina com o ${to.name}${from ? ` (vindo do ${from.name})` : ' (sem clube)'}.`);
+  if (G.news[0]) { G.news[0].fee = fee; G.news[0].cl = [from?.id, to.id].filter((x) => x != null); }
 }
 
 // Proposta do usuário por um jogador

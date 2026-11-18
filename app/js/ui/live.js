@@ -1,3 +1,4 @@
+import { SET, vibrate } from '../settings.js';
 import { oppStudy, scoutReport, rivalOfClub } from '../engine/universe.js';
 import { coachOf } from '../engine/life.js';
 import { esc } from '../util.js';
@@ -84,7 +85,8 @@ export function launchLive(f, m, side, hc, ac, done) {
     onReplay: (on) => { const w = document.querySelector('.lv-pitch'); if (w) w.classList.toggle('rp', on); },
   });
   cv.addEventListener('click', () => L?.viz.skipReplay());
-  L.lastNar = 0;
+  L.lastNar = 0; L.viz.speed = SET.speed; L.viz.replays = SET.replays;
+  { const b = document.getElementById('lsp'); if (b) b.textContent = SET.speed + 'x'; const r = document.getElementById('lrp'); if (r) r.style.opacity = SET.replays ? 1 : 0.4; }
   L.onResize = () => L.viz.resize(); window.addEventListener('resize', L.onResize);
   addFeed({ t: 'ini' }); stats();
   L.raf = requestAnimationFrame(loop);
@@ -142,7 +144,7 @@ function addFeed(e) {
   const d = document.createElement('div'); d.className = 'ev ' + e.t + (e.side === L.side ? ' mine' : '');
   const tx = evText(e); d.innerHTML = `<b class="dim">${e.m != null ? e.m + "'" : ''}</b> ${tx}`;
   el.prepend(d);
-  if (['gol', 'trave', 'def', 'ver', 'nar', 'int', 'fim'].includes(e.t)) { const n = document.getElementById('lnar'); if (n) { n.innerHTML = tx.replace(/<[^>]+>/g, ''); n.className = 'lv-nar on ' + e.t; L.narT = performance.now() + 3200; } }
+  if (SET.narr && ['gol', 'trave', 'def', 'ver', 'nar', 'int', 'fim'].includes(e.t)) { const n = document.getElementById('lnar'); if (n) { n.innerHTML = tx.replace(/<[^>]+>/g, ''); n.className = 'lv-nar on ' + e.t; L.narT = performance.now() + 3200; } }
 }
 function onEv(e, quiet) {
   addFeed(e);
@@ -150,7 +152,7 @@ function onEv(e, quiet) {
   document.getElementById('lsc').textContent = `${L.viz.score[0]} – ${L.viz.score[1]}`;
   stats();
   if (quiet) return;
-  if (e.t === 'gol' && navigator.vibrate) navigator.vibrate(e.side === L.side ? [80, 60, 80] : 40);
+  if (e.t === 'gol') vibrate(e.side === L.side ? [80, 60, 80] : 40);
   if (e.t === 'les' && e.side === L.side) { L.viz.paused = true; updPause(); toast('Seu jogador se machucou! Faça uma substituição.'); }
   if (e.t === 'ver' && e.side === L.side) toast('Expulsão! Considere ajustar o time.');
 }

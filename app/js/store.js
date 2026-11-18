@@ -13,9 +13,21 @@ async function tx(store, mode, fn) {
   const d = await db();
   return new Promise((res, rej) => { const t = d.transaction(store, mode); const s = t.objectStore(store); const q = fn(s); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); });
 }
-export const saveGame = (G) => { const c = G._idx; G._idx = null; const p = tx('save', 'readwrite', (s) => s.put(G, 'slot1')); G._idx = c; return p; };
-export const loadGame = () => tx('save', 'readonly', (s) => s.get('slot1'));
-export const deleteGame = () => tx('save', 'readwrite', (s) => s.delete('slot1'));
+// 3 espaços de carreira; cada um guarda um resumo (meta) para a tela inicial
+let SLOT = 'slot1';
+try { SLOT = localStorage.getItem('prancheta.slot') || 'slot1'; } catch {}
+export const SLOTS = ['slot1', 'slot2', 'slot3'];
+export const getSlot = () => SLOT;
+export function setSlot(s) { SLOT = s; try { localStorage.setItem('prancheta.slot', s); } catch {} }
+function metaOf(G) { const c = G.me?.job ? G.clubs[G.me.job.cid] : null; return { name: G.me?.name, club: c?.name || (G.me?.retired ? 'Aposentado' : 'Sem clube'), c1: c?.c1, c2: c?.c2, year: G.year, week: G.week, rep: Math.round(G.me?.rep || 0), titles: G.me?.titles?.length || 0, ts: Date.now() }; }
+export const saveGame = (G) => { const c = G._idx; G._idx = null; const m = metaOf(G); const p = tx('save', 'readwrite', (s) => { s.put(m, 'meta:' + SLOT); return s.put(G, SLOT); }); G._idx = c; return p; };
+export const loadGame = (slot = SLOT) => tx('save', 'readonly', (s) => s.get(slot));
+export const deleteGame = (slot = SLOT) => tx('save', 'readwrite', (s) => { s.delete('meta:' + slot); return s.delete(slot); });
+export async function listSlots() {
+  const out = {};
+  for (const sl of SLOTS) { out[sl] = await tx('save', 'readonly', (s) => s.get('meta:' + sl)); if (!out[sl]) { const k = await tx('save', 'readonly', (s) => s.getKey(sl)); if (k) out[sl] = { legacy: true, name: 'Carreira salva', club: '—' }; } }
+  return out;
+}
 
 export const IMG = new Map();
 export async function loadImages() {

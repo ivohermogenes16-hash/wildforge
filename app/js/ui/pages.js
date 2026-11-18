@@ -1,3 +1,4 @@
+import { SET } from '../settings.js';
 import { playerExtra, scoutNetView } from './universe.js';
 import { onPromote } from '../engine/universe.js';
 import { esc, money, clamp, POS, POS_NAME } from '../util.js';
@@ -28,7 +29,7 @@ H.continue = () => {
     const nf = natUserFixNow(G);
     if (nf) { if (n > 0) { render(); save(); } natPreMatch(nf); return; }
     const uf = userFixNow(G);
-    if (uf) { if (n > 0) { render(); save(); } preMatch(uf); return; }
+    if (uf) { if (n > 0) { render(); save(); } if (SET.fast) { H.goquick(String(uf.i)); return; } preMatch(uf); return; }
     playSlot(G); n++;
     if (G.slot === 0) break;
   }
@@ -390,6 +391,7 @@ PAGES.opcoes = () => `<div class="card"><h3>Jogo</h3><button class="btn blk" dat
   <div class="card"><h3>Como jogar</h3><div class="sm" style="line-height:1.55">
   • <b>Continuar</b> avança o tempo até o próximo jogo seu.<br>• Monte o time em <b>Elenco › Escalação</b> e a estratégia em <b>Tática</b>.<br>• Ganhe jogos para subir sua <b>reputação</b> — clubes maiores passam a te chamar.<br>• Com seu salário, invista em <b>Patrimônio</b>. Com ${money(FOUND_COST)} você <b>funda um clube</b> na várzea; ou compre ações de uma <b>SAF</b>.<br>• No <b>Editor</b> você troca escudos e fotos por imagens da sua galeria (ficam só no seu aparelho).</div></div>
   <div class="card"><h3>Sobre os dados</h3><p class="sm mut">Clubes e ligas reais da temporada 2026. Os elencos das primeiras divisões são reais (base até meados de 2026) e podem estar desatualizados; nas divisões de baixo os jogadores são gerados. Corrija o que quiser no Editor.</p></div>
+  <button class="btn blk" data-a="tomenu">🏠 Menu principal (carreiras e configurações)</button>
   <button class="btn red blk" data-a="newcareer">Começar nova carreira</button>`;
 H.savenow = async () => { await save(true); toast('💾 Jogo salvo'); };
 H.presstog = () => { S.G.me.pressOn = S.G.me.pressOn === false; render(); save(); };

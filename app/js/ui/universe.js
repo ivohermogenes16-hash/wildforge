@@ -243,3 +243,77 @@ export function playerExtra(G, p) {
   ${r ? `<div class="kv sm"><span>Relatório de ${esc(r.by)}</span><b>geral ~${r.eo} · potencial ~${r.ep}</b></div>` : ''}
   ${p.sto?.length ? `<div class="card flat" style="margin-top:6px"><h3>Trajetória</h3>${p.sto.slice().reverse().map(([y, t]) => `<div class="kv sm"><span>${esc(t)}</span><b>${y}</b></div>`).join('')}</div>` : ''}`;
 }
+
+// ============================== JORNAL ==============================
+import { isDerby } from '../engine/life.js';
+function relevantClubs(G) {
+  const me = G.me; const mine = new Set(); const riv = new Set();
+  if (me.job) mine.add(me.job.cid);
+  for (const c of G.clubs) if (c.own?.user > 0) mine.add(c.id);
+  for (const cid of mine) { const c = G.clubs[cid]; for (const o of G.clubs) if (o.id !== cid && o.league && o.country === c.country && isDerby(G, cid, o.id)) riv.add(o.id); const comp = G.comps[c.league]; if (comp?.table?.[cid]) { const t = Object.keys(comp.table).map(Number).sort((a, b) => comp.table[b].pts - comp.table[a].pts); const i = t.indexOf(cid); for (const j of [i - 2, i - 1, i + 1, i + 2]) if (t[j] != null && j >= 0) riv.add(t[j]); } }
+  for (const [kid, r] of Object.entries(G.uv?.riv || {})) if (r.pts >= 4) { const k = G.coaches[kid]; if (k?.cid >= 0) riv.add(k.cid); }
+  for (const x of mine) riv.delete(x);
+  return { mine, riv };
+}
+function hasClub(t, name) {
+  let i = t.indexOf(name);
+  while (i >= 0) {
+    const a = t[i - 1] || ' ', z = t[i + name.length] || ' ';
+    const okZ = !/[\p{L}\d-]/u.test(z), okA = !/[\p{L}\d-]/u.test(a);
+    const prev = t.slice(0, i).match(/(\S+) $/); const person = prev && /^\p{Lu}\p{Ll}+$/u.test(prev[1]) && i > prev[1].length + 1 && !/[.:!?]\s*$/.test(t.slice(0, i - prev[1].length - 1));
+    if (okZ && okA && !person) return true;
+    i = t.indexOf(name, i + 1);
+  }
+  return false;
+}
+export function newsFeed(G, all) {
+  const { mine, riv } = relevantClubs(G); const me = G.me;
+  const myCo = (G.biz?.cos || []).filter((c) => c.sh > 0).map((c) => c.n);
+  const natName = me.nat ? G.nat.teams[me.nat.code].name : null;
+  const find = (txt, ids) => [...ids].filter((id) => hasClub(txt, G.clubs[id].name));
+  const out = [];
+  for (const n of G.news) {
+    const t = n.txt; let kind = null, clubs = [];
+    const m = find(t, mine), r = find(t, riv);
+    if (n.mine) { kind = 'clube'; clubs = n.cl || m; }
+    else if (t.includes(me.name) || (natName && t.includes(natName)) || myCo.some((x) => t.includes(x))) { kind = 'voce'; clubs = m; }
+    else if (m.length) { kind = 'clube'; clubs = m.concat(r); }
+    else if (r.length) { kind = 'rival'; clubs = r; }
+    else if ((n.fee || 0) >= 50e6 || /R\$ ?([5-9]\d|\d{3,})(,\d+)? mi(?!l)|R\$ ?\d+(,\d+)? bi/.test(t)) { kind = 'mundo'; clubs = n.cl || []; }
+    else if (/🏆/.test(t) && /(Liga dos Campeões|Libertadores|Copa do Mundo|Champions|Eurocopa|Copa América)/.test(t)) kind = 'mundo';
+    if (!kind && !all) continue;
+    if (!clubs.length && n.cl) clubs = n.cl;
+    if (!clubs.length) { for (const c of G.clubs) if (c.league && c.name.length > 4 && hasClub(t, c.name)) { clubs.push(c.id); if (clubs.length >= 2) break; } }
+    out.push({ n, kind: kind || 'geral', clubs: clubs.filter((x) => x != null && G.clubs[x]).slice(0, 2) });
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+const KIND = { voce: ['VOCÊ NA MÍDIA', '#f4c542'], clube: ['SEU CLUBE', '#2fe08a'], rival: ['RIVAIS', '#ff5a5f'], mundo: ['MUNDO DA BOLA', '#4aa8ff'], geral: ['GERAL', '#8ba39a'] };
+function topicOf(t) { return /💰|troca|assina|empréstimo|emprestado|🔁|✍️/.test(t) ? 'mercado' : /🏆|campeã|campeão/.test(t) ? 'titulo' : /⚽|vence|goleada|x /.test(t) ? 'jogo' : /💼|🏢|🤝|patrocín|empresa/.test(t) ? 'negocio' : /📢|torcida|protest|homenage/i.test(t) ? 'torcida' : /🏛️|diretoria|presidente|crise|💸/.test(t) ? 'crise' : /🌍|seleção/i.test(t) ? 'selecao' : 'geral'; }
+const ICO = { mercado: '✍️', titulo: '🏆', jogo: '⚽', negocio: '💼', torcida: '📣', crise: '🏛️', selecao: '🌍', geral: '📰' };
+function newsArt(G, it, big) {
+  const cs = it.clubs.map((id) => G.clubs[id]); const a = cs[0], b = cs[1]; const tp = topicOf(it.n.txt);
+  const c1 = a?.c1 || '#1b2a25', c2 = b?.c1 || a?.c2 || '#0b1210';
+  const fee = (it.n.txt.match(/R\$ ?[\d.,]+ ?(mil|mi|bi)/) || [])[0];
+  return `<div class="np-img ${big ? 'big' : ''}" style="--c1:${c1};--c2:${c2}"><svg class="np-lines" viewBox="0 0 160 90" preserveAspectRatio="none"><g fill="none" stroke="#ffffff22" stroke-width=".6"><rect x="6" y="8" width="148" height="74"/><line x1="80" y1="8" x2="80" y2="82"/><circle cx="80" cy="45" r="11"/><rect x="6" y="28" width="18" height="34"/><rect x="136" y="28" width="18" height="34"/></g></svg>
+  ${a ? `<div class="np-crest l">${crest(a, big ? 64 : 38)}</div>` : ''}${b ? `<div class="np-crest r">${crest(b, big ? 64 : 38)}</div>` : ''}
+  <div class="np-ico">${tp === 'mercado' && a && b ? '➜' : ICO[tp]}</div>${fee && big ? `<div class="np-fee">${esc(fee)}</div>` : ''}</div>`;
+}
+const clean = (t) => t.replace(/^[^\p{L}\d]+/u, '').trim();
+export function newsPaperView(G) {
+  const all = S.newsAll; const feed = newsFeed(G, all);
+  const head = `<div class="np-mast"><div><div class="np-title">Gazeta da Prancheta</div><div class="xs mut">Edição de ${wk(G.week)} · ${G.year} · ${all ? 'todas as notícias' : 'feita para você: seu clube, você, rivais e grandes negócios'}</div></div><div class="chips" style="margin:0"><span class="chip ${!all ? 'on' : ''}" data-a="newsall" data-v="0">Para você</span><span class="chip ${all ? 'on' : ''}" data-a="newsall" data-v="1">Mundo todo</span></div></div>`;
+  if (!feed.length) return head + '<div class="empty">Nada sobre você ou seus rivais por enquanto. Jogue algumas rodadas!</div>';
+  const pr = { voce: 0, clube: 1, rival: 2, mundo: 3, geral: 4 }; let li = 0; for (let i = 1; i < Math.min(8, feed.length); i++) if (pr[feed[i].kind] < pr[feed[li].kind]) li = i;
+  const lead = feed[li]; const rest = feed.filter((_, i) => i !== li);
+  const k = (it) => `<span class="np-kick" style="--k:${KIND[it.kind][1]}">${KIND[it.kind][0]}</span>`;
+  return head + `<div class="np-lead">${newsArt(G, lead, true)}<div class="np-lt">${k(lead)}<div class="np-h1">${esc(clean(lead.n.txt))}</div><div class="xs mut">${wk(lead.n.w)} · ${lead.n.y}</div></div></div>
+  <div class="np-grid">${rest.map((it) => `<div class="np-card">${newsArt(G, it, false)}<div class="np-ct">${k(it)}<div class="np-h3">${esc(clean(it.n.txt))}</div><div class="xs dim">${wk(it.n.w)} · ${it.n.y}</div></div></div>`).join('')}</div>`;
+}
+H.newsall = (v) => { S.newsAll = v === '1'; render(); };
+export function newsHome(G) {
+  const feed = newsFeed(G, false).slice(0, 4);
+  return feed.map((it) => `<div class="np-mini">${newsArt(G, it, false)}<div class="grow"><span class="np-kick" style="--k:${KIND[it.kind][1]}">${KIND[it.kind][0]}</span><div class="sm b">${esc(clean(it.n.txt))}</div></div></div>`).join('') || '<div class="xs mut">Sem notícias sobre você ainda.</div>';
+}
+S.newsHome = newsHome;

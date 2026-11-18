@@ -24,7 +24,7 @@ export function closeSheet(all) { do { const s = sheetStack.pop(); if (!s) break
 export function replaceSheet(html) { const s = sheetStack[sheetStack.length - 1]; if (!s) return openSheet(html); const el = s.bg.querySelector('.sheet'); el.innerHTML = html; return el; }
 H.cs = () => closeSheet();
 let saveT = null;
-export function save(now) { clearTimeout(saveT); const go = () => saveGame(S.G).catch((e) => console.warn('save', e)); if (now) return go(); saveT = setTimeout(go, 400); }
+export function save(now) { clearTimeout(saveT); const go = () => { try { S.onSave?.(S.G); } catch {} return saveGame(S.G).catch((e) => console.warn('save', e)); }; if (now) return go(); saveT = setTimeout(go, 400); }
 
 document.addEventListener('click', (e) => { const el = e.target.closest('[data-a]'); if (!el) return; const fn = H[el.dataset.a]; if (fn) { e.preventDefault(); fn(el.dataset.v, el, e); } });
 document.addEventListener('change', (e) => { const el = e.target.closest('[data-ch]'); if (el && H[el.dataset.ch]) H[el.dataset.ch](el.value, el, e); });
@@ -129,7 +129,7 @@ VIEWS.home = () => {
   if (c) col2 += `<div class="card"><h3>Clima no clube</h3>${[['Torcida', c.fans ?? 50], ['Entrosamento', c.chem ?? 60], ['Pressão da imprensa', me.pp ?? 20]].map(([l, v], i) => `<div style="margin-bottom:5px"><div class="row xs"><span class="grow mut">${l}</span><b>${Math.round(v)}</b></div><div class="bar"><i style="width:${v}%;background:${i === 2 ? (v > 65 ? 'var(--red)' : 'var(--org)') : v < 35 ? 'var(--red)' : v < 55 ? 'var(--gold)' : 'var(--ac)'}"></i></div></div>`).join('')}</div>`;
   const unread = G.inbox.filter((m) => !m.read && m.kind !== 'dec');
   if (unread.length) col3 += `<div class="card"><h3><span>Caixa de entrada</span><span class="badge">${unread.length}</span></h3><div class="list">${unread.slice(0, 4).map((m) => `<div class="li tap" data-a="msg" data-v="${m.id}"><div class="grow"><div class="b ell">${esc(m.title)}</div><div class="xs mut">${esc(m.from)}</div></div>›</div>`).join('')}</div></div>`;
-  col3 += `<div class="card"><h3><span>Notícias</span><span class="sm" data-a="go" data-v="noticias">ver todas ›</span></h3><div class="list">${G.news.slice(0, 6).map((n) => `<div class="li sm">${esc(n.txt)}</div>`).join('')}</div></div>`;
+  col3 += `<div class="card"><h3><span>Notícias</span><span class="sm" data-a="newsgo">ver jornal ›</span></h3><div>${S.newsHome ? S.newsHome(G) : ''}</div></div>`;
   if (me.nat) { const nf = nextNatFix(G); const T = G.nat.teams[me.nat.code]; const tm = (k) => G.nat.teams[k]; col1 += `<div class="card" data-a="tab" data-v="nat"><h3><span>${T.flag} Seleção ${esc(T.name)}</span><span class="pill">Federação ${Math.round(T.conf)}%</span></h3>${nf ? `<div class="row" style="justify-content:center;gap:10px"><span style="font-size:26px">${tm(nf.h).flag}</span><b>${esc(tm(nf.h).name)} x ${esc(tm(nf.a).name)}</b><span style="font-size:26px">${tm(nf.a).flag}</span></div><div class="xs mut" style="text-align:center">${wk(nf.w)}${nf.w === G.week && G.slot === 0 ? ' · HOJE' : ''}</div>` : '<div class="xs mut">Sem jogos marcados.</div>'}</div>`; }
   return `<div class="dash"><div>${col1}</div><div>${col2 || col3}</div>${col2 ? `<div>${col3}</div>` : ''}</div>`;
 };
@@ -191,18 +191,27 @@ VIEWS.tat = () => {
   const bar = (l, v) => `<div style="margin-bottom:6px"><div class="row xs"><span class="grow mut">${l}</span><b>${Math.round(v)}</b></div><div class="bar"><i style="width:${clamp((v - 40) * 2, 3, 100)}%"></i></div></div>`;
   let right = seg('tat', [['res', 'Jogadores'], ['tat', 'Estilo'], ['treino', 'Treino']]);
   if (S.sub.tat === 'res') {
-    const pool = G.players.filter((p) => p && p.club === c.id && (youth ? p.u20 && !p.u17 : !p.u20) && !lu.xi.includes(p.id)).sort((a, b) => (lu.bench.includes(b.id) - lu.bench.includes(a.id)) || b.ovr - a.ovr);
-    right += `<div class="hint" style="margin-bottom:8px">${S.sel ? '👉 Agora toque no jogador que vai entrar.' : '✋ Arraste os jogadores no campo para trocar de lugar ou mudar a posição. Arraste pelo ⠿ para colocar um reserva.'}</div><div class="list">${pool.map((p) => `<div class="li tap" data-a="pickp" data-v="${p.id}"><span class="grip" data-dragp="${p.id}">⠿</span>${posTag(p.pos)}<div class="grow"><div class="b ell">${esc(p.n)}</div><div class="xs mut">${lu.bench.includes(p.id) ? '🪑 Banco · ' : ''}⚡${Math.round(p.fit)} ${!available(p) ? '<span class="bad">indisponível</span>' : ''}</div></div>${ovrBadge(p.ovr)}</div>`).join('')}</div>`;
+    const pool = G.players.filter((p) => p && p.club === c.id && (youth ? p.u20 && !p.u17 : !p.u20) && !lu.xi.includes(p.id));
+    const bench = lu.bench.map((id) => G.players[id]).filter((p) => p && pool.includes(p));
+    const out = pool.filter((p) => !lu.bench.includes(p.id)).sort((a, b) => b.ovr - a.ovr);
+    const card = (p, n) => `<div class="bcard ${!available(p) ? 'off' : ''}" data-a="pickp" data-v="${p.id}"><span class="bnum">${n}</span><span class="grip" data-dragp="${p.id}">⠿</span><div class="grow" style="min-width:0"><div class="bpos">${posTag(p.pos)}</div><b class="ell bnm">${esc(shortName(p.n))}</b><div class="bfit"><i style="width:${Math.round(p.fit)}%;background:${p.fit < 65 ? '#ff9f43' : '#2fe08a'}"></i></div></div>${ovrBadge(p.ovr)}</div>`;
+    right += `<div class="hint" style="margin-bottom:8px">${S.sel ? '👉 Agora toque no jogador que vai entrar.' : '✋ Toque numa posição do campo e depois no jogador, ou arraste pelo ⠿.'}</div>
+    <div class="bench-head"><span>🪑 Banco de reservas</span><span class="pill">${bench.length}/9</span></div>
+    <div class="bench-grid">${bench.map((p, i) => card(p, 12 + i)).join('')}${Array.from({ length: Math.max(0, 9 - bench.length) }, (_, i) => `<div class="bcard empty"><span class="bnum">${12 + bench.length + i}</span><span class="xs mut">vago</span></div>`).join('')}</div>
+    <div class="bench-head" style="margin-top:10px"><span>Fora da lista</span><span class="pill">${out.length}</span></div>
+    <div class="list">${out.map((p) => `<div class="li tap sm" data-a="pickp" data-v="${p.id}"><span class="grip" data-dragp="${p.id}">⠿</span>${posTag(p.pos)}<span class="grow b ell">${esc(p.n)}</span><span class="xs ${p.fit < 65 ? 'warn' : 'mut'}">⚡${Math.round(p.fit)}</span>${!available(p) ? '<span class="xs bad">indisp.</span>' : `<button class="btn sm" data-a="tobench" data-v="${p.id}">+ banco</button>`}${ovrBadge(p.ovr)}</div>`).join('')}</div>`;
   } else if (S.sub.tat === 'tat') {
     right += `<div class="card flat">${bar('Ataque', R.att)}${bar('Meio-campo', R.ctl)}${bar('Defesa', R.def)}</div>
     <div class="field"><label>Mentalidade</label><div class="seg" style="margin:0">${MENT.map((m, i) => `<button class="${tact.ment === i ? 'on' : ''}" data-a="tact" data-v="ment:${i}">${m}</button>`).join('')}</div></div>
     <div class="field"><label>Pressão</label><div class="seg" style="margin:0">${PRESS.map((m, i) => `<button class="${tact.press === i ? 'on' : ''}" data-a="tact" data-v="press:${i}">${m}</button>`).join('')}</div></div>
-    <p class="xs mut">Ofensiva cria mais chances, mas expõe a defesa. Pressão alta domina o meio e cansa mais.</p>`;
+    ${Object.entries(INSTR).map(([k, d]) => `<div class="field"><label>${d.n}</label><div class="seg" style="margin:0">${d.o.map((o, i) => `<button class="${(tact[k] ?? (d.o.length === 3 ? 1 : 0)) === i ? 'on' : ''}" data-a="tact" data-v="${k}:${i}">${o}</button>`).join('')}</div></div>`).join('')}
+    <p class="xs mut">Ofensiva e passes longos criam mais chances, mas expõem a defesa. Linha alta e pressão dominam o meio e cansam mais. Adversários estudam o que você repete.</p>
+    <div class="card flat"><h3>Táticas salvas</h3>${[0, 1, 2].map((i) => { const P = (c.presets ||= [])[i]; return `<div class="li"><span class="grow"><b>${P ? esc(P.n) : `Espaço ${i + 1}`}</b>${P ? ` <span class="xs mut">${P.t.form} · ${MENT[P.t.ment]}</span>` : ''}</span>${P ? `<button class="btn sm" data-a="preload" data-v="${i}">Carregar</button>` : ''}<button class="btn sm" data-a="presave" data-v="${i}">Salvar aqui</button></div>`; }).join('')}</div>`;
   } else {
     right += trainView(G, c, youth);
   }
   const forms = Object.keys(FORMATIONS).concat(tact.custom ? ['Personalizada'] : []);
-  return `<div class="tact-wrap"><div class="tact-l"><div class="chips">${forms.map((f) => `<span class="chip ${tact.form === f ? 'on' : ''}" data-a="form" data-v="${f}">${f}</span>`).join('')}</div>${pitch}<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm grow" data-a="autolu">⚡ Escalar automático</button>${tact.form === 'Personalizada' ? '<button class="btn sm" data-a="resetform">↺ Formação padrão</button>' : ''}</div></div><div class="tact-r card flat">${right}</div></div>`;
+  return `<div class="tact-wrap"><div class="tact-l"><div class="chips">${forms.map((f) => `<span class="chip ${tact.form === f ? 'on' : ''}" data-a="form" data-v="${f}">${f}</span>`).join('')}</div>${pitch}<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm grow" data-a="autolu">⚡ Escalar automático</button><button class="btn sm pri grow" data-a="savetac">💾 Salvar escalação</button>${tact.form === 'Personalizada' ? '<button class="btn sm" data-a="resetform">↺ Formação padrão</button>' : ''}</div></div><div class="tact-r card flat">${right}</div></div>`;
 };
 H.resetform = () => { const t = mySide().tact; t.form = '4-3-3'; render(); save(); };
 H.form = (v) => { mySide().tact.form = v; render(); save(); };
@@ -218,6 +227,10 @@ H.pickp = (v) => {
   if (out >= 0 && !lu.bench.includes(out)) { lu.bench.unshift(out); if (lu.bench.length > 9) lu.bench.pop(); }
   S.sel = null; render(); save();
 };
+H.tobench = (v) => { const { G, c, youth } = mySide(); const lu = (youth ? (G.me.u20lineup ||= myLineup()) : (c.lineup ||= myLineup())); if (lu.bench.length >= 9) { toast('Banco cheio (9). Toque num reserva para trocar.'); return; } lu.bench.push(+v); render(); save(); };
+H.savetac = () => { const { G, c, youth } = mySide(); const lu = myLineup(); if (youth) G.me.u20lineup = { xi: lu.xi.slice(), bench: lu.bench.slice() }; else c.lineup = { xi: lu.xi.slice(), bench: lu.bench.slice() }; save(true); toast('💾 Escalação e tática salvas!'); };
+H.presave = (i) => { const { c, tact } = mySide(); const lu = myLineup(); const n = `${tact.form} ${MENT[tact.ment].toLowerCase()}`; (c.presets ||= [])[+i] = { n, t: JSON.parse(JSON.stringify(tact)), lu: { xi: lu.xi.slice(), bench: lu.bench.slice() } }; save(true); toast('💾 Tática salva'); render(); };
+H.preload = (i) => { const { G, c, youth } = mySide(); const P = c.presets?.[+i]; if (!P) return; const t = mySide().tact; Object.assign(t, JSON.parse(JSON.stringify(P.t))); const ok = P.lu.xi.every((id) => G.players[id]?.club === c.id); if (ok) { if (youth) G.me.u20lineup = { xi: P.lu.xi.slice(), bench: P.lu.bench.slice() }; else c.lineup = { xi: P.lu.xi.slice(), bench: P.lu.bench.slice() }; } toast(ok ? `Tática "${P.n}" carregada` : `Tática carregada (escalação refeita: alguns jogadores saíram)`); render(); save(); };
 H.tact = (v) => { const [k, n] = v.split(':'); mySide().tact[k] = +n; render(); save(); };
 function trainView(G, c, youth) {
   const tr = youth ? (G.me.u20train ||= { foco: 'equilibrado', int: 1 }) : c.train;
@@ -341,6 +354,7 @@ PAGES.inbox = () => { const G = S.G; return `<div class="card flat" style="paddi
 PAGES_T.inbox = 'Caixa de entrada';
 PAGES.noticias = () => `<div class="card flat" style="padding:2px 12px"><div class="list">${S.G.news.map((n) => `<div class="li sm"><span class="xs dim" style="width:56px">${wk(n.w)}<br>${n.y}</span><span class="grow">${esc(n.txt)}</span></div>`).join('')}</div></div>`;
 PAGES_T.noticias = 'Notícias';
+H.newsgo = () => { S.tab = 'mundo'; S.sub.mu = 'news'; S.page = null; render(); };
 export { VIEWS };
 export { playSlot, userFixNow, strength };
 
@@ -411,6 +425,7 @@ document.addEventListener('pointercancel', (e) => endDrag(e, true));
 // ---------- decisões (diretoria, vestiário, imprensa, comercial) ----------
 import { resolveDecision } from '../engine/life.js';
 import { takeNatJob, nextNatFix } from '../engine/nations.js';
+import { INSTR } from '../engine/match.js';
 import { jobInfo, onRefuseJob } from '../engine/universe.js';
 import { TRAIN_FX, ITR, PRE } from '../engine/life.js';
 import { acceptLoanOffer } from '../engine/market2.js';
