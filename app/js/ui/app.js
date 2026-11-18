@@ -67,7 +67,7 @@ export function render() {
   const sc = app.querySelector('main')?.scrollTop || 0; const same = app.dataset.view === (S.page || S.tab);
   app.innerHTML = `<nav class="rail">${NAV.filter(([k]) => k !== 'nat' || S.G.me.nat).map(([k, l, ic]) => `<button class="${S.tab === k && !S.page ? 'on' : ''}" data-a="tab" data-v="${k}">${ICONS[ic]}<span>${l}</span>${k === 'more' && unread ? `<span class="badge">${unread}</span>` : ''}</button>`).join('')}</nav>
   <div class="right"><header class="top">${S.page ? `<button class="btn sm" data-a="back">‹ Voltar</button>` : c ? crest(c, 32) : '<span class="logo" style="font-size:20px">P<span>.</span></span>'}
-    <div class="grow"><div class="t1 ell">${esc(S.page ? (PAGES_T[S.page] || '') : title)}</div><div class="t2">📅 ${dateStr(Math.min(G.week, SEASON_WEEKS - 1), true)} de ${G.year} · ${G.me.job && !G.me.job.youth ? (inWindow(G) ? '<span class="ok">🟢 mercado aberto</span>' : '<span class="mut">🔴 mercado fechado</span>') : `sem. ${Math.min(G.week, SEASON_WEEKS - 1) + 1}/${SEASON_WEEKS}`}${c && G.me.obj ? ` · 🎯 ${esc(G.me.obj.text)}` : ''}</div></div>
+    <div class="grow"><div class="t1 ell">${esc(S.page ? (PAGES_T[S.page] || '') : title)}</div><div class="t2">${dateStr(Math.min(G.week, SEASON_WEEKS - 1), true)} de ${G.year} ${G.me.job && !G.me.job.youth ? (inWindow(G) ? '<span class="mk-pill open">Mercado aberto</span>' : '<span class="mk-pill">Mercado fechado</span>') : `· sem. ${Math.min(G.week, SEASON_WEEKS - 1) + 1}/${SEASON_WEEKS}`}${c && G.me.obj ? ` · 🎯 ${esc(G.me.obj.text)}` : ''}</div></div>
     <button class="icon-btn" data-a="go" data-v="inbox">📩${unread ? `<span class="badge">${unread}</span>` : ''}</button>
     <span class="money-pill" data-a="go" data-v="financas">${money(G.me.money)}</span>
     <button class="btn pri cont" data-a="continue">${now ? '▶ Jogo' : 'Continuar'} ›</button></header>
@@ -90,7 +90,7 @@ export function fixLine(f, cid) {
     const r = gf > ga ? 'V' : gf < ga ? 'D' : f.pen ? ((home ? f.pen[0] > f.pen[1] : f.pen[1] > f.pen[0]) ? 'V' : 'D') : 'E';
     res = `<span class="pill ${r === 'V' ? 'g' : r === 'D' ? 'r' : ''}">${f.hg}–${f.ag}${f.pen ? ` (${f.pen[0]}–${f.pen[1]}p)` : ''}</span>`;
   }
-  return `<div class="li tap" data-a="fix" data-v="${f.i}"><span class="xs mut" style="width:46px">${wk(f.w)}</span>${crest(opp, 24)}<div class="grow"><div class="b ell">${home ? '' : '@ '}${esc(opp.name)}</div><div class="xs mut">${compName(f.c)}${f.ko >= 0 ? ' · mata-mata' : ''}</div></div>${res || `<span class="pill">${home ? 'Casa' : 'Fora'}</span>`}</div>`;
+  return `<div class="li tap" data-a="fix" data-v="${f.i}"><span class="xs mut" style="width:46px">${dateStr(f.w, false, f.s ? 3 : 0)}</span>${crest(opp, 24)}<div class="grow"><div class="b ell">${home ? '' : '@ '}${esc(opp.name)}</div><div class="xs mut">${compName(f.c)} · ${fixPhase(f)}</div></div>${res || `<span class="pill">${home ? 'Casa' : 'Fora'}</span>`}</div>`;
 }
 function miniTable(comp, cid) {
   const G = S.G; const gi = Math.max(0, comp.groups.findIndex((g) => g.includes(cid)));
@@ -108,7 +108,7 @@ VIEWS.home = () => {
     const nf = nextUserFix(G);
     if (nf) {
       const hc = G.clubs[nf.h], ac = G.clubs[nf.a]; const now = nf.w === G.week && nf.s === G.slot;
-      col1 += `<div class="card hero-card" style="--c1:${hc.c1};--c2:${ac.c1}"><h3><span>Próximo jogo · ${esc(compName(nf.c))}</span><span class="pill ${now ? 'g' : ''}">${now ? 'Hoje' : wk(nf.w)}</span></h3>
+      col1 += `<div class="card hero-card" style="--c1:${hc.c1};--c2:${ac.c1}"><h3><span>Próximo jogo · ${esc(compName(nf.c))} · ${esc(fixPhase(nf))}</span><span class="pill ${now ? 'g' : ''}">${now ? 'Hoje' : wk(nf.w)}</span></h3>
       <div class="match-hero"><div data-a="club" data-v="${hc.id}">${crest(hc, 54)}<div class="nm">${esc(hc.name)}</div><div class="xs mut">${Math.round(strength(G, hc.id, me.job.youth))} força</div></div><div class="vs">VS</div><div data-a="club" data-v="${ac.id}">${crest(ac, 54)}<div class="nm">${esc(ac.name)}</div><div class="xs mut">${Math.round(strength(G, ac.id, me.job.youth))} força</div></div></div>
       <button class="btn pri blk" style="margin-top:10px" data-a="continue">${now ? '▶ Ir para o jogo' : 'Continuar ›'}</button></div>`;
     }
@@ -252,7 +252,7 @@ H.train = (v) => { const { G, c, youth } = mySide(); const tr = youth ? G.me.u20
 // ---------- JOGOS ----------
 VIEWS.jg = () => {
   let h = seg('jg', [['cal', 'Calendário'], ['tab', 'Tabelas'], ['art', 'Artilharia']]);
-  if (S.sub.jg === 'cal') h += calView(); else if (S.sub.jg === 'tab') h += tablesView(); else h += scorersView();
+  if (S.sub.jg === 'cal') h += myCompsCard() + calView(); else if (S.sub.jg === 'tab') h += tablesView(); else h += scorersView();
   return h;
 };
 function calView() {
@@ -274,9 +274,63 @@ function compPicker() {
   if (!S.comp || !G.comps[S.comp]) S.comp = mine[0] || 'BRA';
   const all = Object.values(G.comps);
   return `<div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">${mine.map((id) => `<span class="chip ${S.comp === id ? 'on' : ''}" data-a="comp" data-v="${id}">${esc(G.comps[id].short)}</span>`).join('')}
-  <select data-ch="comp" style="width:auto;flex:1;min-width:180px">${[['BR', '🇧🇷 Brasil'], ['EN', '🏴 Inglaterra'], ['ES', '🇪🇸 Espanha'], ['IT', '🇮🇹 Itália'], ['AR', '🇦🇷 Argentina'], ['SA', '🌎 América do Sul'], ['EU', '🌍 Europa']].map(([k, l]) => `<optgroup label="${l}">${all.filter((x) => x.country === k).map((x) => `<option value="${x.id}" ${S.comp === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>`).join('')}</select></div>`;
+  <select data-ch="comp" style="width:auto;flex:1;min-width:180px">${compGroups(all).map(([l, xs]) => `<optgroup label="${esc(l)}">${xs.map((x) => `<option value="${x.id}" ${S.comp === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>`).join('')}</select></div>`;
 }
-function tablesView() { return compPicker() + compTables(S.G.comps[S.comp]); }
+function compGroups(all) {
+  const out = []; const used = new Set();
+  const add = (l, xs) => { xs = xs.filter((x) => !used.has(x.id) && x.kind !== 'youth'); xs.forEach((x) => used.add(x.id)); if (xs.length) out.push([l, xs]); };
+  add('Brasil', all.filter((x) => x.country === 'BR' && x.kind !== 'state'));
+  add('Estaduais', all.filter((x) => x.kind === 'state').sort((a, b) => a.name.localeCompare(b.name)));
+  add('Continentais', all.filter((x) => x.kind === 'cont'));
+  const cs = [...new Set(all.map((x) => x.country))];
+  for (const k of cs) add(COUNTRIES[k]?.name || k, all.filter((x) => x.country === k));
+  return out;
+}
+// ===== fase de cada competição =====
+export function koRoundName(comp, r) { const left = comp.koWeeks.length - r; return left === 1 ? 'Final' : left === 2 ? 'Semifinal' : left === 3 ? 'Quartas de final' : left === 4 ? 'Oitavas de final' : `${r + 1}ª fase`; }
+export function fixPhase(f) {
+  const G = S.G; const comp = G.comps[f.c]; if (!comp) return '';
+  if (f.ko >= 0) return koRoundName(comp, f.ko);
+  const same = G.fix.filter((x) => x.c === f.c && x.ko < 0 && (x.h === f.h || x.a === f.h)).sort((a, b) => a.w - b.w || a.s - b.s);
+  const rd = same.indexOf(f) + 1;
+  const grp = comp.groups.length > 1 ? `${comp.format === 'zones2' ? 'Zona' : 'Grupo'} ${String.fromCharCode(65 + Math.max(0, comp.groups.findIndex((g) => g.includes(f.h))))} · ` : '';
+  return comp.kind === 'league' && comp.format !== 'groups6' ? `${rd}ª rodada` : `${comp.kind === 'state' || comp.kind === 'cont' || comp.format === 'groups6' ? 'Fase de grupos' : 'Fase inicial'} · ${grp}${rd}ª rodada`;
+}
+export function compStatus(comp, cid) {
+  const G = S.G; const total = comp.groups.length ? standings(G, comp, 0).length : 0;
+  if (comp.champion != null) return { ph: 'Encerrado', me: comp.champion === cid ? 'Campeão!' : comp.runnerUp === cid ? 'Vice-campeão' : elimText(comp, cid) || 'Fora da disputa', tone: comp.champion === cid ? 'gold' : '' };
+  if (comp.phase === 'ko') {
+    const r = comp.koRound; const ties = comp.ko[r].map((i) => G.fix[i]); const t = ties.find((f) => f.h === cid || f.a === cid);
+    const ph = koRoundName(comp, r);
+    if (t) { const o = G.clubs[t.h === cid ? t.a : t.h]; return { ph, me: `${t.hg != null ? 'Jogou' : 'Enfrenta'} ${o.name}${t.hg != null ? ` (${t.h === cid ? t.hg : t.ag}–${t.h === cid ? t.ag : t.hg})` : ''}`, tone: 'ok' }; }
+    if (comp.byes?.includes(cid)) return { ph, me: 'Classificado direto para a próxima fase', tone: 'ok' };
+    return { ph, me: elimText(comp, cid) || 'Eliminado', tone: 'bad' };
+  }
+  if (comp.kind === 'cup' && !comp.ko.length) return { ph: 'Aguardando sorteio', me: '' };
+  const gi = Math.max(0, comp.groups.findIndex((g) => g.includes(cid))); const tab = standings(G, comp, gi); const pos = tab.indexOf(cid) + 1; const n = tab.length;
+  const played = comp.table[cid]?.p || 0; const games = comp.games || (n - 1);
+  const ph = comp.kind === 'league' && comp.format !== 'groups6' ? `${Math.min(games, played + 1)}ª rodada de ${games}` : `Fase de grupos · ${played}/${games} jogos`;
+  const grp = comp.groups.length > 1 ? ` no ${comp.format === 'zones2' ? 'Zona' : 'Grupo'} ${String.fromCharCode(65 + gi)}` : '';
+  const q = comp.koQual ? (pos <= comp.koQual ? ' · na zona de classificação' : ` · classificam ${comp.koQual}`) : comp.up && pos <= comp.up ? ' · zona de acesso' : comp.down && pos > n - comp.down ? ' · zona de rebaixamento' : '';
+  return { ph, me: `${pos}º${grp}${q}`, tone: comp.koQual ? (pos <= comp.koQual ? 'ok' : 'warn') : comp.down && pos > n - comp.down ? 'bad' : '' };
+}
+function elimText(comp, cid) {
+  const G = S.G;
+  for (let r = comp.ko.length - 1; r >= 0; r--) { const f = comp.ko[r].map((i) => G.fix[i]).find((x) => x.h === cid || x.a === cid); if (f && f.hg != null) return `Eliminado: ${koRoundName(comp, r)}`; }
+  if (comp.clubs.includes(cid) && comp.groups.length) return 'Eliminado na fase de grupos';
+  return '';
+}
+export function myCompsCard() {
+  const G = S.G; const c = myClub(G); if (!c) return '';
+  const ids = myComps(); if (!ids.length) return '';
+  return `<div class="comp-strip">${ids.map((id) => { const k = G.comps[id]; const st = compStatus(k, c.id); return `<div class="comp-chip ${S.comp === id && S.sub.jg === 'tab' ? 'on' : ''}" data-a="compgo" data-v="${id}"><div class="cc-k">${esc(KIND_L[k.kind] || 'Competição')}</div><div class="cc-n ell">${esc(k.short)}</div><div class="cc-p">${esc(st.ph)}</div><div class="cc-m ${st.tone || ''}">${esc(st.me)}</div></div>`; }).join('')}</div>`;
+}
+const KIND_L = { league: 'Liga', cup: 'Copa nacional', cont: 'Continental', state: 'Estadual', amateur: 'Amador', youth: 'Base' };
+H.compgo = (v) => { S.comp = v; S.sub.jg = 'tab'; S.tab = 'jg'; S.page = null; render(); };
+function tablesView() { const G = S.G; const comp = G.comps[S.comp] || G.comps[myComps()[0]]; const my = myClub(G)?.id; let top = '';
+  if (comp && my != null && comp.clubs.includes(my)) { const st = compStatus(comp, my); top = `<div class="comp-head"><div><div class="xs mut">${esc(KIND_L[comp.kind] || '')}${comp.fmt ? ' · ' + esc(comp.fmt) : ''}</div><div class="ch-n">${esc(comp.name)}</div></div><div class="ch-ph"><div class="xs mut">Fase atual</div><b>${esc(st.ph)}</b></div><div class="ch-me ${st.tone || ''}"><div class="xs mut">Sua situação</div><b>${esc(st.me)}</b></div></div>`; }
+  else if (comp) top = `<div class="comp-head"><div><div class="xs mut">${esc(KIND_L[comp.kind] || '')}</div><div class="ch-n">${esc(comp.name)}</div></div><div class="ch-ph"><div class="xs mut">Fase atual</div><b>${esc(comp.champion != null ? 'Encerrado' : comp.phase === 'ko' ? koRoundName(comp, comp.koRound) : 'Fase de grupos / pontos corridos')}</b></div></div>`;
+  return myCompsCard() + compPicker() + top + compTables(comp); }
 H.comp = (v) => { S.comp = v; render(); };
 export function compTables(comp) {
   const G = S.G; const my = myClub(G)?.id;
@@ -301,7 +355,7 @@ export function compTables(comp) {
     h += '</div>';
   }
   if (comp.ko.length) {
-    const names = (r, tot) => { const left = tot - r; return left === 1 ? 'Final' : left === 2 ? 'Semifinal' : left === 3 ? 'Quartas de final' : left === 4 ? 'Oitavas de final' : `${r + 1}ª fase`; };
+    const names = (r) => koRoundName(comp, r);
     h += '<div class="cols2">';
     for (let r = comp.ko.length - 1; r >= 0; r--) {
       h += `<div class="card flat"><h3>${names(r, comp.koWeeks.length)}</h3><div class="list">${comp.ko[r].map((i) => { const f = G.fix[i]; const a = G.clubs[f.h], b = G.clubs[f.a]; return `<div class="li tap sm" data-a="fix" data-v="${f.i}">${crest(a, 20)}<span class="grow ell ${f.h === my ? 'b ok' : ''}">${esc(a.name)}</span><b>${f.hg != null ? `${f.hg}–${f.ag}${f.pen ? '*' : ''}` : wk(f.w)}</b><span class="grow ell" style="text-align:right">${esc(b.name)}</span>${crest(b, 20)}</div>`; }).join('')}</div></div>`;
@@ -427,6 +481,7 @@ import { resolveDecision } from '../engine/life.js';
 import { takeNatJob, nextNatFix } from '../engine/nations.js';
 import { INSTR } from '../engine/match.js';
 import { dateStr, inWindow } from '../engine/market.js';
+import { COUNTRIES } from '../data/leagues.js';
 import { jobInfo, onRefuseJob } from '../engine/universe.js';
 import { TRAIN_FX, ITR, PRE } from '../engine/life.js';
 import { acceptLoanOffer } from '../engine/market2.js';

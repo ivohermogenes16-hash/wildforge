@@ -3,6 +3,7 @@ import { shuffle } from '../util.js';
 import { SEASON_WEEKS } from './econ.js';
 import { ensureU17 } from './world.js';
 import { CUPS2, CONTS_ALL } from '../data/leagues2.js';
+import { ESTADUAIS } from '../data/estaduais.js';
 
 export const CUPS = [
   { id: 'CDB', name: 'Copa do Brasil', short: 'Copa do Brasil', country: 'BR', from: ['BRA', 'BRB', 'BRC'], extra: ['BRD', 4], prize: 70e6 },
@@ -73,15 +74,15 @@ export function setupSeason(G) {
       // agrupa por região aproximada: ordem original da lista ~ estados
       const orig = ids.slice();
       orig.forEach((id, i) => comp.groups[Math.floor(i / (ids.length / ng))].push(id));
-      scheduleRR(G, comp, true, [0, 30], 1);
+      scheduleRR(G, comp, true, [L.country === 'BR' ? 3 : 0, 30], 1);
       comp.koWeeks = [32, 35, 38, 41, 44]; comp.koQual = 2; void pots;
     } else if (L.format === 'zones2') {
       const s = shuffle(ids.slice()); const h = Math.ceil(s.length / 2);
       comp.groups = [s.slice(0, h), s.slice(h)];
-      scheduleRR(G, comp, true, [0, SEASON_WEEKS], 1);
+      scheduleRR(G, comp, true, [L.country === 'BR' ? 3 : 0, SEASON_WEEKS], 1);
     } else {
       comp.groups = [ids];
-      scheduleRR(G, comp, L.format === 'double', [0, SEASON_WEEKS], 1);
+      scheduleRR(G, comp, L.format === 'double', [L.country === 'BR' ? 3 : 0, SEASON_WEEKS], 1);
     }
     G.comps[L.id] = comp;
   }
@@ -90,6 +91,7 @@ export function setupSeason(G) {
   const cu = newComp({ id: 'U20', kind: 'youth', name: 'Brasileirão Sub-20', short: 'Sub-20', country: 'BR', clubs: u20, groups: [u20] });
   scheduleRR(G, cu, true, [0, SEASON_WEEKS - 4], 1); G.comps.U20 = cu;
   setupU17(G, 2);
+  setupEstaduais(G);
   // Liga amadora (clube próprio)
   const ama = G.clubs.filter((c) => c.league === 'AMA').map((c) => c.id);
   if (ama.length >= 4) {
@@ -149,7 +151,7 @@ export function defaultQual(G, id) {
 function startKO(G, comp, pairs, r) {
   comp.koRound = r; comp.phase = 'ko';
   const w = comp.koWeeks[r];
-  const slot = comp.kind === 'league' ? 1 : 0;
+  const slot = comp.koSlots ? comp.koSlots[r] : comp.kind === 'league' ? 1 : 0;
   comp.ko[r] = pairs.map(([h, a]) => addFix(G, comp, w, slot, h, a, -1, r).i);
 }
 
@@ -176,7 +178,11 @@ export function progressComps(G) {
       if (comp.koWeeks.length) {
         const q = comp.groups.map((g, gi) => standings(G, comp, gi).slice(0, comp.koQual));
         let pairs = [];
-        if (q.length === 4 && comp.kind === 'cont') {
+        if (comp.kind === 'state') {
+          if (q.length === 1) pairs = comp.koQual === 2 ? [[q[0][0], q[0][1]]] : [[q[0][0], q[0][3]], [q[0][1], q[0][2]]];
+          else if (comp.koQual === 4) pairs = [[q[0][0], q[1][3]], [q[1][1], q[0][2]], [q[1][0], q[0][3]], [q[0][1], q[1][2]]];
+          else pairs = [[q[0][0], q[1][1]], [q[1][0], q[0][1]]];
+        } else if (q.length === 4 && comp.kind === 'cont') {
           pairs = [[q[0][0], q[1][1]], [q[1][0], q[0][1]], [q[2][0], q[3][1]], [q[3][0], q[2][1]]];
         } else {
           for (let i = 0; i < q.length; i += 2) { pairs.push([q[i][0], q[i + 1][1]]); pairs.push([q[i + 1][0], q[i][1]]); }
@@ -226,3 +232,25 @@ export function recordResult(G, f) {
 }
 
 export function fixturesOf(G, cid) { return G.fix.filter((f) => f.h === cid || f.a === cid).sort((a, b) => a.w - b.w || a.s - b.s); }
+
+// ===== campeonatos estaduais (jan–mar): datas no meio e no fim de semana =====
+const EST_DATES = [[0, 0], [0, 1], [1, 0], [1, 1], [2, 0], [2, 1], [4, 0], [6, 0], [7, 0], [10, 0]];
+export function setupEstaduais(G) {
+  for (const E of ESTADUAIS) {
+    const ids = E.clubs.map((n) => G.clubs.find((c) => c.key === n || c.name === n)).filter((c) => c && c.country === 'BR').map((c) => c.id);
+    if (ids.length < 4) continue;
+    const n = ids.length; const sorted = ids.slice().sort((a, b) => G.clubs[b].rep - G.clubs[a].rep);
+    const comp = newComp({ id: E.id, kind: 'state', uf: E.uf, name: E.name, short: E.short, country: 'BR', clubs: ids, prize: E.prize });
+    let ko;
+    if (n <= 8) { comp.groups = [ids]; comp.koQual = n >= 6 ? 4 : 2; ko = comp.koQual === 4 ? 2 : 1; comp.fmt = 'Pontos corridos em turno único'; }
+    else { const A = [], B = []; sorted.forEach((id, i) => ((i % 4 === 0 || i % 4 === 3) ? A : B).push(id)); comp.groups = [A, B]; comp.koQual = n >= 12 ? 4 : 2; ko = comp.koQual === 4 ? 3 : 2; comp.fmt = 'Dois grupos em turno único'; }
+    const per = comp.groups.map((g) => roundRobin(shuffle(g.slice())));
+    const R = Math.max(...per.map((r) => r.length));
+    for (let r = 0; r < R; r++) { const [w, sl] = EST_DATES[r]; per.forEach((rounds, gi) => { if (rounds[r]) for (const [h, a] of rounds[r]) addFix(G, comp, w, sl, h, a, gi); }); }
+    for (const id of ids) comp.table[id] = { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, form: '' };
+    comp.rounds = R; comp.games = R;
+    const kd = EST_DATES.slice(EST_DATES.length - ko);
+    comp.koWeeks = kd.map((d) => d[0]); comp.koSlots = kd.map((d) => d[1]);
+    G.comps[E.id] = comp;
+  }
+}

@@ -1,3 +1,4 @@
+import { NEW_BR } from '../data/estaduais.js';
 import { LEAGUES, CLUBS, RESERVE, COUNTRIES } from '../data/leagues.js';
 import { NAMES, FOREIGN } from '../data/names.js';
 import { SQUADS } from '../data/squads.js';
@@ -160,6 +161,7 @@ export function createWorld(G) {
     }
   }
   for (const [country, rows] of Object.entries(RESERVE)) for (const row of rows) { const c = makeClub(G, row, null, country, true); buildSquad(G, c); }
+  addStateClubs(G);
   // Base sub-20 para todos os clubes brasileiros da Série A e B
   for (const c of G.clubs) if (c.country === 'BR' && (c.league === 'BRA' || c.league === 'BRB')) buildU20(G, c);
   // Dinheiro e patrocínio para fechar a conta
@@ -169,7 +171,7 @@ export function createWorld(G) {
 // saves antigos: adiciona os países/ligas/clubes novos (entram nas competições na próxima temporada)
 export function expandWorld(G) {
   const have = new Set(G.clubs.map((c) => c.key));
-  let n = 0;
+  let n = addStateClubs(G, true);
   for (const L of LEAGUES) for (const row of CLUBS[L.id]) {
     if (have.has(row[0])) continue;
     const c = makeClub(G, row, L.id, L.country); buildSquad(G, c); initFinances(G, c); c.fresh = true; n++;
@@ -193,3 +195,10 @@ export function initFinances(G, c) {
 }
 
 export { COUNTRIES };
+
+// clubes que só disputam o estadual (sem divisão nacional)
+export function addStateClubs(G, fin) {
+  const have = new Set(G.clubs.map((c) => c.key)); let n = 0;
+  for (const row of NEW_BR) { if (have.has(row[0])) continue; const c = makeClub(G, row.slice(0, 6), null, 'BR', true); c.uf = row[6]; buildSquad(G, c); if (fin) { initFinances(G, c); c.realSq = true; } n++; }
+  return n;
+}

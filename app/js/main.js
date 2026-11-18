@@ -9,6 +9,7 @@ import { migrate } from './engine/life.js';
 import './ui/nations.js';
 import './ui/universe.js';
 import './ui/nego.js';
+import { startIcons, stripEmoji } from './ui/icons.js';
 import { initUniverse } from './engine/universe.js';
 import { initBiz } from './engine/business.js';
 import { initNations, natSetupYear } from './engine/nations.js';
@@ -186,6 +187,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && S.G
 window.PRANCHETA = S;
 const rot = document.createElement('div'); rot.className = 'rotate'; rot.innerHTML = '<div class="ph"></div><div class="xb" style="font-size:20px">Gire o celular</div><div class="mut">O Prancheta é jogado na horizontal.</div>'; document.body.appendChild(rot);
 applySet();
+startIcons();
 try { if (window.PranchetaNative && SET.notif && !localStorage.getItem('prancheta.askedNotif')) { localStorage.setItem('prancheta.askedNotif', '1'); setTimeout(() => askNotif(), 2500); } } catch {}
 (async function boot() {
   try { await loadImages(); } catch (e) { console.warn(e); }

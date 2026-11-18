@@ -104,7 +104,7 @@ export function aiCoachResult(G, club, gf, ga, opp) {
   k.rep = clamp(k.rep + (r === 'v' ? 0.06 * q : r === 'd' ? -0.06 / q : 0) + (target - k.rep) * 0.01, 3, 97);
   club.coach.rep = Math.round(k.rep);
 }
-export function titleWeight(comp) { return comp.kind === 'cont' ? 15 : comp.kind === 'cup' ? 5 : comp.kind === 'youth' ? 2 : comp.kind === 'amateur' ? 1 : comp.tier === 1 ? 10 : 4; }
+export function titleWeight(comp) { return comp.kind === 'cont' ? 15 : comp.kind === 'cup' ? 5 : comp.kind === 'state' ? 3 : comp.kind === 'youth' ? 2 : comp.kind === 'amateur' ? 1 : comp.tier === 1 ? 10 : 4; }
 export function coachChampion(G, club, comp) {
   const k = coachOf(G, club); if (!k) return;
   const w = titleWeight(comp);

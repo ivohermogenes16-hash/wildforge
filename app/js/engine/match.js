@@ -46,7 +46,7 @@ export const PRESS = ['Baixa', 'Média', 'Alta'];
 export function available(p) { return p && p.inj <= 0 && p.sus <= 0; }
 
 // desgaste por minuto em campo (posição, idade, pressão)
-export const FITPOS = { GOL: 7, ZAG: 19, LD: 26, LE: 26, ALD: 27, ALE: 27, VOL: 24, MC: 26, MEI: 24, PD: 26, PE: 26, SA: 24, ATA: 22 };
+export const FITPOS = { GOL: 5, ZAG: 13, LD: 18, LE: 18, ALD: 19, ALE: 19, VOL: 17, MC: 18, MEI: 17, PD: 18, PE: 18, SA: 17, ATA: 16 };
 export function fitRate(p, tact) { const ag = p.age >= 33 ? 1.3 : p.age >= 30 ? 1.15 : p.age <= 21 ? 0.92 : 1; return (FITPOS[p.pos] || 24) * ag / 90 * (1 + ((tact?.press ?? 1) - 1) * 0.15); }
 export function effAt(p, slot, minute = 0, en = null) {
   const fit = en != null ? Math.max(15, en) : Math.max(30, p.fit - (minute > 55 ? (minute - 55) * 0.35 : 0));

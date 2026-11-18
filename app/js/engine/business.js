@@ -63,10 +63,10 @@ export const capacity = (co) => 9000 * Math.pow(Math.max(1, co.emp), 0.9) * (1 +
 export const empWage = (co) => 900 + co.d.adm * 50;
 const deptUpkeep = (co) => Object.values(co.d).reduce((s, l) => s + l * l * 1500, 0);
 export function coValuation(G, co) {
-  const h = co.hist.slice(-8); const annRev = (h.length ? h.reduce((s, x) => s + x.rev, 0) / h.length : co.rev) * W; const annProf = (h.length ? h.reduce((s, x) => s + x.prof, 0) / h.length : co.prof) * W;
-  const growth = h.length >= 8 ? clamp((h[h.length - 1].rev - h[0].rev) / Math.max(1, h[0].rev), -0.5, 1) : 0;
+  const h = co.hist.slice(-26); const annRev = (h.length ? h.reduce((s, x) => s + x.rev, 0) / h.length : co.rev) * W; const annProf = Math.min(annRev * 0.3, (h.length ? h.reduce((s, x) => s + x.prof, 0) / h.length : co.prof) * W);
+  const growth = h.length >= 20 ? clamp((h.slice(-4).reduce((s, x) => s + x.rev, 0) - h.slice(0, 4).reduce((s, x) => s + x.rev, 0)) / Math.max(1, h.slice(0, 4).reduce((s, x) => s + x.rev, 0)), -0.5, 0.6) : 0;
   const contracts = contractsOf(G, co).length;
-  const mult = 6 + growth * 8 + co.rep / 15 + contracts * 0.3;
+  const mult = clamp(5 + growth * 4 + co.rep / 30 + contracts * 0.1, 3, 11);
   // empresas novas valem o que têm (caixa + estrutura); o valor pelo lucro só pesa depois de provar resultado (até 1 ano)
   const mat = clamp((co.wk ?? 99) / 46, 0, 1);
   const assets = co.cash - co.debt + (co.inv || 0) * 0.15 + co.emp * 2500 + Object.values(co.d).reduce((s, l) => s + (l - 1) * 90000, 0);

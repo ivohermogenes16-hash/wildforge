@@ -11,8 +11,8 @@ const DAY0 = 4, WK = 7.6; const MDAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31,
 const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const MESL = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const doy = (md) => { const [m, d] = md.split('-').map(Number); let n = d - 1; for (let i = 0; i < m - 1; i++) n += MDAYS[i]; return n; };
-export function dateOfWeek(w) { let n = Math.min(364, Math.round(DAY0 + w * WK)); let m = 0; while (n >= MDAYS[m]) { n -= MDAYS[m]; m++; } return { d: n + 1, m }; }
-export const dateStr = (w, long) => { const x = dateOfWeek(w); return long ? `${x.d} de ${MESL[x.m]}` : `${x.d} ${MES[x.m]}`; };
+export function dateOfWeek(w, off = 0) { let n = Math.min(364, Math.round(DAY0 + w * WK + off)); let m = 0; while (n >= MDAYS[m]) { n -= MDAYS[m]; m++; } return { d: n + 1, m }; }
+export const dateStr = (w, long, off) => { const x = dateOfWeek(w, off); return long ? `${x.d} de ${MESL[x.m]}` : `${x.d} ${MES[x.m]}`; };
 const wOf = (md) => (doy(md) - DAY0) / WK;
 // [abre, fecha] — fontes: CBF, FIFA/ligas, MLS; 'ap' = datas aproximadas (ligas com pouca divulgação)
 export const WINDOWS = {

@@ -173,7 +173,7 @@ function applyMatch(G, f, res) {
       if (si) mins = 90 - si.m; if (so) mins = Math.min(mins, so.m - (si ? si.m : 0)); if (!hasSub && !res.played) mins = 82;
       if (youth) mins *= 0.85;
       p.fit = res.en && res.en[id] != null ? Math.max(25, Math.round(Math.min(p.fit, res.en[id] + (youth ? 3 : 0)))) : Math.max(25, p.fit - fitCost(p, mins));
-      if (p.fit < 62 && rnd() < (62 - p.fit) * 0.004) p.inj = Math.max(p.inj, ri(1, 3)); // músculo cansado se lesiona mais
+      if (p.fit < 60 && rnd() < (60 - p.fit) * 0.003) p.inj = Math.max(p.inj, ri(1, 3)); // músculo cansado se lesiona mais
       p.mor = clamp(p.mor + (won ? 4 : lost ? -4 : 0), 5, 100);
       p.playedW = (p.playedW || 0) + 1;
       let nota = 6.2 + (won ? 0.4 : lost ? -0.35 : 0) + gauss() * 0.45;
@@ -241,7 +241,7 @@ function recoverHalf(G) {
     const isMine = job && p.club === job.cid && !!p.u20 === !!job.youth;
     const tr = isMine ? (p.u20 ? G.me.u20train || club.train : club.train) : { foco: 'equilibrado', int: 1 };
     const ag = p.age >= 33 ? 0.78 : p.age >= 30 ? 0.88 : p.age <= 22 ? 1.1 : 1;
-    const base = [12, 9.5, 7][tr.int] ?? 9.5;
+    const base = [12.5, 10.5, 8][tr.int] ?? 10.5;
     p.fit = Math.min(100, p.fit + (base + (isMine ? (recovBonus(G, club) + (TRAIN_FX[tr.foco]?.rec || 0)) / 2 : 0)) * ag * (p.inj > 0 ? 0.6 : 1));
   }
 }
@@ -283,7 +283,7 @@ function onEvent(G, e) {
   if (userWon) {
     G.me.titles.push({ y: G.year, c: comp.name, club: c.name, w: titleWeight(comp) }); G.me.xp = (G.me.xp || 0) + 40 + titleWeight(comp) * 3; G.me.pop = clamp((G.me.pop || 0) + 6, 0, 100); c.fans = clamp((c.fans || 50) + 8, 0, 100);
     tl(G, `🏆 ${G.me.name} conquista ${comp.name} com o ${c.name}`, 'user');
-    const boost = comp.kind === 'cont' ? 15 : comp.kind === 'youth' ? 8 : comp.kind === 'cup' ? 6 : comp.tier === 1 ? 12 : comp.kind === 'amateur' ? 4 : 6;
+    const boost = comp.kind === 'cont' ? 15 : comp.kind === 'youth' ? 8 : comp.kind === 'cup' ? 6 : comp.kind === 'state' ? 4 : comp.tier === 1 ? 12 : comp.kind === 'amateur' ? 4 : 6;
     G.me.rep = clamp(G.me.rep + boost, 1, 99);
     if (!j.youth) c.board.conf = clamp(c.board.conf + 25, 0, 100);
     msg(G, 'Imprensa', `🏆 Campeão! ${comp.name}`, `Você conquistou ${comp.name} com o ${c.name}! Sua reputação subiu para ${Math.round(G.me.rep)}.`);

@@ -3,7 +3,7 @@ import { oppStudy, scoutReport, rivalOfClub } from '../engine/universe.js';
 import { coachOf } from '../engine/life.js';
 import { esc } from '../util.js';
 import { crest, face } from './art.js';
-import { S, H, render, toast, openSheet, closeSheet, save, myLineup, posTag, wk, shortName } from './app.js';
+import { S, H, render, toast, openSheet, closeSheet, save, myLineup, posTag, wk, shortName, fixPhase } from './app.js';
 import { LiveMatch, FORMATIONS, formOf, MENT, PRESS, available, penalties, effAt } from '../engine/match.js';
 import { lineupFor, playSlot, myClub } from '../engine/game.js';
 import { MatchViz } from './viz.js';
@@ -29,7 +29,7 @@ export function preMatch(f) {
   const ana = staffQ(G, c, 'ana');
   const R = ratingsOf(G, opp, oppLu);
   const weak = R ? [['Ataque', R.att], ['Meio', R.ctl], ['Defesa', R.def]].sort((a, b) => a[1] - b[1])[0][0] : '';
-  openSheet(`${derby ? '<div class="derby">🔥 CLÁSSICO</div>' : ''}<div class="xs mut" style="text-align:center">${esc(comp.name)}${f.ko >= 0 ? ' · mata-mata' : ''} · ${wk(f.w)}</div>
+  openSheet(`${derby ? '<div class="derby">🔥 CLÁSSICO</div>' : ''}<div class="xs mut" style="text-align:center">${esc(comp.name)} · ${esc(fixPhase(f))} · ${wk(f.w)}</div>
   <div class="match-hero" style="margin:8px 0 12px"><div>${crest(hc, 56)}<div class="nm">${esc(hc.name)}</div></div><div class="vs">VS</div><div>${crest(ac, 56)}<div class="nm">${esc(ac.name)}</div></div></div>
   ${probs.length ? `<div class="hint bad" style="margin-bottom:8px">⚠️ Há jogador indisponível na escalação.</div>` : ''}
   ${tired.length ? `<div class="hint warn row" style="margin-bottom:8px;gap:8px;align-items:center"><span class="grow">😮‍💨 Cansados: ${tired.map((p) => esc(shortName(p.n)) + ' ' + Math.round(p.fit) + '%').join(', ')}</span><button class="btn sm" data-a="poupar" data-v="${f.i}">🔁 Poupar</button></div>` : ''}
@@ -259,7 +259,7 @@ export function finishMatch(f, res) {
   const st = f.stats || {};
   const motm = notas[0];
   const PQ = !G.me.job?.youth ? pressAfter(G, f) : null; const pq = PQ ? pressDecision(G, f, PQ, 'post') : null;
-  openSheet(`<div class="xs mut" style="text-align:center">${esc(G.comps[f.c].name)}</div>
+  openSheet(`<div class="xs mut" style="text-align:center">${esc(G.comps[f.c].name)} · ${esc(fixPhase(f))}</div>
    <div class="match-hero" style="margin:6px 0"><div>${crest(hc, 48)}<div class="nm">${esc(hc.name)}</div>${gl(0)}</div><div class="score">${f.hg}–${f.ag}</div><div>${crest(ac, 48)}<div class="nm">${esc(ac.name)}</div>${gl(1)}</div></div>
    ${f.pen ? `<div style="text-align:center" class="b">Pênaltis: ${f.pen[0]} – ${f.pen[1]}</div>` : ''}
    ${st.pos ? `<div class="stat-grid" style="margin:8px 0"><div class="stat"><div class="v">${st.pos[0]}%</div><div class="l">posse (casa)</div></div><div class="stat"><div class="v">${st.sh?.[0] ?? 0}–${st.sh?.[1] ?? 0}</div><div class="l">finalizações</div></div><div class="stat"><div class="v">${st.ont ? `${st.ont[0]}–${st.ont[1]}` : '–'}</div><div class="l">no gol</div></div></div>` : ''}
