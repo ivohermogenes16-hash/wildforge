@@ -4,7 +4,7 @@ import { SEASON_WEEKS, TICKET, coachWage, playerWage, playerValue } from './econ
 import { createWorld, makePlayer, genName, buildU20, clubLevel, START_YEAR, newFin, initFinances, QUOTA } from './world.js';
 import { setupSeason, progressComps, recordResult, standings, koWinner, CUPS, CONTS } from './season.js';
 import { autoLineup, quickSim, penalties, validLineup, FORMATIONS, FITPOS } from './match.js';
-import { aiTransferWeek, inWindow, expireContracts, playerInterest } from './market.js';
+import { aiTransferWeek, inWindow, anyWindow, windowInfo, expireContracts, playerInterest } from './market.js';
 import { weeklyPersonal, ownClubWeek, ownSeasonEnd } from './career.js';
 import { ensureBase, scoutWeek, baseBudget } from './youth.js';
 import { migrate, appointAI, coachLeaves, aiCoachResult, coachChampion, titleWeight, lifeWeek, lifeSeasonEnd, seasonAwards, secondaryEnd, secondaryObjective, afterUserMatch, boardK, devMul, injMul, recovBonus, retiredToCoach, tl } from './life.js';
@@ -327,7 +327,15 @@ function endWeek(G) {
     }
     if (isMine && tr.int === 2 && p.itr !== 'fis' && rnd() < 0.004 * injMul(club)) p.inj = Math.max(p.inj, ri(1, 3));
   }
-  if (inWindow(G)) aiTransferWeek(G);
+  { // avisos da janela do país do usuário
+    const cn = G.me.job ? G.clubs[G.me.job.cid]?.country : null;
+    if (cn && !G.me.job.youth) { const o = inWindow(G), wi = windowInfo(G);
+      if (o && !G._winWas) news(G, `🟢 Abriu a janela de transferências: o mercado vai até ${wi.until}.`, 'mercado');
+      if (!o && G._winWas) news(G, `🔴 Fechou a janela de transferências. Reabre em ${wi.next}.`, 'mercado');
+      if (o && wi.left === 1) msg(G, 'Diretoria', '⏰ Última semana de mercado', `A janela fecha em ${wi.until}. Se ainda precisa de reforços ou quer vender alguém, é agora.`);
+      G._winWas = o; }
+  }
+  if (anyWindow(G)) aiTransferWeek(G);
   else if (rnd() < 0.15) aiTransferWeek(G, true);
   playerInterest(G);
   coachMarket(G);

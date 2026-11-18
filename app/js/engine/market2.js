@@ -6,7 +6,7 @@ import { agentOf } from './universe.js';
 // =====================================================================
 import { clamp, ri, rf, rnd, pick, money, shuffle } from '../util.js';
 import { playerValue, playerWage } from './econ.js';
-import { inWindow, askPrice, importance, willJoin, wageDemand, doTransfer, isUserClub, userControls } from './market.js';
+import { inWindow, winOpen, askPrice, importance, willJoin, wageDemand, doTransfer, isUserClub, userControls, wageBudget, squad } from './market.js';
 import { QUOTA } from './world.js';
 import { tl } from './life.js';
 
@@ -36,20 +36,48 @@ export function endLoan(G, p, buy) {
     news(G, `↩️ ${p.n} volta ao ${F.name} após empréstimo ao ${T.name}.`);
   }
 }
-// pedido de empréstimo do usuário por um jogador de outro clube
-export function loanRequest(G, p, type, share) {
+// pedido de empréstimo do usuário por um jogador de outro clube — com as regras da vida real:
+// clubes só emprestam quem não é peça importante, jovens para rodar ou encostados; estrelas nunca
+export function loanCheck(G, p, type = 'simples', share = 0.6) {
   const c = G.clubs[G.me.job.cid];
   if (p.club < 0 || p.loan) return { ok: false, why: 'Esse jogador não pode ser emprestado.' };
   if (!inWindow(G)) return { ok: false, why: 'Janela fechada.' };
   if (G.me.freeze && G.me.freeze >= G.t) return { ok: false, why: 'A diretoria congelou as contratações.' };
-  const imp = importance(G, p); const own = G.clubs[p.club];
-  if (imp >= 0.7 && p.age < 30) return { ok: false, why: `O ${own.name} não empresta um titular.` };
+  const own = G.clubs[p.club]; const imp = importance(G, p);
+  const mine = squad(G, c.id).filter((x) => !x.u20).sort((a, b) => b.ovr - a.ovr); const lvl = mine.slice(0, 11).reduce((s, x) => s + x.ovr, 0) / Math.max(1, Math.min(11, mine.length));
+  const inLoans = mine.filter((x) => x.loan).length;
+  if (inLoans >= 5) return { ok: false, why: 'Seu elenco já tem 5 emprestados — o limite do regulamento.' };
+  // 1) estrelas e titulares absolutos não são emprestados
+  if (imp >= 1) return { ok: false, why: `O ${own.name} não empresta um dos seus principais jogadores. Só uma compra resolveria.` };
+  if (p.ovr >= 84 && p.age >= 21) return { ok: false, why: `${p.n} é um jogador de elite — clubes não emprestam esse nível de atleta.` };
+  if (imp >= 0.7) return { ok: false, why: `${p.n} é titular no ${own.name}. Clubes emprestam reservas e jovens, não titulares.` };
+  // 2) o jogador precisa topar: nível do clube e da liga
   const wj = willJoin(G, p, c.id); if (!wj.ok) return wj;
+  if (p.ovr > lvl + 9 && p.age >= 23) return { ok: false, why: `${p.n} não aceita ser emprestado para um time de nível tão abaixo do dele.` };
+  if (own.rep > c.rep + 22 && p.ovr >= 76 && p.age >= 22) return { ok: false, why: `O ${own.name} prefere emprestar ${p.n} para um clube de vitrine maior.` };
+  // 3) salário: o clube dono quer que o salário seja bancado
+  const wb = wageBudget(G, c); const myPart = p.wage * share;
+  if (myPart > wb * 0.18) return { ok: false, why: `O salário de ${p.n} (${money(p.wage)}/sem.) não cabe na sua folha, mesmo pagando ${Math.round(share * 100)}%.` };
+  // 4) chance de aceitar
+  let pr = 0.08 + share * 0.45 + (type === 'obrig' ? 0.22 : type === 'opcao' ? 0.06 : 0);
+  if (p.age <= 21) pr += 0.18; // jovens: clube quer minutos para ele
+  if (imp <= 0.15) pr += 0.15; // encostado
+  if (p.loanLst || p.lst) pr += 0.25;
+  if (p.ovr >= lvl - 2) pr += 0.08; // vai ser titular no seu time: bom para o desenvolvimento dele
+  pr -= imp * 0.35; pr -= Math.max(0, own.rep - c.rep) * 0.006;
+  if (own.country === c.country) pr += 0.05;
+  if (own.league === c.league && own.rep >= c.rep - 12) pr -= 0.18; // não fortalece concorrente direto
+  return { ok: true, pr: Math.max(0.03, Math.min(0.92, pr)) };
+}
+export function loanRequest(G, p, type, share) {
+  const c = G.clubs[G.me.job.cid]; const own = G.clubs[p.club];
+  const ck = loanCheck(G, p, type, share); if (!ck.ok) return ck;
   const fee = type === 'simples' ? 0 : Math.round(playerValue(p) * (type === 'obrig' ? 0.95 : 1.1) / 1000) * 1000;
   if (type !== 'simples' && fee > c.money * 1.2) return { ok: false, why: `Seu clube não teria caixa para a compra futura (${money(fee)}).` };
-  let pr = 0.25 + share * 0.6 + (type === 'obrig' ? 0.2 : type === 'opcao' ? 0.05 : 0) + (p.age <= 21 ? 0.1 : 0) - imp * 0.3;
-  if (rnd() < pr) { doLoan(G, p, c.id, type, fee, share); if (G.me.car) G.me.car.trans++; return { ok: true, why: `✅ ${p.n} chega emprestado${type !== 'simples' ? ` (compra: ${money(fee)})` : ''}!` }; }
-  return { ok: false, why: `❌ O ${own.name} recusou. Tente pagar mais do salário ou incluir obrigação de compra.` };
+  if ((p.lnAsk || 0) >= G.t) return { ok: false, why: `O ${own.name} já respondeu esta semana. Tente de novo na próxima.` };
+  p.lnAsk = G.t;
+  if (rnd() < ck.pr) { doLoan(G, p, c.id, type, fee, share); if (G.me.car) G.me.car.trans++; return { ok: true, why: `✅ ${p.n} chega emprestado${type !== 'simples' ? ` (compra: ${money(fee)})` : ''}!` }; }
+  return { ok: false, why: `❌ O ${own.name} recusou. Pagar mais do salário ou incluir obrigação de compra ajuda.` };
 }
 
 // ---------------- disputa por jogador ----------------
@@ -99,11 +127,11 @@ function rumors(G) {
 
 // ---------------- empréstimos da IA ----------------
 function aiLoans(G) {
-  if (!(G.week <= 2 || (G.week >= 22 && G.week <= 23))) return;
+  if (rnd() > 0.45) return;
   let n = 0;
   for (const p of shuffle(G.players.filter((x) => x && x.club >= 0 && !x.u20 && !x.loan && x.age <= 22 && !isUserClub(G, x.club) && !userControls(G, x.club)))) {
     if (n >= 10) break;
-    const F = G.clubs[p.club]; if (!F.league || importance(G, p) >= 0.7 || rnd() > 0.15) continue;
+    const F = G.clubs[p.club]; if (!F.league || !winOpen(G, F.country) || importance(G, p) >= 0.7 || rnd() > 0.08) continue;
     const T = pick(G.clubs.filter((c) => c.league && c.country === F.country && c.rep < F.rep - 10 && c.rep > F.rep - 40 && !isUserClub(G, c.id) && !userControls(G, c.id)));
     if (!T) continue;
     const type = pick(['simples', 'simples', 'opcao']); doLoan(G, p, T.id, type, Math.round(playerValue(p) * 1.1 / 1000) * 1000, rf(0.5, 1)); n++;
@@ -144,7 +172,8 @@ function agents(G) {
 // ---------------- ganchos ----------------
 export function marketWeek(G) {
   processDeals(G);
-  if (inWindow(G)) { rumors(G); aiLoans(G); loanOffers(G); agents(G); }
+  aiLoans(G);
+  if (inWindow(G)) { rumors(G); loanOffers(G); agents(G); }
   // decisão sobre opção de compra (usuário pegou emprestado)
   if (G.week === 40) {
     const cid = myCid(G);

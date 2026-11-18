@@ -8,6 +8,7 @@ import './ui/life.js';
 import { migrate } from './engine/life.js';
 import './ui/nations.js';
 import './ui/universe.js';
+import './ui/nego.js';
 import { initUniverse } from './engine/universe.js';
 import { initBiz } from './engine/business.js';
 import { initNations, natSetupYear } from './engine/nations.js';

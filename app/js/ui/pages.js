@@ -10,8 +10,8 @@ import { natPreMatch } from './nations.js';
 import { playerValue, clubValuation, coachWage, seasonIncome, SEASON_WEEKS } from '../engine/econ.js';
 import { myClub, userFixNow, playSlot, takeJob, resign, strength } from '../engine/game.js';
 import { doTransfer } from '../engine/market.js';
-import { rivalFor, swapValue, loanRequest, LOAN_T } from '../engine/market2.js';
-import { userBid, userSign, wageDemand, renew, renewDemand, release, askPrice, acceptBid, scoutSearch, weeklyWages, wageBudget, inWindow, willJoin } from '../engine/market.js';
+import { rivalFor, swapValue, loanRequest, loanCheck, LOAN_T } from '../engine/market2.js';
+import { userBid, userSign, wageDemand, renew, renewDemand, release, askPrice, acceptBid, scoutSearch, weeklyWages, wageBudget, inWindow, willJoin, windowInfo, WINDOWS } from '../engine/market.js';
 import { invest, netWorth, foundClub, FOUND_COST, APT_PRICE, inject, safQuote, buySAF, sellStake, controls, hireCoachFor } from '../engine/career.js';
 import { LEAGUES } from '../data/leagues.js';
 import { clubLevel } from '../engine/world.js';
@@ -146,7 +146,7 @@ H.renew2 = () => { const G = S.G, n = S.neg, p = G.players[n.p]; const r = renew
 H.bid = (v) => {
   const G = S.G, p = G.players[+v];
   if (!G.me.job || G.me.job.youth) { toast('Só o técnico do profissional contrata'); return; }
-  if (!inWindow(G) && p.club >= 0) { toast('Janela de transferências fechada (abre nas semanas 1–6 e 23–26)', 3000); return; }
+  if (!inWindow(G) && p.club >= 0) { const wi = windowInfo(G); toast(`🔴 Mercado fechado — reabre em ${wi.next} (faltam ${wi.wait} sem.). Só jogadores livres agora.`, 3200); return; }
   const c = myClub(G);
   const wj = willJoin(G, p, c.id); if (!wj.ok) { toast(wj.why, 3000); return; }
   if (p.club < 0) { S.neg = { p: p.id, wage: wageDemand(G, p, c.id), years: 2, fee: 0 }; replaceSheet(negHtml(p, S.neg.wage, 'sign2', 'Contratar jogador livre', 0)); return; }
@@ -200,13 +200,13 @@ PAGES.market = () => {
   if (!j || j.youth) return `<div class="card"><h3>Mercado</h3><p>Só o técnico do time profissional negocia jogadores.</p><p class="mut sm">Mesmo assim você pode olhar os jogadores pelo mundo:</p><button class="btn blk" data-a="sub" data-v="mk:busca">Buscar jogadores</button></div>${S.sub.mk === 'busca' ? searchView(true) : ''}`;
   const c = myClub(G);
   const ww = weeklyWages(G, c.id), wb = wageBudget(G, c);
-  let h = `<div class="card"><div class="row"><div class="grow"><div class="xs mut">Caixa do clube</div><div class="xb" style="font-size:20px">${money(c.money)}</div></div><div style="text-align:right"><div class="xs mut">Folha / teto semanal</div><div class="b ${ww > wb ? 'bad' : ''}">${money(ww)} / ${money(wb)}</div></div></div><div class="xs ${inWindow(G) ? 'ok' : 'warn'}" style="margin-top:8px">${inWindow(G) ? '🟢 Janela de transferências aberta' : '🔴 Janela fechada — só jogadores livres (abre nas semanas 1–6 e 23–26)'}</div></div>`;
+  let h = `<div class="card"><div class="row"><div class="grow"><div class="xs mut">Caixa do clube</div><div class="xb" style="font-size:20px">${money(c.money)}</div></div><div style="text-align:right"><div class="xs mut">Folha / teto semanal</div><div class="b ${ww > wb ? 'bad' : ''}">${money(ww)} / ${money(wb)}</div></div></div>${windowCard(G)}</div>`;
   const bids = G.inbox.filter((m) => m.kind === 'bid' && !m.done && !m.expired);
   h += `<div class="seg">${[['busca', 'Buscar'], ['obs', `Observados (${G.short.length})`], ['prop', `Propostas${bids.length ? ` (${bids.length})` : ''}`], ['venda', 'À venda'], ['olh', 'Olheiros'], ['emp', 'Empréstimos'], ['news', 'Notícias']].map(([k, l]) => `<button class="${S.sub.mk === k ? 'on' : ''}" data-a="sub" data-v="mk:${k}">${l}</button>`).join('')}</div>`;
   if (S.sub.mk === 'busca') h += searchView();
   else if (S.sub.mk === 'olh') h += scoutNetView(G);
   else if (S.sub.mk === 'obs') h += `<div class="card flat" style="padding:4px 12px"><div class="list">${G.short.map((id) => playerRow(G.players[id], { club: true })).join('') || '<div class="empty">Toque em ☆ Observar no perfil de um jogador.</div>'}</div></div>`;
-  else if (S.sub.mk === 'prop') h += `<div class="card flat" style="padding:4px 12px"><div class="list">${bids.map((m) => `<div class="li tap" data-a="msg" data-v="${m.id}">${crest(G.clubs[m.from], 30)}<div class="grow"><div class="b ell">${esc(G.players[m.pid]?.n || '')}</div><div class="xs mut">${esc(G.clubs[m.from].name)} oferece ${money(m.fee)}</div></div>›</div>`).join('') || '<div class="empty">Nenhuma proposta. Coloque jogadores à venda para atrair interessados.</div>'}</div></div>`;
+  else if (S.sub.mk === 'prop') h += `<div class="card flat" style="padding:4px 12px"><div class="list">${bids.map((m) => `<div class="li tap" data-a="nego" data-v="${m.id}">${crest(G.clubs[m.from], 30)}<div class="grow"><div class="b ell">${esc(G.players[m.pid]?.n || '')}</div><div class="xs mut">${esc(G.clubs[m.from].name)} oferece ${money(m.fee)}${m.neg ? ' · em negociação' : ''}</div></div><span class="btn sm pri">💼 Negociar</span></div>`).join('') || '<div class="empty">Nenhuma proposta. Coloque jogadores à venda para atrair interessados.</div>'}</div></div>`;
   else if (S.sub.mk === 'emp') { const out = G.players.filter((p) => p && p.loan && p.loan.from === c.id), inn = G.players.filter((p) => p && p.loan && p.club === c.id), lst = G.players.filter((p) => p && p.club === c.id && p.loanLst);
     h += `<div class="cols2"><div class="card flat"><h3>Emprestados por você</h3><div class="list">${out.map((p) => playerRow(p, { club: true, extra: `<span class="xs mut" style="width:90px;text-align:right">${esc(LOAN_T[p.loan.type].replace('Empréstimo ', ''))}</span>` })).join('') || '<div class="xs mut">Nenhum.</div>'}</div><h3 style="margin-top:8px">Disponíveis para empréstimo</h3><div class="list">${lst.map((p) => playerRow(p, { mine: true })).join('') || '<div class="xs mut">No perfil do jogador, toque em "Emprestar".</div>'}</div></div>
     <div class="card flat"><h3>Emprestados para você</h3><div class="list">${inn.map((p) => playerRow(p, { club: true, extra: `<span class="xs mut" style="width:90px;text-align:right">do ${esc(G.clubs[p.loan.from].short)}</span>` })).join('') || '<div class="xs mut">Peça um empréstimo no perfil de qualquer jogador.</div>'}</div></div></div>`; }
@@ -411,11 +411,16 @@ function loanHtml() {
   <div class="field" style="margin-top:10px"><label>Tipo</label><div class="seg" style="margin:0">${Object.entries(LOAN_T).map(([k, l]) => `<button class="${n.type === k ? 'on' : ''}" data-a="lnt" data-v="${k}">${l.replace('Empréstimo ', '').replace('simples', 'Simples')}</button>`).join('')}</div></div>
   ${n.type !== 'simples' ? `<div class="hint" style="margin-bottom:8px">Valor de compra estimado: ${money(Math.round(playerValue(p) * (n.type === 'obrig' ? 0.95 : 1.1) / 1000) * 1000)}${n.type === 'obrig' ? ' — compra obrigatória no fim da temporada.' : ' — você decide na semana 41.'}</div>` : ''}
   <div class="field"><label>Você paga <b id="lns">${Math.round(n.share * 100)}%</b> do salário</label><input type="range" min="0.3" max="1" step="0.05" value="${n.share}" data-in="lns"></div>
-  <p class="xs mut">Pagar mais do salário e incluir obrigação de compra aumentam a chance de o clube aceitar. Titulares quase nunca são emprestados.</p>
-  <button class="btn pri blk" data-a="lnok">Enviar pedido</button>`;
+  <div id="lnck">${lnck()}</div>`;
+}
+function lnck() {
+  const G = S.G, n = S.ln, p = G.players[n.p];
+  return `${(() => { const ck = loanCheck(G, p, n.type, n.share); if (!ck.ok) return `<div class="hint bad" style="margin-bottom:8px">🚫 ${esc(ck.why)}</div><button class="btn blk" disabled>Pedido impossível</button>`;
+    const lv = ck.pr >= 0.6 ? ['Alta', 'ok'] : ck.pr >= 0.35 ? ['Média', 'warn'] : ['Baixa', 'bad'];
+    return `<div class="hint" style="margin-bottom:8px">Chance de o clube aceitar: <b class="${lv[1]}">${lv[0]}</b> · clubes emprestam reservas, jovens e encostados — nunca as estrelas.</div><button class="btn pri blk" data-a="lnok">Enviar pedido</button>`; })()}`;
 }
 H.lnt = (v) => { S.ln.type = v; replaceSheet(loanHtml()); };
-H.lns = (v) => { S.ln.share = +v; document.getElementById('lns').textContent = Math.round(+v * 100) + '%'; };
+H.lns = (v) => { S.ln.share = +v; document.getElementById('lns').textContent = Math.round(+v * 100) + '%'; const e = document.getElementById('lnck'); if (e) e.innerHTML = lnck(); };
 H.lnok = () => { const G = S.G; const r = loanRequest(G, G.players[S.ln.p], S.ln.type, S.ln.share); toast(r.why, 3200); if (r.ok) { closeSheet(true); render(); save(); } };
 
 // ---------- categoria (Sub-17 / Sub-20) e treino individual ----------
@@ -435,3 +440,15 @@ H.itr = (v) => {
   <h3 style="margin-top:10px">${ITR.pos.n}</h3><p class="xs mut">${ITR.pos.d}</p><div class="chips" style="flex-wrap:wrap">${POS.filter((x) => x !== p.pos && (x === 'GOL') === (p.pos === 'GOL')).map((x) => `<span class="chip ${p.itr === 'pos:' + x ? 'on' : ''}" data-a="itr2" data-v="${p.id}:pos:${x}">${x}</span>`).join('')}</div>`);
 };
 H.itr2 = (v) => { const [id, ...k] = v.split(':'); const p = S.G.players[+id]; const t = k.join(':'); if (t !== p.itr) p.posL = 0; p.itr = t || null; toast('Treino individual definido'); closeSheet(true); H.player(id); render(); save(); };
+
+// ===== cartão da janela de transferências =====
+export function windowCard(G, compact) {
+  const wi = windowInfo(G); const cn = G.clubs[G.me.job?.cid]?.country || 'BR';
+  const pct = wi.open ? null : null;
+  if (compact) return `<div class="win-chip ${wi.open ? 'open' : ''}" data-a="go" data-v="mercado">${wi.open ? `🟢 Mercado aberto · fecha ${wi.until}` : `🔴 Mercado fechado · abre ${wi.next}`}</div>`;
+  return `<div class="win-card ${wi.open ? 'open' : ''}"><div class="win-dot"></div><div class="grow"><div class="b">${wi.open ? 'Mercado ABERTO' : 'Mercado FECHADO'}</div>
+  <div class="xs mut">${wi.open ? `Fecha em ${wi.until} · ${wi.left <= 0 ? 'última semana!' : `${wi.left + 1} semana${wi.left ? 's' : ''} restante${wi.left ? 's' : ''}`}` : `Reabre em ${wi.next} · faltam ${wi.wait} semana${wi.wait > 1 ? 's' : ''}. Jogadores livres podem ser contratados.`}</div>
+  <div class="xs dim" style="margin-top:2px">Janelas (${esc(COUNTRY_NAME(cn))}): ${wi.all.join(' e ')}${wi.ap ? ' · datas aproximadas' : ''}</div></div>
+  ${wi.open && wi.left <= 1 ? '<span class="win-dead">⏰ Deadline</span>' : ''}</div>`;
+}
+const COUNTRY_NAME = (k) => ({ BR: 'Brasil', EN: 'Inglaterra', ES: 'Espanha', IT: 'Itália', AR: 'Argentina', DE: 'Alemanha', FR: 'França', PT: 'Portugal', NL: 'Holanda', MX: 'México', US: 'EUA/Canadá', JP: 'Japão', SA: 'Arábia Saudita', AU: 'Austrália', UY: 'Uruguai', CO: 'Colômbia', MA: 'Marrocos', ZA: 'África do Sul' })[k] || k;

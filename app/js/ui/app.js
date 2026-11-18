@@ -36,7 +36,7 @@ export const clubOf = (p) => (p && p.club >= 0 ? S.G.clubs[p.club] : null);
 export function clubTag(c, size = 22) { if (!c) return '<span class="mut">Sem clube</span>'; return `<span class="row" style="gap:6px;display:inline-flex" data-a="club" data-v="${c.id}">${crest(c, size)}<span class="ell">${esc(c.name)}</span></span>`; }
 export function stars(rep) { const n = clamp(Math.round(rep / 20), 1, 5); return '<span class="gold">' + '★'.repeat(n) + '</span><span class="dim">' + '★'.repeat(5 - n) + '</span>'; }
 export function compName(id) { return S.G.comps[id]?.short || id; }
-export function wk(w) { return `Sem. ${w + 1}`; }
+export function wk(w) { return dateStr(w); }
 export function shortName(n) { const s = n.split(' '); return s.length > 1 && n.length > 12 ? s[s.length - 1] : n; }
 export function potRange(p, mine) { if (mine || S.G.me.job?.cid === p.club) return p.pot; const lo = Math.max(p.ovr, p.pot - 4), hi = Math.min(95, p.pot + 3); return lo === hi ? lo : `${lo}–${hi}`; }
 export const delta = (p) => { const d = p.ovr - (p.s0 ?? p.ovr); return d > 0 ? `<span class="dl up">▲${d}</span>` : d < 0 ? `<span class="dl dn">▼${-d}</span>` : '<span class="dl">–</span>'; };
@@ -67,7 +67,7 @@ export function render() {
   const sc = app.querySelector('main')?.scrollTop || 0; const same = app.dataset.view === (S.page || S.tab);
   app.innerHTML = `<nav class="rail">${NAV.filter(([k]) => k !== 'nat' || S.G.me.nat).map(([k, l, ic]) => `<button class="${S.tab === k && !S.page ? 'on' : ''}" data-a="tab" data-v="${k}">${ICONS[ic]}<span>${l}</span>${k === 'more' && unread ? `<span class="badge">${unread}</span>` : ''}</button>`).join('')}</nav>
   <div class="right"><header class="top">${S.page ? `<button class="btn sm" data-a="back">‹ Voltar</button>` : c ? crest(c, 32) : '<span class="logo" style="font-size:20px">P<span>.</span></span>'}
-    <div class="grow"><div class="t1 ell">${esc(S.page ? (PAGES_T[S.page] || '') : title)}</div><div class="t2">${wk(Math.min(G.week, SEASON_WEEKS - 1))} de ${SEASON_WEEKS} · ${G.year}${c && G.me.obj ? ` · 🎯 ${esc(G.me.obj.text)}` : ''}</div></div>
+    <div class="grow"><div class="t1 ell">${esc(S.page ? (PAGES_T[S.page] || '') : title)}</div><div class="t2">📅 ${dateStr(Math.min(G.week, SEASON_WEEKS - 1), true)} de ${G.year} · ${G.me.job && !G.me.job.youth ? (inWindow(G) ? '<span class="ok">🟢 mercado aberto</span>' : '<span class="mut">🔴 mercado fechado</span>') : `sem. ${Math.min(G.week, SEASON_WEEKS - 1) + 1}/${SEASON_WEEKS}`}${c && G.me.obj ? ` · 🎯 ${esc(G.me.obj.text)}` : ''}</div></div>
     <button class="icon-btn" data-a="go" data-v="inbox">📩${unread ? `<span class="badge">${unread}</span>` : ''}</button>
     <span class="money-pill" data-a="go" data-v="financas">${money(G.me.money)}</span>
     <button class="btn pri cont" data-a="continue">${now ? '▶ Jogo' : 'Continuar'} ›</button></header>
@@ -326,7 +326,7 @@ H.msg = (v) => {
   let act = '';
   if (!m.done && !m.expired) {
     if (m.kind === 'job') act = `<div class="row" style="margin-top:14px"><button class="btn red grow" data-a="msgact" data-v="${m.id}:no">Recusar</button><button class="btn pri grow" data-a="msgact" data-v="${m.id}:yes">Aceitar</button></div>`;
-    if (m.kind === 'bid') act = `<div class="row" style="margin-top:14px"><button class="btn red grow" data-a="msgact" data-v="${m.id}:no">Recusar</button><button class="btn pri grow" data-a="msgact" data-v="${m.id}:yes">Vender</button></div>`;
+    if (m.kind === 'bid') act = `<div class="row" style="margin-top:14px"><button class="btn red grow" data-a="msgact" data-v="${m.id}:no">Recusar</button><button class="btn pri grow" data-a="nego" data-v="${m.id}">💼 Abrir negociação</button></div>`;
     if (m.kind === 'natjob') act = `<div class="row" style="margin-top:14px"><button class="btn red grow" data-a="msgact" data-v="${m.id}:no">Recusar</button><button class="btn pri grow" data-a="msgact" data-v="${m.id}:yes">Aceitar a seleção</button></div>`;
     if (m.kind === 'loanoff') act = `<div class="row" style="margin-top:14px"><button class="btn red grow" data-a="msgact" data-v="${m.id}:no">Recusar</button><button class="btn pri grow" data-a="msgact" data-v="${m.id}:yes">Emprestar</button></div>`;
     if (m.kind === 'agent') act = `<div class="row" style="margin-top:14px"><button class="btn grow" data-a="msgact" data-v="${m.id}:no">Dispensar</button><button class="btn pri grow" data-a="msgact" data-v="${m.id}:ver">Ver jogador</button></div>`;
@@ -426,6 +426,7 @@ document.addEventListener('pointercancel', (e) => endDrag(e, true));
 import { resolveDecision } from '../engine/life.js';
 import { takeNatJob, nextNatFix } from '../engine/nations.js';
 import { INSTR } from '../engine/match.js';
+import { dateStr, inWindow } from '../engine/market.js';
 import { jobInfo, onRefuseJob } from '../engine/universe.js';
 import { TRAIN_FX, ITR, PRE } from '../engine/life.js';
 import { acceptLoanOffer } from '../engine/market2.js';

@@ -5,7 +5,49 @@ import { QUOTA } from './world.js';
 import { staffQ, tl } from './life.js';
 import { queueDeal, swapValue } from './market2.js';
 
-export const inWindow = (G) => G.week <= 5 || (G.week >= 22 && G.week <= 25);
+// ===== calendário e janelas de transferência reais (datas de 2026) =====
+// semana 0 = 5 de janeiro; cada semana do jogo ≈ 7,6 dias (a temporada vai até meados de dezembro)
+const DAY0 = 4, WK = 7.6; const MDAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const MESL = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const doy = (md) => { const [m, d] = md.split('-').map(Number); let n = d - 1; for (let i = 0; i < m - 1; i++) n += MDAYS[i]; return n; };
+export function dateOfWeek(w) { let n = Math.min(364, Math.round(DAY0 + w * WK)); let m = 0; while (n >= MDAYS[m]) { n -= MDAYS[m]; m++; } return { d: n + 1, m }; }
+export const dateStr = (w, long) => { const x = dateOfWeek(w); return long ? `${x.d} de ${MESL[x.m]}` : `${x.d} ${MES[x.m]}`; };
+const wOf = (md) => (doy(md) - DAY0) / WK;
+// [abre, fecha] — fontes: CBF, FIFA/ligas, MLS; 'ap' = datas aproximadas (ligas com pouca divulgação)
+export const WINDOWS = {
+  BR: { w: [['01-05', '03-03'], ['07-20', '09-11']] },
+  EN: { w: [['01-01', '02-02'], ['06-15', '09-01']] },
+  ES: { w: [['01-02', '02-02'], ['07-01', '09-01']] },
+  IT: { w: [['01-02', '02-02'], ['06-29', '09-01']] },
+  DE: { w: [['01-01', '02-02'], ['07-01', '08-31']] },
+  FR: { w: [['01-01', '02-02'], ['07-01', '09-01']] },
+  PT: { w: [['01-02', '02-02'], ['07-01', '09-01']] },
+  NL: { w: [['01-02', '02-02'], ['07-01', '09-01']] },
+  AR: { w: [['01-05', '01-27'], ['06-22', '07-31']] },
+  US: { w: [['01-26', '03-26'], ['07-13', '09-02']] },
+  SA: { w: [['01-05', '02-02'], ['07-22', '09-06']] },
+  MX: { w: [['01-02', '02-03'], ['06-15', '08-31']], ap: 1 },
+  JP: { w: [['01-06', '03-27'], ['07-17', '08-14']], ap: 1 },
+  AU: { w: [['01-02', '02-02'], ['07-01', '09-15']], ap: 1 },
+  UY: { w: [['01-05', '03-06'], ['07-01', '07-31']], ap: 1 },
+  CO: { w: [['01-05', '03-06'], ['06-22', '08-28']], ap: 1 },
+  MA: { w: [['01-01', '01-31'], ['07-01', '09-30']], ap: 1 },
+  ZA: { w: [['01-01', '02-02'], ['07-01', '09-15']], ap: 1 },
+};
+export function windowsOf(country) { const W = WINDOWS[country] || WINDOWS.BR; return W.w.map(([a, b]) => ({ a: wOf(a), b: wOf(b), da: a, db: b })); }
+export function winOpen(G, country, wk = G.week) { const ext = G.uv?.regs?.window ? 2 : 0; return windowsOf(country).some((x, i) => wk >= Math.floor(x.a) && wk <= Math.floor(x.b) + (i === 1 ? ext : 0)); }
+const myCountry = (G) => { const j = G.me.job; return j ? G.clubs[j.cid]?.country || 'BR' : 'BR'; };
+export const inWindow = (G, country) => winOpen(G, country || myCountry(G));
+export const anyWindow = (G) => Object.keys(WINDOWS).some((k) => winOpen(G, k));
+const fmt = (md) => { const [m, d] = md.split('-').map(Number); return `${d} ${MES[m - 1]}`; };
+// situação da janela para a interface
+export function windowInfo(G, country) {
+  country = country || myCountry(G); const ws = windowsOf(country); const ext = G.uv?.regs?.window ? 2 : 0;
+  for (let i = 0; i < ws.length; i++) { const x = ws[i]; const end = Math.floor(x.b) + (i === 1 ? ext : 0); if (G.week >= Math.floor(x.a) && G.week <= end) return { open: true, left: end - G.week, until: fmt(x.db), from: fmt(x.da), ap: !!WINDOWS[country]?.ap, all: ws.map((y) => `${fmt(y.da)} – ${fmt(y.db)}`) }; }
+  const nx = ws.find((x) => Math.floor(x.a) > G.week) || ws[0]; const wait = nx === ws[0] && Math.floor(nx.a) <= G.week ? 46 - G.week + Math.floor(nx.a) : Math.floor(nx.a) - G.week;
+  return { open: false, wait, next: fmt(nx.da), ap: !!WINDOWS[country]?.ap, all: ws.map((y) => `${fmt(y.da)} – ${fmt(y.db)}`) };
+}
 
 function msg(G, from, title, body, extra = {}) { G.inbox.unshift({ id: (G.inbox[0]?.id || 0) + 1, t: G.t, y: G.year, w: G.week, from, title, body, read: false, ...extra }); }
 function news(G, txt) { G.news.unshift({ t: G.t, y: G.year, w: G.week, txt, cat: 'mercado' }); }
@@ -13,7 +55,7 @@ function news(G, txt) { G.news.unshift({ t: G.t, y: G.year, w: G.week, txt, cat:
 export function isUserClub(G, cid) { return G.me.job && !G.me.job.youth && G.me.job.cid === cid; }
 export function userControls(G, cid) { return isUserClub(G, cid) || (G.clubs[cid]?.own.user >= 51 && !G.clubs[cid].coach); }
 
-function squad(G, cid) { const e = G._idx?.get(cid); if (e) return e.s.filter((p) => p.club === cid); return G.players.filter((p) => p && p.club === cid && !p.u20); }
+export function squad(G, cid) { const e = G._idx?.get(cid); if (e) return e.s.filter((p) => p.club === cid); return G.players.filter((p) => p && p.club === cid && !p.u20); }
 
 // Importância do jogador no elenco (0..1)
 export function importance(G, p) {
@@ -57,6 +99,7 @@ export function wageBudget(G, c) {
 export function doTransfer(G, p, toCid, fee, wage, years) {
   const from = p.club >= 0 ? G.clubs[p.club] : null; const to = G.clubs[toCid];
   if (from) { from.money += fee; from.fin.tin += fee; if (from.lineup) from.lineup = null; }
+  if (p.sellOn && from && fee > 0 && p.sellOn.cid !== toCid) { const so = G.clubs[p.sellOn.cid]; const cut = Math.round(fee * p.sellOn.pct / 100); if (so) { so.money += cut; so.fin.tin += cut; from.money -= cut; news(G, `💸 ${so.name} recebe ${money(cut)} (${p.sellOn.pct}% da revenda de ${p.n}).`); } p.sellOn = null; }
   to.money -= fee; to.fin.tout += fee;
   if (from && from.id !== toCid) { onTransfer(G, p, from.id, toCid, fee); if (G.me.job && from.id === G.me.job.cid) onSellYouth(G, p); }
   p.club = toCid; p.wage = wage; p.con = G.year + years; p.lst = false; p.u20 = false; p.u17 = false; p.mor = Math.min(p.mor + 30, 80);
@@ -127,6 +170,7 @@ export function aiTransferWeek(G, light) {
   let done = 0;
   for (const c of clubs) {
     if (done >= nDeals) break;
+    if (!winOpen(G, c.country)) continue;
     if (rnd() > (light ? 0.05 : 0.25)) continue;
     const sq = byClub.get(c.id) || [];
     // vende excesso
@@ -168,7 +212,7 @@ export function playerInterest(G) {
     const chance = p.lst ? 0.3 : p.ovr >= 75 ? 0.025 : 0.008;
     if (rnd() > chance) continue;
     if (G.inbox.some((m) => m.kind === 'bid' && m.pid === p.id && !m.done)) continue;
-    const buyers = G.clubs.filter((c) => c.league && c.id !== j.cid && c.money > askPrice(G, p) * 0.7 && willJoin(G, p, c.id).ok && c.rep >= G.clubs[j.cid].rep - 15);
+    const buyers = G.clubs.filter((c) => c.league && c.id !== j.cid && winOpen(G, c.country) && c.money > askPrice(G, p) * 0.7 && willJoin(G, p, c.id).ok && c.rep >= G.clubs[j.cid].rep - 15);
     if (!buyers.length) continue;
     const b = pick(buyers);
     let fee = Math.round(playerValue(p) * rf(p.lst ? 0.75 : 0.9, 1.35) * (0.96 + staffQ(G, G.clubs[j.cid], 'dir') * 0.006) / 1000) * 1000;
@@ -178,14 +222,41 @@ export function playerInterest(G) {
     G.news.unshift({ t: G.t, y: G.year, w: G.week, txt: `📰 ${b.name} faz proposta oficial por ${p.n}.`, cat: 'rumor' });
   }
 }
+// ===== negociação de venda (contraproposta) =====
+export function negInit(G, m) {
+  if (m.neg) return m.neg;
+  const p = G.players[m.pid]; const b = G.clubs[m.from]; const v = playerValue(p);
+  const want = p.ovr >= 80 ? rf(1.15, 1.55) : rf(1.05, 1.4); // quanto o comprador está disposto a esticar
+  const max = Math.max(m.fee, Math.min(m.fee * want, Math.max(m.fee, b.money * 0.85), v * 2.2));
+  m.neg = { max: Math.round(max / 1000) * 1000, pat: ri(2, 4), log: [], start: m.fee, sell: 0 };
+  return m.neg;
+}
+export function negCounter(G, m, ask, sell = 0) {
+  const n = negInit(G, m); const b = G.clubs[m.from]; const p = G.players[m.pid];
+  ask = Math.round(ask / 1000) * 1000; const k = 1 + sell * 0.012; const eff = ask * k;
+  n.log.push({ me: 1, ask, sell });
+  if (eff <= n.max) { m.fee = ask; n.sell = sell; n.log.push({ me: 0, r: 'ok', fee: ask, sell }); n.deal = true; return { r: 'ok', fee: ask }; }
+  n.pat--;
+  if (n.pat < 0 || eff > n.max * 1.6) {
+    if (n.pat < 0 || rnd() < 0.5) { n.walk = true; m.done = true; m.expired = true; n.log.push({ me: 0, r: 'walk' }); return { r: 'walk' }; }
+  }
+  if (eff <= n.max * 1.25) {
+    const top = n.max / k; const nf = Math.round(Math.min(top, m.fee + (top - m.fee) * rf(0.45, 0.85)) / 1000) * 1000;
+    if (nf > m.fee) { m.fee = nf; n.sell = sell; n.log.push({ me: 0, r: 'counter', fee: nf, sell }); return { r: 'counter', fee: nf }; }
+  }
+  const bump = Math.round(Math.min(n.max / k, m.fee * rf(1.02, 1.06)) / 1000) * 1000;
+  if (bump > m.fee) { m.fee = bump; n.sell = sell; }
+  n.log.push({ me: 0, r: 'no', fee: m.fee, sell: n.sell }); return { r: 'no', fee: m.fee };
+}
 export function acceptBid(G, m) {
   const p = G.players[m.pid]; const b = G.clubs[m.from];
   if (!p || p.club !== G.me.job?.cid) { m.done = true; return 'Jogador não está mais no clube.'; }
   if (b.money < m.fee) { m.done = true; return 'O clube comprador desistiu (sem dinheiro).'; }
   doTransfer(G, p, b.id, m.fee, wageDemand(G, p, b.id), ri(2, 5));
   if (m.swap != null) { const s = G.players[m.swap]; if (s && s.club === b.id) doTransfer(G, s, G.me.job.cid, 0, Math.max(s.wage, wageDemand(G, s, G.me.job.cid)), ri(2, 4)); }
+  if (m.neg?.sell) p.sellOn = { cid: G.me.job.cid, pct: m.neg.sell };
   if (G.me.car) G.me.car.trans++;
-  m.done = true; return `${p.n} vendido por ${money(m.fee)}.`;
+  m.done = true; return `${p.n} vendido por ${money(m.fee)}${m.neg?.sell ? ` + ${m.neg.sell}% de uma venda futura` : ''}.`;
 }
 
 // Contratos que vencem
