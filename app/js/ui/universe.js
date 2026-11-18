@@ -44,7 +44,7 @@ function coCard(G, c, mine) {
   const spark = h.length > 1 ? `<svg viewBox="0 0 100 30" preserveAspectRatio="none" style="width:100%;height:34px"><polyline fill="none" stroke="#2fe08a" stroke-width="1.5" points="${h.map((x, i) => `${i / (h.length - 1) * 100},${30 - x.rev / mx * 28}`).join(' ')}"/><polyline fill="none" stroke="#f4c542" stroke-width="1" points="${h.map((x, i) => `${i / (h.length - 1) * 100},${30 - Math.max(0, x.prof) / mx * 28}`).join(' ')}"/></svg>` : '';
   return `<div class="card ${mine ? '' : 'flat'}" data-a="coopen" data-v="${c.id}"><h3><span>${esc(c.n)}</span><span class="pill">${B.SEGS[c.seg].n}</span></h3>
   <div class="train-kpi"><div><b>${money(c.rev * 46)}</b><span>Receita/ano</span></div><div><b class="${c.prof >= 0 ? 'ok' : 'bad'}">${money(c.prof * 46)}</b><span>Lucro/ano</span></div><div><b>${Math.round(c.rep)}</b><span>Reputação</span></div><div><b>${money(B.coValuation(G, c))}</b><span>Valor</span></div></div>${spark}
-  <div class="xs mut">${c.emp} funcionários · ${c.cc.map(flag).join('')} · ${B.contractsOf(G, c).length} contratos de patrocínio${c.sh ? ` · você tem ${c.sh}%` : ''}</div></div>`;
+  <div class="xs mut">${c.emp} funcionários · ${c.cc.map(flag).join('')} · ${B.contractsOf(G, c).length} contratos de patrocínio · 📱 ${B.fmtK(c.fol || 0)} seguidores${c.sh ? ` · você tem ${c.sh}%` : ''}${(c.wk ?? 99) < 40 ? ` · 🌱 marca nova (${Math.round(30 + 70 * (c.wk || 0) / 40)}% das lojas)` : ''}</div></div>`;
 }
 function empView(G) {
   const cos = B.myCos(G);
@@ -76,13 +76,21 @@ function coSheet() {
   <div class="kv"><span>Folha</span><b>${money(c.emp * B.empWage(c))}/sem.</b></div><div class="kv"><span>Produtos</span><b>${c.prods}${c.proj ? ` (+1 em ${c.proj.left} sem.)` : ''}</b></div></div>
   <div class="card flat"><h3>Departamentos</h3>${Object.entries(B.DEPTS).map(([k, l]) => `<div class="li"><span class="grow">${l} <span class="xs mut">nível ${c.d[k]}</span></span>${mine ? `<button class="btn sm" data-a="coact" data-v="dept:${k}">Investir ${money(120000 * Math.pow(2.2, c.d[k] - 1))}</button>` : ''}</div>`).join('')}</div>
   <div class="card flat"><h3>Contratos de patrocínio (${ctr.length})</h3>${ctr.slice(0, 30).map(({ c: cl, s }) => `<div class="li sm">${crest(cl, 20)}<span class="grow">${esc(cl.name)} <span class="xs mut">${B.SLOTS[s.slot]?.n || s.slot}</span></span><b>${money(s.val)}/ano até ${s.until}</b></div>`).join('') || '<div class="xs mut">Nenhum.</div>'}</div>`;
-  if (mine) h += `<div class="card"><h3>Administrar</h3><div class="row" style="flex-wrap:wrap;gap:6px">
-    <button class="btn sm" data-a="coact" data-v="hire:5">+5 funcionários</button><button class="btn sm" data-a="coact" data-v="hire:25">+25</button><button class="btn sm red" data-a="coact" data-v="fire:5">Demitir 5</button>
-    <button class="btn sm" data-a="coact" data-v="ads:100000">Publicidade ${money(100000)}</button><button class="btn sm" data-a="coact" data-v="ads:1000000">Campanha ${money(1000000)}</button>
-    <button class="btn sm" data-a="coact" data-v="prod:">Desenvolver produto (${money(250000 * c.prods)})</button></div>
-    <div class="field" style="margin-top:8px"><label>Expandir para outro país (${money(400000 + c.cc.length * 350000)})</label><select data-ch="coexp"><option value="">Escolha…</option>${Object.keys(B.MKT_W).filter((k) => !c.cc.includes(k)).map((k) => `<option value="${k}">${flag(k)} ${COUNTRIES[k]?.name || k} (mercado ${Math.round(B.MKT_W[k] * 100)}%)</option>`).join('')}</select></div>
-    <div class="row" style="gap:6px"><button class="btn sm grow" data-a="cocash" data-v="200000">Aportar ${money(200000)}</button><button class="btn sm grow" data-a="cocash" data-v="1000000">Aportar ${money(1000000)}</button><button class="btn sm grow pri" data-a="cocash" data-v="-div">Retirar dividendos</button></div>
-    <button class="btn sm blk" style="margin-top:6px" data-a="spoNew" data-v="${c.id}">🤝 Negociar patrocínio com um clube</button></div>`;
+  if (mine) h += socialCard(G, c, true);
+  if (mine) { const mx = Math.max(10000, Math.floor(G.me.money / 10000) * 10000); S.cq ||= { ap: Math.min(mx, 200000), wd: 0, hire: 10, ads: 100000, inf: 50000 }; const q = S.cq; q.ap = Math.min(q.ap, mx); const wmx = Math.max(0, Math.floor(c.cash / 10000) * 10000); q.wd = Math.min(q.wd, wmx);
+    h += `<div class="card"><h3>Dinheiro</h3>
+    <div class="field"><label>Aportar do seu bolso: <b id="cqap">${money(q.ap)}</b> <span class="xs mut">(você tem ${money(G.me.money)})</span></label><input type="range" min="10000" max="${mx}" step="10000" value="${q.ap}" data-in="cqap"></div>
+    <div class="row" style="gap:6px;margin-bottom:8px">${[0.1, 0.25, 0.5, 1].map((f) => `<span class="chip" data-a="cqset" data-v="ap:${Math.max(10000, Math.floor(G.me.money * f / 10000) * 10000)}">${f === 1 ? 'Tudo' : Math.round(f * 100) + '%'}</span>`).join('')}<button class="btn sm pri grow" data-a="cqgo" data-v="ap">💰 Aportar</button></div>
+    <div class="field"><label>Retirar da empresa: <b id="cqwd">${money(q.wd)}</b> <span class="xs mut">(caixa ${money(c.cash)} · você recebe ${c.sh}%)</span></label><input type="range" min="0" max="${wmx}" step="10000" value="${q.wd}" data-in="cqwd"></div>
+    <button class="btn sm blk" data-a="cqgo" data-v="wd">🏦 Retirar dividendos</button></div>
+    <div class="card"><h3>Administrar</h3>
+    <div class="field"><label>Contratar funcionários: <b id="cqhire">${q.hire}</b> <span class="xs mut">(${money(q.hire * 2500)} de custo + ${money(q.hire * B.empWage(c))}/sem. · cada um produz ~${money(B.capacity({ ...c, emp: c.emp + 1 }) - B.capacity(c))}/sem.)</span></label><input type="range" min="1" max="500" step="1" value="${q.hire}" data-in="cqhire"></div>
+    <div class="row" style="gap:6px;margin-bottom:8px"><button class="btn sm pri grow" data-a="cqgo" data-v="hire">+ Contratar</button><button class="btn sm red" data-a="coact" data-v="fire:${Math.min(q.hire, Math.max(0, c.emp - 2))}">Demitir ${Math.min(q.hire, Math.max(0, c.emp - 2))}</button></div>
+    ${c.rev >= B.capacity(c) * 0.98 ? '<div class="hint warn" style="margin-bottom:8px">⚠️ A fábrica está no limite: há mais pedidos do que você consegue produzir. Contratar funcionários aumenta a receita.</div>' : ''}
+    <div class="field"><label>Publicidade: <b id="cqads">${money(q.ads)}</b></label><input type="range" min="10000" max="${Math.max(20000, Math.floor(c.cash / 10000) * 10000)}" step="10000" value="${Math.min(q.ads, Math.max(20000, c.cash))}" data-in="cqads"></div>
+    <div class="row" style="gap:6px;margin-bottom:8px"><button class="btn sm grow" data-a="cqgo" data-v="ads">📣 Lançar campanha</button><button class="btn sm grow" data-a="coact" data-v="prod:">🧪 Novo produto (${money(250000 * c.prods)})</button></div>
+    <div class="field"><label>Expandir para outro país (${money(400000 + c.cc.length * 350000)})</label><select data-ch="coexp"><option value="">Escolha…</option>${Object.keys(B.MKT_W).filter((k) => !c.cc.includes(k)).map((k) => `<option value="${k}">${flag(k)} ${COUNTRIES[k]?.name || k} (mercado ${Math.round(B.MKT_W[k] * 100)}%)</option>`).join('')}</select></div>
+    <button class="btn sm blk" style="margin-top:6px" data-a="spoNew" data-v="${c.id}">🤝 Negociar patrocínio com um clube</button></div>`; }
   h += `<div class="card flat"><h3>Participação</h3><div class="kv"><span>Valor de mercado</span><b>${money(B.coValuation(G, c))}</b></div><div class="kv"><span>Sua parte</span><b>${c.sh}%</b></div><div class="row" style="gap:6px;flex-wrap:wrap">
     ${c.sh < 100 && !c.dead ? `<button class="btn sm grow" data-a="cobuy" data-v="25">Comprar 25%</button><button class="btn sm grow pri" data-a="cobuy" data-v="${Math.max(51 - c.sh, 1)}">Comprar o controle</button><button class="btn sm grow" data-a="cobuy" data-v="${100 - c.sh}">Comprar tudo</button>` : ''}
     ${c.sh > 0 ? `<button class="btn sm grow red" data-a="cosell" data-v="${Math.min(25, c.sh)}">Vender ${Math.min(25, c.sh)}%</button><button class="btn sm grow red" data-a="cosell" data-v="${c.sh}">Vender tudo</button>` : ''}</div>
@@ -90,6 +98,29 @@ function coSheet() {
   return h;
 }
 const coAgain = (r) => { toast(r, 3000); replaceSheet(coSheet()); render(); save(); };
+for (const k of ['ap', 'wd', 'hire', 'ads', 'inf']) H['cq' + k] = (v) => { S.cq[k] = +v; const e = document.getElementById('cq' + k); if (e) e.textContent = k === 'hire' ? v : money(+v); };
+H.cqset = (v) => { const [k, x] = v.split(':'); S.cq[k] = +x; replaceSheet(coSheet()); };
+H.cqgo = (v) => { const G = S.G, c = B.coById(G, S.coId), q = S.cq;
+  if (v === 'ap') coAgain(B.moveCash(G, c, q.ap)); else if (v === 'wd') { if (!q.wd) { toast('Escolha um valor'); return; } coAgain(B.moveCash(G, c, -q.wd)); }
+  else if (v === 'hire') coAgain(B.coAction(G, c, 'hire', q.hire)); else if (v === 'ads') coAgain(B.coAction(G, c, 'ads', Math.min(q.ads, c.cash)));
+  else if (v === 'inf') coAgain(B.influencerCampaign(G, c, q.inf)); else if (v === 'cpost') coAgain(B.coachPost(G, c)); };
+// ===== redes sociais da empresa =====
+const POSTI = { launch: '🚀', ads: '📣', world: '🌍', prod: '🧪', deal: '🤝', viral: '🔥', misc: '📸', title: '🏆', coach: '🧑‍💼', infl: '🎥' };
+function socialCard(G, c, mine) {
+  const f = c.fol || 0; const fh = c.fh || []; const d = fh.length > 1 ? f - fh[Math.max(0, fh.length - 2)] : 0; const d4 = fh.length > 4 ? f - fh[fh.length - 5] : d;
+  const mx = Math.max(...fh, 1), mn = Math.min(...fh, f);
+  const spark = fh.length > 1 ? `<svg viewBox="0 0 100 26" preserveAspectRatio="none" class="so-spark"><defs><linearGradient id="sog" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e1306c" stop-opacity=".45"/><stop offset="1" stop-color="#e1306c" stop-opacity="0"/></linearGradient></defs><polygon fill="url(#sog)" points="0,26 ${fh.map((x, i) => `${i / (fh.length - 1) * 100},${24 - (x - mn) / Math.max(1, mx - mn) * 22}`).join(' ')} 100,26"/><polyline fill="none" stroke="#ff4f8b" stroke-width="1.6" points="${fh.map((x, i) => `${i / (fh.length - 1) * 100},${24 - (x - mn) / Math.max(1, mx - mn) * 22}`).join(' ')}"/></svg>` : '';
+  const handle = '@' + c.n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+  const tier = f >= 5e6 ? 'Marca global' : f >= 1e6 ? 'Marca famosa' : f >= 1e5 ? 'Marca em alta' : f >= 1e4 ? 'Marca conhecida na região' : 'Marca iniciante';
+  return `<div class="card so-card"><div class="so-head"><div class="so-av">${esc(c.n.slice(0, 1))}</div><div class="grow"><b>${esc(handle)}</b> <span class="so-ver">${f >= 1e5 ? '✔' : ''}</span><div class="xs mut">${tier}</div></div>
+    <div style="text-align:right"><div class="so-big">${B.fmtK(f)}</div><div class="xs ${d >= 0 ? 'ok' : 'bad'}">${d >= 0 ? '▲' : '▼'} ${B.fmtK(Math.abs(d))} esta semana</div></div></div>
+    ${spark}
+    <div class="so-plats"><span>📸 Instagram <b>${B.fmtK(f * 0.55)}</b></span><span>🎵 TikTok <b>${B.fmtK(f * 0.3)}</b></span><span>𝕏 <b>${B.fmtK(f * 0.15)}</b></span></div>
+    <div class="xs mut" style="margin:4px 0 6px">Seguidores aumentam as vendas (+${Math.round(B.socialBoost(c) * 100)}% hoje) e a reputação. Crescem com fama, patrocínios, campanhas e a sua popularidade como treinador. Últimas 4 semanas: ${d4 >= 0 ? '+' : ''}${B.fmtK(d4)}.</div>
+    ${mine ? `<div class="row" style="gap:6px;margin-bottom:6px"><button class="btn sm grow" data-a="cqgo" data-v="cpost">🧑‍💼 Post com você (grátis, 1×/sem.)</button></div>
+    <div class="field" style="margin:0 0 4px"><label>Campanha com influenciadores: <b id="cqinf">${money(S.cq?.inf || 50000)}</b></label><input type="range" min="10000" max="${Math.max(20000, Math.floor(c.cash / 10000) * 10000)}" step="10000" value="${Math.min(S.cq?.inf || 50000, Math.max(20000, c.cash))}" data-in="cqinf"></div><button class="btn sm blk" data-a="cqgo" data-v="inf">🎥 Contratar influenciadores</button>` : ''}
+    <div class="so-feed">${(c.posts || []).slice(0, 6).map((p) => `<div class="so-post ${p.kind}"><span class="so-pi">${POSTI[p.kind] || '📸'}</span><div class="grow"><div class="sm">${esc(p.txt)}</div><div class="xs mut">❤️ ${B.fmtK(p.likes)} · 💬 ${B.fmtK(p.com)} · ${wk(p.w)} ${p.y}</div></div></div>`).join('') || '<div class="xs mut">Nenhum post ainda.</div>'}</div></div>`;
+}
 H.coact = (v) => { const [a, ...x] = v.split(':'); coAgain(B.coAction(S.G, B.coById(S.G, S.coId), a, x.join(':'))); };
 H.coexp = (v) => { if (v) coAgain(B.coAction(S.G, B.coById(S.G, S.coId), 'country', v)); };
 H.cocash = (v) => { const c = B.coById(S.G, S.coId); coAgain(B.moveCash(S.G, c, v === '-div' ? -Math.floor(Math.max(0, c.cash * 0.5) / 1000) * 1000 : +v)); };
@@ -114,23 +145,24 @@ H.spoRenew = (v) => { const [co, cid, slot] = v.split(':'); const c = S.G.clubs[
 function spoHtml() {
   const G = S.G, sp = S.sp; const mine = B.myCos(G).filter((c) => c.sh >= 51);
   const q = sp.q.toLowerCase(); const list = q.length >= 2 ? G.clubs.filter((c) => c.league && c.name.toLowerCase().includes(q)).slice(0, 8) : [];
-  const c = sp.cid != null ? G.clubs[sp.cid] : null; const ask = c ? B.sponsorAsk(G, c, sp.slot) : 0; if (c && !sp.val) sp.val = ask;
+  const c = sp.cid != null ? G.clubs[sp.cid] : null; const co = B.coById(G, sp.co); const nd = c && co ? B.sponsorNeed(G, co, c, sp.slot, sp.years, sp.bonus) : { ask: 0, need: 0 }; const ask = nd.ask, need = nd.need; if (c && !sp.val) sp.val = need;
   const cur = c?.spons?.find((x) => x.slot === sp.slot);
   return `<h2>Negociar patrocínio</h2><div class="field"><label>Empresa</label><select data-ch="spco">${mine.map((x) => `<option value="${x.id}" ${sp.co === x.id ? 'selected' : ''}>${esc(x.n)} (rep. ${Math.round(x.rep)}, caixa ${money(x.cash)})</option>`).join('')}</select></div>
   <div class="field"><label>Clube</label><input id="spq" value="${esc(sp.q)}" placeholder="Digite o nome do clube" data-in="spq"></div>
   <div class="list" id="spl">${list.map((x) => `<div class="li tap" data-a="spcl" data-v="${x.id}">${crest(x, 22)}<span class="grow">${esc(x.name)} <span class="xs mut">${G.comps[x.league]?.short || ''} · rep ${x.rep}</span></span></div>`).join('')}</div>
   ${c ? `<div class="card flat"><div class="row" style="gap:8px">${crest(c, 32)}<div class="grow"><b>${esc(c.name)}</b><div class="xs mut">visibilidade ${Math.round(B.clubVis(G, c))} · torcida ${Math.round(c.fans ?? 50)}% · ${c.money < 0 ? 'endividado' : 'finanças ok'}</div></div></div>
     <div class="field"><label>Tipo de contrato</label><select data-ch="spslot">${Object.entries(B.SLOTS).map(([k, s]) => `<option value="${k}" ${sp.slot === k ? 'selected' : ''}>${s.n}</option>`).join('')}</select></div>
-    <div class="kv"><span>Atual</span><b>${cur ? `${esc(cur.n)} · ${money(cur.val)}/ano até ${cur.until}` : 'vago'}</b></div><div class="kv"><span>O clube pede</span><b>~${money(ask)}/ano</b></div><div class="kv"><span>Reputação mínima</span><b>${Math.round(c.rep * 0.45)}</b></div>
-    <div class="field"><label>Valor anual: <b id="spv">${money(sp.val)}</b></label><input type="range" min="${Math.round(ask * 0.5)}" max="${Math.round(ask * 1.8)}" step="${Math.max(1000, Math.round(ask / 100))}" value="${sp.val}" data-in="spv"></div>
+    <div class="kv"><span>Atual</span><b>${cur ? `${esc(cur.n)} · ${money(cur.val)}/ano até ${cur.until}` : 'vago'}</b></div><div class="kv"><span>Preço de mercado</span><b>~${money(ask)}/ano</b></div><div class="kv"><span>Para a sua marca aceitam a partir de</span><b class="gold" id="spneed">${money(need)}/ano</b></div>
+    <div class="field"><label>Valor anual: <b id="spv">${money(sp.val)}</b> <span id="spok" class="xs ${sp.val >= need ? 'ok' : 'bad'}">${sp.val >= need ? '✅ aceitariam' : '❌ abaixo do mínimo'}</span></label><input type="range" min="${Math.round(ask * 0.3 / 1000) * 1000}" max="${Math.round(Math.max(need * 1.6, ask * 2) / 1000) * 1000}" step="${Math.max(1000, Math.round(ask / 200 / 1000) * 1000)}" value="${sp.val}" data-in="spv"></div>
+    <div class="xs mut" style="margin:-4px 0 8px">Marca pequena paga um pouco mais; vagas livres, clubes endividados e divisões menores aceitam mais fácil. Precisa ter 25% do valor no caixa (${money(sp.val * 0.25)}).</div>
     <div class="field"><label>Duração</label><div class="seg" style="margin:0">${[1, 2, 3, 4, 5].map((y) => `<button class="${sp.years === y ? 'on' : ''}" data-a="spy" data-v="${y}">${y} ano${y > 1 ? 's' : ''}</button>`).join('')}</div></div>
     <div class="field"><label>Bônus por título: <b id="spb">${money(sp.bonus)}</b></label><input type="range" min="0" max="${Math.round(ask * 0.5)}" step="${Math.max(1000, Math.round(ask / 100))}" value="${sp.bonus}" data-in="spb"></div>
     <button class="btn pri blk" data-a="spgo">Enviar proposta</button>` : ''}`;
 }
-H.spco = (v) => { S.sp.co = +v; }; H.spq = (v) => { S.sp.q = v; const el = document.getElementById('spl'); if (el) { const tmp = document.createElement('div'); tmp.innerHTML = spoHtml(); el.innerHTML = tmp.querySelector('#spl').innerHTML; } };
+H.spco = (v) => { S.sp.co = +v; S.sp.val = 0; replaceSheet(spoHtml()); }; H.spq = (v) => { S.sp.q = v; const el = document.getElementById('spl'); if (el) { const tmp = document.createElement('div'); tmp.innerHTML = spoHtml(); el.innerHTML = tmp.querySelector('#spl').innerHTML; } };
 H.spcl = (v) => { S.sp.cid = +v; S.sp.q = S.G.clubs[+v].name; S.sp.val = 0; replaceSheet(spoHtml()); };
 H.spslot = (v) => { S.sp.slot = v; S.sp.val = 0; replaceSheet(spoHtml()); };
-H.spv = (v) => { S.sp.val = +v; document.getElementById('spv').textContent = money(+v); };
+H.spv = (v) => { S.sp.val = +v; document.getElementById('spv').textContent = money(+v); const G = S.G, sp = S.sp; const n = B.sponsorNeed(G, B.coById(G, sp.co), G.clubs[sp.cid], sp.slot, sp.years, sp.bonus).need; const e = document.getElementById('spok'); if (e) { e.className = 'xs ' + (sp.val >= n ? 'ok' : 'bad'); e.textContent = sp.val >= n ? '✅ aceitariam' : '❌ abaixo do mínimo'; } };
 H.spb = (v) => { S.sp.bonus = +v; document.getElementById('spb').textContent = money(+v); };
 H.spy = (v) => { S.sp.years = +v; replaceSheet(spoHtml()); };
 H.spgo = () => { const G = S.G, sp = S.sp; const r = B.sponsorOffer(G, B.coById(G, sp.co), G.clubs[sp.cid], sp.slot, sp.val, sp.years, sp.bonus); toast(r.why, 3500); if (r.ok) { closeSheet(true); S.tab = 'neg'; S.sub.neg = 'spo'; render(); save(); } };

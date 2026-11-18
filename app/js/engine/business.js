@@ -31,7 +31,7 @@ const KITS = ['Kappa Sul', 'Dínamo Sports', 'Vento Wear', 'Arena Athletic', 'Pu
 function newCo(G, o) {
   const B = G.biz; const seg = o.seg;
   const co = { id: B.seq++, n: o.n, seg, user: !!o.user, sh: o.user ? 100 : 0, ai: !o.user, emp: o.emp ?? 10, d: { mkt: o.lv ?? 1, prod: o.lv ?? 1, dist: o.lv ?? 1, rd: o.lv ?? 1, adm: o.lv ?? 1 }, rep: o.rep ?? 15, cash: o.cash ?? 200000, debt: 0, cc: o.cc || ['BR'],
-    cap: 0, rev: 0, exp: 0, prof: 0, hist: [], ads: 0, proj: null, prods: o.prods ?? 1, ident: o.ident || '', goal: o.goal || '', founded: G.year, home: o.home || 'BR', dead: false };
+    cap: 0, rev: 0, exp: 0, prof: 0, hist: [], ads: 0, proj: null, prods: o.prods ?? 1, ident: o.ident || '', goal: o.goal || '', founded: G.year, home: o.home || 'BR', dead: false, inv: o.inv || 0, wk: o.user ? 0 : 99, fol: o.fol ?? Math.round(150 * Math.pow(o.rep ?? 15, 2.1)), posts: [] };
   B.cos.push(co); return co;
 }
 export function initBiz(G) {
@@ -67,7 +67,10 @@ export function coValuation(G, co) {
   const growth = h.length >= 8 ? clamp((h[h.length - 1].rev - h[0].rev) / Math.max(1, h[0].rev), -0.5, 1) : 0;
   const contracts = contractsOf(G, co).length;
   const mult = 6 + growth * 8 + co.rep / 15 + contracts * 0.3;
-  return Math.max(0, Math.round((Math.max(annRev * 0.25, annProf * mult) + co.cash - co.debt) / 1000) * 1000);
+  // empresas novas valem o que têm (caixa + estrutura); o valor pelo lucro só pesa depois de provar resultado (até 1 ano)
+  const mat = clamp((co.wk ?? 99) / 46, 0, 1);
+  const assets = co.cash - co.debt + (co.inv || 0) * 0.15 + co.emp * 2500 + Object.values(co.d).reduce((s, l) => s + (l - 1) * 90000, 0);
+  return Math.max(0, Math.round((assets + Math.max(annRev * 0.25, annProf * mult) * mat) / 1000) * 1000);
 }
 export function bizWeek(G) {
   initBiz(G); const B = G.biz; const me = G.me;
@@ -81,9 +84,12 @@ export function bizWeek(G) {
     for (const co of cs) {
       const e = exposure(G, co);
       const famous = co.user ? (me.pop || 0) / 8 + (me.rep || 0) / 20 : 0; // treinador famoso puxa a marca
-      const target = clamp(10 + Math.min(60, e * 0.6) + co.d.mkt * 3 + co.ads + famous + co.prods, 5, 98);
+      const target = clamp(10 + Math.min(60, e * 0.6) + co.d.mkt * 3 + co.ads + famous + co.prods + socialBoost(co) * 40, 5, 98);
       co.rep += (target - co.rep) * 0.03; co.ads = Math.max(0, co.ads * 0.92);
-      const demand = SEGS[seg].mkt / W * (attract(co) * reach(co)) / tot;
+      co.wk = (co.wk ?? 99) + 1;
+      const ramp = co.wk < 40 ? 0.3 + 0.7 * co.wk / 40 : 1; // marca nova leva meses para chegar às lojas
+      const demand = SEGS[seg].mkt / W * (attract(co) * reach(co)) / tot * ramp * (1 + socialBoost(co));
+      socialWeek(G, co, e);
       co.cap = capacity(co); co.rev = Math.round(Math.min(demand, co.cap));
       let contractCost = 0; for (const { s } of contractsOf(G, co)) contractCost += s.val / W;
       const cogs = co.rev * (0.62 - 0.035 * co.d.prod);
@@ -92,7 +98,7 @@ export function bizWeek(G) {
       co.hist.push({ rev: co.rev, prof: co.prof, rep: Math.round(co.rep) }); if (co.hist.length > 60) co.hist.shift();
       if (co.cash < 0 && co.user) { const loan = -co.cash; co.debt += loan; co.cash = 0; }
       // projetos de produto
-      if (co.proj && --co.proj.left <= 0) { co.prods++; co.rep += 3; if (co.user) msg(G, co.n, `🧪 Novo produto lançado: ${co.proj.n}`, `A ${co.n} lançou ${co.proj.n}. A linha de produtos ficou mais atrativa.`); co.proj = null; }
+      if (co.proj && --co.proj.left <= 0) { co.prods++; co.rep += 3; post(G, co, 'prod', `Lançamento: ${co.proj.n}. Já nas lojas! 🔥`); if (co.user) msg(G, co.n, `🧪 Novo produto lançado: ${co.proj.n}`, `A ${co.n} lançou ${co.proj.n}. A linha de produtos ficou mais atrativa.`); co.proj = null; }
       if (co.ai) aiCoWeek(G, co);
     }
   }
@@ -149,26 +155,27 @@ export function foundCompany(G, o) {
   if (o.inv < FOUND_MIN) return { ok: false, why: `Investimento mínimo: ${money(FOUND_MIN)}.` };
   if (me.money < o.inv) return { ok: false, why: 'Dinheiro pessoal insuficiente.' };
   me.money -= o.inv;
-  const co = newCo(G, { n: o.n, seg: o.seg, user: true, emp: Math.max(3, Math.round(o.inv / 60000)), rep: 6, cash: o.inv * 0.7, cc: [o.home || 'BR'], home: o.home || 'BR', ident: o.ident, goal: o.goal, prods: 1 });
+  const co = newCo(G, { n: o.n, seg: o.seg, user: true, emp: Math.max(3, Math.round(o.inv / 60000)), rep: 6, fol: Math.round(80 + (me.pop || 0) * 400), inv: o.inv, cash: o.inv * 0.8, cc: [o.home || 'BR'], home: o.home || 'BR', ident: o.ident, goal: o.goal, prods: 1 });
   news(G, `🆕 ${me.name} funda a ${co.n} (${SEGS[co.seg].n}).`); tl(G, `${me.name} funda a ${co.n}`, 'neg');
+  post(G, co, 'launch', `Nasce a ${co.n}! ${o.ident ? o.ident + '. ' : ''}O começo de uma história. 🚀`);
   return { ok: true, co };
 }
 export function coAction(G, co, act, arg) {
   const cost = {
     hire: () => 0, fire: () => 0, dept: () => 120000 * Math.pow(2.2, co.d[arg] - 1), ads: () => arg, country: () => 400000 + co.cc.length * 350000, prod: () => 250000 * co.prods,
   }[act]?.() ?? 0;
-  if (act === 'hire') { const n = +arg; const fee = n * 2500; if (co.cash < fee) return 'Caixa insuficiente.'; co.cash -= fee; co.emp += n; return `${n} funcionários contratados. Folha: ${money(co.emp * empWage(co))}/sem.`; }
+  if (act === 'hire') { const n = Math.max(1, Math.floor(+arg || 0)); const fee = n * 2500; if (co.cash < fee) return 'Caixa insuficiente.'; co.cash -= fee; co.emp += n; return `${n} funcionários contratados. Folha: ${money(co.emp * empWage(co))}/sem.`; }
   if (act === 'fire') { const n = Math.min(+arg, co.emp - 2); co.emp -= n; co.cash -= n * 1500; co.rep -= n > co.emp * 0.2 ? 2 : 0; return `${n} demitidos (rescisões de ${money(n * 1500)}).`; }
   if (co.cash < cost) return `Caixa insuficiente: precisa de ${money(cost)}.`;
   if (act === 'dept') { if (co.d[arg] >= 6) return 'Departamento já no máximo.'; co.cash -= cost; co.d[arg]++; return `${DEPTS[arg]} subiu para o nível ${co.d[arg]}.`; }
-  if (act === 'ads') { co.cash -= cost; co.ads += Math.sqrt(cost / 10000) * 2; return `Campanha de ${money(cost)} no ar. A reputação da marca vai subir nas próximas semanas.`; }
-  if (act === 'country') { co.cash -= cost; co.cc.push(arg); return `${co.n} agora vende em ${COUNTRIES[arg]?.name || arg}.`; }
+  if (act === 'ads') { co.cash -= cost; co.ads += Math.sqrt(cost / 10000) * 2; co.fol += Math.round(Math.sqrt(cost) * 6); post(G, co, 'ads', pick(['Nova campanha no ar! 📣', 'Você já viu nosso comercial? 🎬', 'Lançamos a campanha da temporada!'])); return `Campanha de ${money(cost)} no ar. A reputação da marca vai subir nas próximas semanas.`; }
+  if (act === 'country') { co.cash -= cost; co.cc.push(arg); post(G, co, 'world', `Chegamos em ${COUNTRIES[arg]?.name || arg}! ${COUNTRIES[arg]?.flag || '🌍'}`); return `${co.n} agora vende em ${COUNTRIES[arg]?.name || arg}.`; }
   if (act === 'prod') { if (co.proj) return 'Já há um produto em desenvolvimento.'; co.cash -= cost; co.proj = { n: arg || `Linha ${co.prods + 1}`, left: 8 }; return `Desenvolvimento iniciado: fica pronto em 8 semanas.`; }
   return '';
 }
 export function moveCash(G, co, amount) {
   const me = G.me; const own = co.sh / 100;
-  if (amount > 0) { if (me.money < amount) return 'Dinheiro pessoal insuficiente.'; me.money -= amount; const pay = Math.min(co.debt, amount * 0.5); co.debt -= pay; co.cash += amount - pay; return `Aporte de ${money(amount)} na ${co.n}${pay ? ` (${money(pay)} quitaram dívida)` : ''}.`; }
+  if (amount > 0) { if (me.money < amount) return 'Dinheiro pessoal insuficiente.'; me.money -= amount; co.inv = (co.inv || 0) + amount; const pay = Math.min(co.debt, amount * 0.5); co.debt -= pay; co.cash += amount - pay; return `Aporte de ${money(amount)} na ${co.n}${pay ? ` (${money(pay)} quitaram dívida)` : ''}.`; }
   const w = -amount; if (co.cash < w) return 'A empresa não tem esse caixa.'; co.cash -= w; me.money += Math.round(w * own); return `Dividendos: ${money(Math.round(w * own))} para você (${co.sh}% da empresa).`;
 }
 export function buyStake(G, co, pct) {
@@ -189,25 +196,73 @@ export function sellStake(G, co, pct) {
 }
 // pedido de patrocínio a um clube
 export function sponsorAsk(G, c, slot) { const base = sponsorValue(G, c, slot === 'Estadio' || slot === 'Treino' || slot === 'Base' || slot === 'Parceria' ? 'Manga' : slot) / (SLOTS[slot === 'Estadio' || slot === 'Treino' || slot === 'Base' || slot === 'Parceria' ? 'Manga' : slot].sh) * SLOTS[slot].sh; return Math.round(base / 1000) * 1000; }
+// o que o clube exige da sua marca: quanto menor/desconhecida a marca, mais caro (mas nunca impossível)
+export function sponsorNeed(G, co, c, slot, years = 2, bonus = 0) {
+  const ask = sponsorAsk(G, c, slot); const cur = (c.spons || []).find((x) => x.slot === slot);
+  const fit = clamp(co.rep / Math.max(8, c.rep * 0.55), 0.2, 1.2);
+  let k = 0.55 + 0.45 * Math.min(1, fit); // marca pequena paga "pedágio"
+  if (!cur || cur.co == null) k += 0.25; // vaga livre ou sem patrocinador fixo: clube aceita mais fácil
+  if (c.money < 0) k += 0.12; // clube precisando de dinheiro
+  if ((c.tier ?? G.comps[c.league]?.tier ?? 1) >= 3) k += 0.1; // divisões menores aceitam qualquer parceiro
+  if (c.own?.user >= 51) k += 0.35; // seu próprio clube
+  if (years >= 3) k += 0.04; k += Math.min(0.12, bonus / Math.max(1, ask));
+  let need = Math.round(ask / k / 1000) * 1000;
+  // gigantes protegem a marca: exigem bem mais de uma empresa desconhecida
+  if (c.rep >= 85 && co.rep < 25) need = Math.round(need * 1.6 / 1000) * 1000;
+  return { ask, need: Math.max(Math.round(ask * 0.45 / 1000) * 1000, need) };
+}
 export function sponsorOffer(G, co, c, slot, val, years, bonus) {
   if (!co.user) return { ok: false, why: 'Só suas empresas podem negociar.' };
   if (SLOTS[slot].kit && !SEGS[co.seg].kit) return { ok: false, why: 'Só empresas de material esportivo ou uniformes podem fornecer material.' };
-  const ask = sponsorAsk(G, c, slot); const minRep = c.rep * 0.45;
+  const { need } = sponsorNeed(G, co, c, slot, years, bonus);
   const s0 = (c.spons ||= []).find((x) => x.slot === slot);
-  if (s0 && s0.co === co.id) { /* renovação */ }
-  if (co.rep < minRep) return { ok: false, why: `O ${c.name} não associa a marca a uma empresa tão pequena (reputação mínima ~${Math.round(minRep)}, a sua: ${Math.round(co.rep)}).` };
-  const score = val / ask + (bonus > 0 ? Math.min(0.15, bonus / ask) : 0) + (years >= 3 ? 0.05 : 0) - (c.crisis === G.year ? -0.15 : 0);
-  if (score < 0.95 && !(c.own.user >= 51 && score >= 0.6)) return { ok: false, why: `O ${c.name} quer cerca de ${money(ask)}/temporada por ${SLOTS[slot].n.toLowerCase()}.` };
-  if (co.cash < val * 0.25) return { ok: false, why: 'A empresa precisa ter em caixa pelo menos 25% do valor anual.' };
+  if (val < need) return { ok: false, why: `O ${c.name} recusou. Para fechar ${SLOTS[slot].n.toLowerCase()} com a ${co.n}, eles querem ao menos ${money(need)}/temporada.` };
+  if (co.cash < val * 0.25) return { ok: false, why: `A ${co.n} precisa ter em caixa 25% do valor anual (${money(val * 0.25)}). Faça um aporte na empresa.` };
   let s = s0; if (!s) { s = { slot, n: co.n, val: 0, until: 0 }; c.spons.push(s); }
   if (s.co != null && s.co !== co.id) { const old = coById(G, s.co); if (old?.ai) news(G, `🔁 ${co.n} tira a ${old.n} e assume ${SLOTS[slot].n.toLowerCase()} do ${c.name}.`); }
   s.co = co.id; s.n = co.n; s.val = val; s.until = G.year + years; s.bonus = bonus || 0; s.renewed = true; syncSpon(c);
+  co.rep += Math.min(6, clubVis(G, c) * (SLOTS[slot]?.vis || 0.3) / 6); co.fol += Math.round(Math.max(200, (c.fans ?? 50) * c.rep * c.rep * 0.4 * (SLOTS[slot]?.vis || 0.3)));
+  post(G, co, 'deal', `Agora somos ${SLOTS[slot].n.toLowerCase()} do ${c.name}! 🤝⚽`);
   news(G, `🤝 ${co.n} fecha ${SLOTS[slot].n.toLowerCase()} com o ${c.name}: ${money(val)}/temporada até ${s.until}.`);
   if (c.own.user >= 51) news(G, `⚖️ Conflito de interesses? ${co.n} e ${c.name} têm o mesmo dono: ${G.me.name}.`, 'bast');
   return { ok: true, why: `Contrato assinado com o ${c.name}!` };
 }
+// ---------------- redes sociais ----------------
+export function socialBoost(co) { return Math.min(0.3, Math.log10(1 + (co.fol || 0)) / 25); }
+export function post(G, co, kind, txt) {
+  if (!co.user && kind !== 'deal') return;
+  const eng = 0.015 + Math.random() * 0.05; const likes = Math.round((co.fol || 0) * eng * (kind === 'viral' ? 8 : 1)) + ri(3, 30);
+  (co.posts ||= []).unshift({ t: G.t, y: G.year, w: G.week, kind, txt, likes, com: Math.round(likes * (0.02 + Math.random() * 0.05)) });
+  if (co.posts.length > 14) co.posts.length = 14;
+}
+function socialWeek(G, co, e) {
+  const me = G.me; co.fol ??= Math.round(150 * Math.pow(co.rep, 2.1));
+  const famous = co.user ? (me.pop || 0) * 900 + (me.rep || 0) * 300 : 0;
+  const target = 120 * Math.pow(Math.max(1, co.rep), 2.15) * (1 + Math.min(3, e / 30)) * (1 + co.cc.length * 0.08) + famous + co.ads * 2500;
+  const g = (target - co.fol) * (target > co.fol ? 0.045 : 0.01);
+  co.fol = Math.max(50, Math.round(co.fol + g + co.fol * 0.002 * (rnd() - 0.3)));
+  (co.fh ||= []).push(co.fol); if (co.fh.length > 30) co.fh.shift();
+  if (!co.user) return;
+  if (rnd() < 0.012 + (me.pop || 0) / 4000) { const gain = Math.round(Math.max(500, co.fol * rf(0.08, 0.35))); co.fol += gain; co.rep += 1; post(G, co, 'viral', pick([`Nosso vídeo viralizou! +${fmtK(gain)} seguidores em 2 dias 🤯`, `Trend da ${co.n} explodiu no TikTok 📈`, `Meme com a nossa camisa tomou conta da internet 😂`])); msg(G, co.n, '📱 Post viralizou!', `Um post da ${co.n} viralizou e trouxe ${fmtK(gain)} novos seguidores. A marca ficou mais conhecida.`); }
+  else if (rnd() < 0.18) post(G, co, 'misc', pick([`Bastidores da fábrica 🏭`, `Qual camisa da coleção é a sua favorita? 👇`, `Obrigado pelo carinho, família ${co.n}! 💚`, `Sorteio na área! Comenta aí 🎁`, `Treino de hoje com os nossos produtos 💪`]));
+}
+export const fmtK = (n) => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace('.', ',') + ' mi' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace('.', ',') + ' mil' : String(Math.round(n));
+export function coachPost(G, co) {
+  if ((co.cp || -9) >= G.t) return 'Você já postou esta semana. Volte na próxima.';
+  co.cp = G.t; const me = G.me; const gain = Math.round(200 + (me.pop || 0) * rf(150, 450) + co.fol * rf(0.01, 0.04));
+  co.fol += gain; co.ads += 0.5 + (me.pop || 0) / 40;
+  post(G, co, 'coach', pick([`${me.name} usando ${co.n} no treino de hoje 👀`, `O professor ${me.name.split(' ')[0]} aprova! ✅`, `Dia de foto com o ${me.name.split(' ')[0]} 📸`]));
+  return `📱 Post com você publicado: +${fmtK(gain)} seguidores.`;
+}
+export function influencerCampaign(G, co, cost) {
+  cost = Math.floor(cost / 1000) * 1000; if (cost < 10000) return 'Valor mínimo: R$ 10 mil.'; if (co.cash < cost) return 'Caixa insuficiente na empresa.';
+  co.cash -= cost; const gain = Math.round(Math.sqrt(cost) * rf(25, 45)); co.fol += gain; co.ads += Math.sqrt(cost / 10000) * 1.2;
+  post(G, co, 'infl', pick(['Parceria com influenciadores da bola 🎥', 'Collab com criadores de conteúdo! 🤳', 'Desafio da embaixadinha com a nossa bola ⚽']));
+  return `Campanha com influenciadores: +${fmtK(gain)} seguidores e mais reputação nas próximas semanas.`;
+}
+
 // bônus por título pago ao clube
-export function sponsorTitleBonus(G, c) { for (const s of c.spons || []) if (s.co != null && s.bonus) { const co = coById(G, s.co); if (co && !co.dead) { co.cash -= s.bonus; c.money += s.bonus; co.rep += 4; if (co.user) msg(G, co.n, `🏆 Bônus pago ao ${c.name}`, `O ${c.name} foi campeão. Bônus de ${money(s.bonus)} pago e a marca ganhou visibilidade.`); } } }
+export function sponsorTitleBonus(G, c) { for (const s of c.spons || []) if (s.co != null) { const co = coById(G, s.co); if (!co || co.dead) continue; if (co.user) { co.fol = Math.round((co.fol || 0) * 1.06); post(G, co, 'title', `CAMPEÃO! Parabéns, ${c.name}! 🏆`); } if (s.bonus) { co.cash -= s.bonus; c.money += s.bonus; co.rep += 4; if (co.user) msg(G, co.n, `🏆 Bônus pago ao ${c.name}`, `O ${c.name} foi campeão. Bônus de ${money(s.bonus)} pago e a marca ganhou visibilidade.`); } } }
 
 // ---------------- grupo multiclube ----------------
 export const STRATS = { equilibrio: 'Equilíbrio', titulos: 'Títulos (gasta mais)', formacao: 'Formação de jovens', lucro: 'Lucro (vende e gasta pouco)' };
