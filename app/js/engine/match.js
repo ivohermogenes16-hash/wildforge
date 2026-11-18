@@ -210,24 +210,55 @@ export class LiveMatch {
     this.push({ t: 'sub', side: i, p: inId, o: outId });
     return true;
   }
+  // sugestões de troca: lesionado, pendurado com amarelo, cansado, ou reserva claramente melhor
+  suggestSubs(i, max = 3) {
+    const sd = this.s[i]; const G = this.G; const form = this.form(i); const out = [];
+    const left = 5 - this.subs[i]; if (left <= 0) return out;
+    const yel = new Set(this.ev.filter((e) => e.t === 'am' && e.side === i).map((e) => e.p));
+    const injd = new Set(this.ev.filter((e) => e.t === 'les' && e.side === i).map((e) => e.p));
+    const [a, b] = i === 0 ? this.score : [this.score[1], this.score[0]]; const diff = a - b;
+    const cand = [];
+    sd.xi.forEach((id, j) => {
+      const p = G.players[id]; if (!p || this.sent[i].has(id)) return; const slot = form[j][0];
+      if (slot === 'GOL' && !injd.has(id)) return;
+      const live = Math.max(30, p.fit - Math.max(0, this.min - 45) * 0.4);
+      let need = 0, why = '';
+      if (injd.has(id)) { need = 100; why = 'lesionado'; }
+      else if (yel.has(id) && this.min >= 55 && ['ZAG', 'VOL', 'LD', 'LE'].includes(p.pos)) { need = 30; why = 'pendurado'; }
+      if (this.min >= 55 && live < 70 && need < 40) { need = Math.max(need, 80 - live); why = why || 'cansado'; }
+      cand.push({ j, id, slot, need, why, v: effAt(p, slot, this.min) - (yel.has(id) ? 3 : 0) });
+    });
+    const used = new Set();
+    cand.sort((x, y) => y.need - x.need || x.v - y.v);
+    for (const c of cand) {
+      if (out.length >= Math.min(max, left)) break;
+      let best = null, bv = -1;
+      for (const id of sd.bench) {
+        if (this.played[i].has(id) || used.has(id)) continue; const p = G.players[id]; if (!p || !available(p)) continue;
+        let v = effAt(p, c.slot);
+        // perdendo: prefere atacante; ganhando: prefere defensor
+        if (this.min >= 65 && diff < 0 && ['ATA', 'SA', 'PD', 'PE', 'MEI'].includes(p.pos)) v += 2;
+        if (this.min >= 70 && diff > 0 && ['ZAG', 'VOL', 'LD', 'LE'].includes(p.pos)) v += 1.5;
+        if (v > bv) { bv = v; best = id; }
+      }
+      if (best == null) continue;
+      if (!c.need && bv < c.v + 2) continue;
+      if (c.need && c.need < 100 && bv < c.v - 6) continue;
+      used.add(best); out.push({ out: c.id, in: best, why: c.why || 'reforço', gain: Math.round((bv - c.v) * 10) / 10 });
+    }
+    return out;
+  }
   aiSubs(i, out) {
     const sd = this.s[i];
     if (this.subs[i] >= 5 || !sd.bench.length) return;
-    const want = (this.min === 60 && this.subs[i] < 2) || (this.min === 72 && this.subs[i] < 4) || (this.min === 82 && this.subs[i] < 5 && rnd() < 0.5);
     const inj = this.ev.find((e) => e.t === 'les' && e.side === i && sd.xi.includes(e.p) && !e.handled);
+    const want = (this.min === 60 && this.subs[i] < 2) || (this.min === 70 && this.subs[i] < 3) || (this.min === 78 && this.subs[i] < 4) || (this.min === 85 && this.subs[i] < 5 && rnd() < 0.5);
     if (!want && !inj) return;
-    const form = this.form(i);
-    let k;
-    if (inj) { inj.handled = true; k = sd.xi.indexOf(inj.p); } else {
-      let worst = 1e9; sd.xi.forEach((id, j) => { if (form[j][0] === 'GOL' || this.sent[i].has(id)) return; const v = effAt(this.G.players[id], form[j][0], this.min); if (v < worst) { worst = v; k = j; } });
-    }
-    if (k == null || k < 0) return;
-    const slot = form[k][0];
-    let best = null, bv = -1;
-    for (const id of sd.bench) { if (this.played[i].has(id)) continue; const p = this.G.players[id]; if (!p) continue; const v = effAt(p, slot); if (v > bv) { bv = v; best = id; } }
-    if (best != null && (inj || bv > effAt(this.G.players[sd.xi[k]], slot, this.min))) { const o = sd.xi[k]; if (this.sub(i, o, best)) out.push(this.ev[this.ev.length - 1]); }
+    if (inj) inj.handled = true;
+    const n = inj ? 1 : this.min === 60 ? 2 - this.subs[i] : 1;
+    for (const sg of this.suggestSubs(i, Math.max(1, n))) if (this.sub(i, sg.out, sg.in)) out.push(this.ev[this.ev.length - 1]);
   }
-  finish() { while (!this.done) this.step(); return this.result(); }
+  finish(auto) { if (auto) for (const sd of this.s) sd.user = false; while (!this.done) this.step(); return this.result(); }
   result() {
     const tot = this.st.pos[0] + this.st.pos[1] || 1;
     return { hg: this.score[0], ag: this.score[1], ev: this.ev.filter((e) => ['gol', 'am', 'ver', 'les', 'sub'].includes(e.t)), stats: { pos: [Math.round(this.st.pos[0] / tot * 100), 0], sh: this.st.sh, ont: this.st.ont }, played: this.played, xi: [this.s[0].xi, this.s[1].xi] };

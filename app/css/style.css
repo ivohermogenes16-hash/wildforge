@@ -441,3 +441,12 @@ main.enter > * { animation: viewIn .2s ease-out; }
 .np-mini { display: flex; gap: 8px; align-items: center; padding: 5px 0; border-top: 1px solid #ffffff0b; } .np-mini .np-img { width: 92px; flex: none; }
 @media (max-width: 760px) { .np-grid { grid-template-columns: 1fr 1fr; } }
 .bcard .bpos { line-height: 1; transform: scale(.85); transform-origin: left center; } .bcard .bnm { display: block; font-size: 13px; }
+/* ===== trocas rápidas ===== */
+.qs-btn { position: relative; } .qs-btn i { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; border-radius: 8px; background: #ff9f43; color: #111; font: 800 10px/16px system-ui; font-style: normal; display: none; } .qs-btn i.on { display: block; }
+.qs-pop { position: absolute; left: 50%; bottom: 12px; transform: translate(-50%, 140%); width: min(420px, 92vw); background: #0b1210f2; border: 1px solid #ffffff22; border-radius: 14px; padding: 10px; z-index: 30; box-shadow: 0 10px 40px #000c; transition: transform .25s; backdrop-filter: blur(6px); }
+.qs-pop.on { transform: translate(-50%, 0); }
+.qs-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.qs-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: center; padding: 6px 8px; border-radius: 9px; background: #ffffff08; margin-top: 4px; font-size: 13px; cursor: pointer; }
+.qs-row:active { background: #ffffff18; }
+.qs-out { color: #ff7b7f; } .qs-in { color: #2fe08a; font-weight: 700; }
+.qs-why { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: #ffffff14; color: var(--mut); text-transform: uppercase; } .qs-why.lesionado { background: #ff5a5f33; color: #ff8a8d; } .qs-why.cansado { background: #ff9f4333; color: #ffb877; } .qs-why.pendurado { background: #f4c54233; color: #f4c542; }

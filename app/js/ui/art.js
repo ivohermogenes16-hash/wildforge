@@ -1,35 +1,75 @@
 import { IMG } from '../store.js';
 import { hash, seeded, esc } from '../util.js';
+import { LEAGUES } from '../data/leagues.js';
+const TOP1 = new Set(LEAGUES.filter((l) => l.tier === 1).map((l) => l.name));
 
 function lum(hex) { const n = parseInt(hex.slice(1), 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
 export const textOn = (hex) => (lum(hex) > 0.6 ? '#111' : '#fff');
 
 // Escudo original (cores + sigla), ou a imagem enviada pelo usuário
+const CREST_CACHE = new Map();
+const SHAPES = [
+  'M50 4 L92 16 V52 C92 76 72 90 50 98 C28 90 8 76 8 52 V16 Z',
+  'M12 6 H88 V50 C88 74 71 90 50 98 C29 90 12 74 12 50 Z',
+  'M50 3 C72 3 94 12 94 12 C94 60 80 84 50 98 C20 84 6 60 6 12 C6 12 28 3 50 3 Z',
+  'O',
+  'M10 8 H38 L50 2 L62 8 H90 V48 C90 74 72 90 50 98 C28 90 10 74 10 48 Z',
+  'M50 2 L94 20 L84 76 L50 98 L16 76 L6 20 Z',
+];
+function darker(hex, k = 0.35) { const n = parseInt(hex.slice(1), 16); const f = (v) => Math.round(v * (1 - k)); return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`; }
+function crestPattern(v, c1, c2) {
+  switch (v) {
+    case 1: return [0, 1, 2, 3, 4].map((i) => `<rect x="${6 + i * 20}" y="0" width="10" height="100" fill="${c2}"/>`).join('');
+    case 2: return [0, 1, 2, 3].map((i) => `<rect x="0" y="${14 + i * 24}" width="100" height="11" fill="${c2}"/>`).join('');
+    case 3: return `<polygon points="0,18 18,0 100,82 82,100" fill="${c2}"/>`;
+    case 4: return `<rect x="50" y="0" width="50" height="100" fill="${c2}"/>`;
+    case 5: return `<rect x="50" y="0" width="50" height="50" fill="${c2}"/><rect x="0" y="50" width="50" height="50" fill="${c2}"/>`;
+    case 6: return `<polygon points="0,30 50,62 100,30 100,48 50,80 0,48" fill="${c2}"/>`;
+    case 7: return `<rect x="42" y="0" width="16" height="100" fill="${c2}"/><rect x="0" y="40" width="100" height="16" fill="${c2}"/>`;
+    case 8: return `<rect x="0" y="0" width="100" height="32" fill="${c2}"/>`;
+    default: return '';
+  }
+}
 export function crest(c, size = 36) {
   if (!c) return `<span class="crest" style="width:${size}px;height:${size}px"></span>`;
   if (c.nat && c.flag) return `<span class="crest" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.8)}px;line-height:${size}px;text-align:center;display:inline-block">${c.flag}</span>`;
   const img = IMG.get('c:' + c.key);
   if (img) return `<img class="crest" src="${img}" width="${size}" height="${size}" alt="">`;
+  const stars = Math.min(5, (c.troph || []).filter((t) => TOP1.has(t.c)).length);
+  const ck = `${c.key || c.name}|${c.c1}|${c.c2}|${c.short}|${size}|${stars}`;
+  const hit = CREST_CACHE.get(ck); if (hit) return hit;
   const h = hash(c.key || c.name);
-  const v = h % 6, shape = (h >> 4) % 3;
-  const c1 = c.c1 || '#444', c2 = c.c2 || '#fff';
-  const path = shape === 0 ? 'M50 4 L92 16 V52 C92 76 72 90 50 98 C28 90 8 76 8 52 V16 Z'
-    : shape === 1 ? 'M14 6 H86 V50 C86 74 70 90 50 98 C30 90 14 74 14 50 Z'
-    : 'M50 3 C72 3 94 12 94 12 C94 60 80 84 50 98 C20 84 6 60 6 12 C6 12 28 3 50 3 Z';
+  const c1 = c.c1 || '#444', c2 = c.c2 && c.c2.toLowerCase() !== (c.c1 || '').toLowerCase() ? c.c2 : (lum(c1) > 0.5 ? '#111111' : '#ffffff');
+  const shape = SHAPES[h % SHAPES.length]; const v = (h >>> 3) % 9; const emb = (h >>> 7) % 4;
   const id = 'k' + h.toString(36) + size;
-  let pat = '';
-  if (v === 1) pat = [0, 1, 2, 3, 4].map((i) => `<rect x="${10 + i * 18}" y="0" width="9" height="100" fill="${c2}"/>`).join('');
-  else if (v === 2) pat = `<rect x="0" y="38" width="100" height="24" fill="${c2}"/>`;
-  else if (v === 3) pat = `<polygon points="0,20 20,0 100,80 80,100" fill="${c2}"/>`;
-  else if (v === 4) pat = `<rect x="50" y="0" width="50" height="100" fill="${c2}"/>`;
-  else if (v === 5) pat = `<rect x="0" y="0" width="100" height="30" fill="${c2}"/>`;
-  const label = (c.short || '').slice(0, 3);
-  const tc = v === 0 ? textOn(c1) : '#fff';
-  const stroke = v === 0 ? '' : `stroke="#000" stroke-opacity=".55" stroke-width="3" paint-order="stroke"`;
-  return `<svg class="crest" width="${size}" height="${size}" viewBox="0 0 100 100"><defs><clipPath id="${id}"><path d="${path}"/></clipPath></defs>
-<g clip-path="url(#${id})"><rect width="100" height="100" fill="${c1}"/>${pat}<rect width="100" height="100" fill="url(#gl)" opacity=".0"/></g>
-<path d="${path}" fill="none" stroke="${c2 === c1 ? '#fff' : c2}" stroke-width="5"/><path d="${path}" fill="none" stroke="#000" stroke-opacity=".25" stroke-width="1.5"/>
-<text x="50" y="${label.length > 2 ? 60 : 62}" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="900" font-size="${label.length > 2 ? 27 : 32}" fill="${tc}" ${stroke}>${esc(label)}</text></svg>`;
+  const label = (c.short || c.name.slice(0, 3)).slice(0, 3).toUpperCase();
+  const big = size >= 46;
+  let svg;
+  if (shape === 'O') {
+    // escudo redondo com anel e nome em volta
+    const name = esc((c.name || '').toUpperCase());
+    svg = `<svg class="crest" width="${size}" height="${size}" viewBox="0 0 100 100"><defs><clipPath id="${id}"><circle cx="50" cy="50" r="31"/></clipPath><path id="${id}t" d="M50 50 m-38 0 a38 38 0 1 1 76 0 a38 38 0 1 1 -76 0"/><radialGradient id="${id}g" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+<circle cx="50" cy="50" r="48" fill="${darker(c1, 0.15)}" stroke="${c2}" stroke-width="3"/><circle cx="50" cy="50" r="33" fill="none" stroke="${c2}" stroke-width="2"/>
+<g clip-path="url(#${id})"><rect width="100" height="100" fill="${c1}"/>${crestPattern(v, c1, c2)}</g>
+${big ? `<text font-family="'Barlow Condensed',system-ui,sans-serif" font-weight="800" font-size="10" letter-spacing="1.5" fill="${textOn(darker(c1, 0.15))}"><textPath href="#${id}t" startOffset="0">${name.length > 26 ? name.slice(0, 26) : name} • ${name.length > 26 ? '' : name.length < 14 ? name : ''}</textPath></text>` : ''}
+<text x="50" y="${label.length > 2 ? 58 : 60}" text-anchor="middle" font-family="'Barlow Condensed',system-ui,sans-serif" font-weight="900" font-size="${label.length > 2 ? 24 : 28}" fill="#fff" stroke="#000" stroke-opacity=".6" stroke-width="3" paint-order="stroke">${esc(label)}</text>
+<circle cx="50" cy="50" r="48" fill="url(#${id}g)"/></svg>`;
+  } else {
+    const tc = lum(c1) > 0.6 && lum(c2) > 0.6 ? '#111' : '#fff';
+    const stroke = `stroke="${tc === '#fff' ? '#000' : '#fff'}" stroke-opacity=".6" stroke-width="3" paint-order="stroke"`;
+    let mid;
+    if (emb === 1) mid = `<circle cx="50" cy="52" r="20" fill="${darker(c1, 0.25)}" stroke="${c2}" stroke-width="3"/><text x="50" y="${label.length > 2 ? 58 : 60}" text-anchor="middle" font-family="'Barlow Condensed',system-ui,sans-serif" font-weight="900" font-size="${label.length > 2 ? 17 : 22}" fill="${textOn(darker(c1, 0.25))}">${esc(label)}</text>`;
+    else if (emb === 2) mid = `<text x="50" y="66" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-weight="900" font-size="46" font-style="italic" fill="${tc}" ${stroke}>${esc(label[0])}</text>`;
+    else if (emb === 3) mid = `<rect x="14" y="40" width="72" height="22" fill="${darker(c2 === '#ffffff' ? c1 : c2, 0.2)}" stroke="${c2}" stroke-width="1.5"/><text x="50" y="57.5" text-anchor="middle" font-family="'Barlow Condensed',system-ui,sans-serif" font-weight="900" font-size="18" letter-spacing="2" fill="#fff">${esc(label)}</text>`;
+    else mid = `<text x="50" y="${label.length > 2 ? 60 : 62}" text-anchor="middle" font-family="'Barlow Condensed',system-ui,sans-serif" font-weight="900" font-size="${label.length > 2 ? 30 : 36}" fill="${tc}" ${stroke}>${esc(label)}</text>`;
+    svg = `<svg class="crest" width="${size}" height="${size}" viewBox="0 0 100 100"><defs><clipPath id="${id}"><path d="${shape}"/></clipPath><linearGradient id="${id}g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".25"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".25"/></linearGradient></defs>
+<g clip-path="url(#${id})"><rect width="100" height="100" fill="${c1}"/>${crestPattern(v, c1, c2)}<rect width="100" height="100" fill="url(#${id}g)"/></g>
+<path d="${shape}" fill="none" stroke="${c2}" stroke-width="5"/><path d="${shape}" fill="none" stroke="#000" stroke-opacity=".3" stroke-width="1.5"/>${mid}</svg>`;
+  }
+  if (stars) { const w = 9; const x0 = 50 - (stars * w) / 2 + w / 2; const st = Array.from({ length: stars }, (_, i) => `<polygon transform="translate(${x0 + i * w} ${shape === 'O' ? 9 : 0}) scale(.42)" points="0,-10 2.4,-3.1 9.5,-3.1 3.8,1.2 5.9,8.1 0,4 -5.9,8.1 -3.8,1.2 -9.5,-3.1 -2.4,-3.1" fill="#f4c542" stroke="#000" stroke-opacity=".4" stroke-width="1.5"/>`).join('');
+    svg = svg.replace('viewBox="0 0 100 100">', 'viewBox="0 -8 100 108">').replace('</svg>', st + '</svg>'); }
+  if (CREST_CACHE.size > 3000) CREST_CACHE.clear();
+  CREST_CACHE.set(ck, svg); return svg;
 }
 
 const SKIN = ['#f6d3b3', '#eec19a', '#e0ac7e', '#c98d5f', '#a86e45', '#8a5533', '#6b3e22', '#4e2c18'];

@@ -11,6 +11,9 @@ PAGES.editor = () => {
   const lg = S.edLg || 'BRA';
   const clubs = G.clubs.filter((c) => (lg === 'AMA' ? c.league === 'AMA' : lg === 'OUT' ? !c.league : c.league === lg));
   return `<div class="hint" style="margin-bottom:12px">Troque nomes, cores e escudos. Dá para colar a lista real de jogadores de qualquer clube. As imagens que você enviar ficam salvas só neste aparelho e valem também para novas carreiras.</div>
+  <div class="card flat imp-card"><h3>🖼️ Importar vários escudos de uma vez</h3><p class="xs mut">Selecione várias imagens da galeria (ou um arquivo .zip). Cada imagem é ligada ao clube pelo nome do arquivo: <b>Flamengo.png</b>, <b>Real Madrid.jpg</b>, <b>Boca Juniors.webp</b>... Acentos, maiúsculas e "FC/EC/SC" não importam. Também vale a sigla (ex.: <b>CAP.png</b>).</p>
+  <label class="btn pri blk">📂 Escolher imagens ou .zip<input type="file" accept="image/*,.zip,application/zip" multiple hidden data-ch="bulkcrest"></label>
+  ${S.impRep ? `<div class="imp-rep"><b>${S.impRep.ok.length} escudos aplicados</b>${S.impRep.bad.length ? ` · ${S.impRep.bad.length} sem clube correspondente: <span class="xs mut">${S.impRep.bad.slice(0, 30).map(esc).join(', ')}${S.impRep.bad.length > 30 ? '…' : ''}</span>` : ''}</div>` : ''}</div>
   <select data-ch="edlg" style="margin-bottom:12px">${LEAGUES.map((l) => `<option value="${l.id}" ${lg === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}<option value="AMA" ${lg === 'AMA' ? 'selected' : ''}>Várzea</option><option value="OUT" ${lg === 'OUT' ? 'selected' : ''}>Fora das ligas</option></select>
   <div class="card flat" style="padding:4px 12px"><div class="list">${clubs.map((c) => `<div class="li tap" data-a="edclub" data-v="${c.id}">${crest(c, 34)}<div class="grow"><div class="b ell">${esc(c.name)}</div><div class="xs mut">${IMG.has('c:' + c.key) ? '🖼️ escudo próprio' : 'escudo gerado'}</div></div>›</div>`).join('') || '<div class="empty">Nenhum clube.</div>'}</div></div>`;
 };
@@ -99,4 +102,44 @@ H.bulkpl = (v) => {
     p.real = true; n++;
   });
   c.lineup = null; save(); toast(`${n} jogadores atualizados no ${c.name}`); replaceSheet(clubEd(c.id)); render();
+};
+
+// ===== importação em massa de escudos =====
+const STOP = new Set(['fc', 'cf', 'sc', 'ec', 'ac', 'cd', 'ca', 'cr', 'se', 'ud', 'sd', 'rc', 'afc', 'club', 'clube', 'de', 'do', 'da', 'futebol', 'football', 'futbol', 'calcio', 'esporte', 'sport', 'sporting', 'the', 'png', 'jpg']);
+const norm = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, ' e ').replace(/[^a-z0-9]+/g, ' ').trim();
+const loose = (t) => norm(t).split(' ').filter((w) => w && !STOP.has(w)).join('');
+function crestIndex(G) {
+  const ex = new Map(), lo = new Map(), sh = new Map();
+  for (const c of G.clubs) { if (!c || c.nat) continue; const a = norm(c.name).replace(/ /g, ''); if (!ex.has(a)) ex.set(a, c); const b = loose(c.name); if (b && !lo.has(b)) lo.set(b, c); if (c.short) { const k = c.short.toLowerCase(); sh.set(k, sh.has(k) ? null : c); } }
+  return (file) => { const base = file.replace(/^.*[\\/]/, '').replace(/\.[a-z0-9]+$/i, ''); const a = norm(base).replace(/ /g, ''); return ex.get(a) || lo.get(loose(base)) || (base.length <= 4 ? sh.get(base.toLowerCase()) : null) || null; };
+}
+async function unzip(blob) {
+  const buf = new Uint8Array(await blob.arrayBuffer()); const dv = new DataView(buf.buffer); const out = [];
+  let e = buf.length - 22; while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--; if (e < 0) return out;
+  let p = dv.getUint32(e + 16, true); const n = dv.getUint16(e + 10, true);
+  for (let i = 0; i < n; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const meth = dv.getUint16(p + 10, true), csz = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(buf.subarray(p + 46, p + 46 + nl)); p += 46 + nl + xl + cl;
+    if (name.endsWith('/') || /(^|\/)(__MACOSX|\.)/.test(name) || !/\.(png|jpe?g|webp|gif|svg|bmp)$/i.test(name)) continue;
+    const lnl = dv.getUint16(off + 26, true), lxl = dv.getUint16(off + 28, true); const data = buf.subarray(off + 30 + lnl + lxl, off + 30 + lnl + lxl + csz);
+    const type = /\.svg$/i.test(name) ? 'image/svg+xml' : /\.png$/i.test(name) ? 'image/png' : /\.webp$/i.test(name) ? 'image/webp' : 'image/jpeg';
+    try {
+      let b; if (meth === 0) b = new Blob([data], { type }); else if (meth === 8) b = await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob().then((x) => new Blob([x], { type })); else continue;
+      out.push({ name, blob: b });
+    } catch {}
+  }
+  return out;
+}
+H.bulkcrest = async (v, el) => {
+  const files = [...(el.files || [])]; if (!files.length) return;
+  const G = S.G; const find = crestIndex(G); const ok = [], bad = [];
+  toast('Lendo imagens…');
+  let items = [];
+  for (const f of files) { if (/\.zip$/i.test(f.name) || f.type.includes('zip')) { try { items = items.concat(await unzip(f)); } catch { bad.push(f.name); } } else items.push({ name: f.name, blob: f }); }
+  for (const it of items) {
+    const c = find(it.name); if (!c) { bad.push(it.name.replace(/^.*\//, '')); continue; }
+    try { await setImage('c:' + c.key, await fileToDataUrl(it.blob, 160)); ok.push(c.name); } catch { bad.push(it.name.replace(/^.*\//, '')); }
+  }
+  S.impRep = { ok, bad }; el.value = ''; toast(`${ok.length} escudo${ok.length === 1 ? '' : 's'} aplicado${ok.length === 1 ? '' : 's'}`); render();
 };

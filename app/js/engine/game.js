@@ -141,6 +141,7 @@ export function playSlot(G, userRes) {
   }
   progressComps(G);
   for (const e of G.events) onEvent(G, e);
+  recoverHalf(G);
   G.slot++;
   if (G.slot > 1) { G.slot = 0; endWeek(G); G.week++; G.t++; }
   if (G.week >= SEASON_WEEKS) endSeason(G);
@@ -163,10 +164,16 @@ function applyMatch(G, f, res) {
   for (let side = 0; side < 2; side++) {
     const gf = side ? f.ag : f.hg, ga = side ? f.hg : f.ag;
     const won = gf > ga, lost = gf < ga;
+    const xi0 = new Set(res.xi?.[side] || []); const hasSub = (res.ev || []).some((e) => e.t === 'sub');
     for (const id of played[side]) {
       const p = G.players[id]; if (!p) continue;
       p.st.j++; p.tot.j++;
-      p.fit = Math.max(20, p.fit - ri(9, 17));
+      // desgaste proporcional aos minutos jogados, posição e idade
+      let mins = 90; const si = (res.ev || []).find((e) => e.t === 'sub' && e.p === +id), so = (res.ev || []).find((e) => e.t === 'sub' && e.o === +id);
+      if (si) mins = 90 - si.m; if (so) mins = Math.min(mins, so.m - (si ? si.m : 0)); if (!hasSub && !res.played) mins = 82;
+      if (youth) mins *= 0.85;
+      p.fit = Math.max(25, p.fit - fitCost(p, mins));
+      if (p.fit < 62 && rnd() < (62 - p.fit) * 0.004) p.inj = Math.max(p.inj, ri(1, 3)); // músculo cansado se lesiona mais
       p.mor = clamp(p.mor + (won ? 4 : lost ? -4 : 0), 5, 100);
       p.playedW = (p.playedW || 0) + 1;
       let nota = 6.2 + (won ? 0.4 : lost ? -0.35 : 0) + gauss() * 0.45;
@@ -225,6 +232,20 @@ function userAfterMatch(G, f, res) {
 }
 
 const comp0 = (G, f) => G.comps[f.c] || {};
+const FITPOS = { GOL: 7, ZAG: 19, LD: 26, LE: 26, ALD: 27, ALE: 27, VOL: 24, MC: 26, MEI: 24, PD: 26, PE: 26, SA: 24, ATA: 22 };
+export function fitCost(p, mins) { const ag = p.age >= 33 ? 1.3 : p.age >= 30 ? 1.15 : p.age <= 21 ? 0.92 : 1; return Math.round((FITPOS[p.pos] || 24) * ag * Math.min(120, mins) / 90 + (rnd() * 6 - 3)); }
+// recuperação a cada meia semana (entre um jogo e outro)
+function recoverHalf(G) {
+  const job = G.me.job; const club = job ? G.clubs[job.cid] : null;
+  for (const p of G.players) {
+    if (!p || p.fit >= 100) continue;
+    const isMine = job && p.club === job.cid && !!p.u20 === !!job.youth;
+    const tr = isMine ? (p.u20 ? G.me.u20train || club.train : club.train) : { foco: 'equilibrado', int: 1 };
+    const ag = p.age >= 33 ? 0.78 : p.age >= 30 ? 0.88 : p.age <= 22 ? 1.1 : 1;
+    const base = [12, 9.5, 7][tr.int] ?? 9.5;
+    p.fit = Math.min(100, p.fit + (base + (isMine ? (recovBonus(G, club) + (TRAIN_FX[tr.foco]?.rec || 0)) / 2 : 0)) * ag * (p.inj > 0 ? 0.6 : 1));
+  }
+}
 function matchHeadline(G, f, res, my, op, gf, ga) {
   const sc = {}; for (const e of res.ev || res.events || []) if (e.t === 'gol' && G.players[e.p]?.club === my.id) sc[e.p] = (sc[e.p] || 0) + 1;
   const top = Object.entries(sc).sort((a, b) => b[1] - a[1])[0]; const hero = top ? G.players[top[0]] : null;
@@ -292,7 +313,6 @@ function endWeek(G) {
     const club = G.clubs[p.club];
     const isMine = G.me.job && p.club === G.me.job.cid && !!p.u20 === !!G.me.job.youth;
     const tr = isMine ? (p.u20 ? G.me.u20train || club.train : train) : { foco: 'equilibrado', int: 1 };
-    p.fit = Math.min(100, p.fit + [19, 14, 10][tr.int] + (isMine ? recovBonus(G, club) + (TRAIN_FX[tr.foco]?.rec || 0) : 0));
     p.mor += (65 - p.mor) * 0.06;
     if (!p.playedW && p.ovr >= 70 && club && !p.u20) p.mor -= 0.6;
     p.playedW = 0;

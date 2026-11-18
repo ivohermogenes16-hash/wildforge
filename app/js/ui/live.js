@@ -4,7 +4,7 @@ import { coachOf } from '../engine/life.js';
 import { esc } from '../util.js';
 import { crest, face } from './art.js';
 import { S, H, render, toast, openSheet, closeSheet, save, myLineup, posTag, wk, shortName } from './app.js';
-import { LiveMatch, FORMATIONS, formOf, MENT, PRESS, available, penalties } from '../engine/match.js';
+import { LiveMatch, FORMATIONS, formOf, MENT, PRESS, available, penalties, effAt } from '../engine/match.js';
 import { lineupFor, playSlot, myClub } from '../engine/game.js';
 import { MatchViz } from './viz.js';
 import { ratings } from '../engine/match.js';
@@ -32,7 +32,7 @@ export function preMatch(f) {
   openSheet(`${derby ? '<div class="derby">🔥 CLÁSSICO</div>' : ''}<div class="xs mut" style="text-align:center">${esc(comp.name)}${f.ko >= 0 ? ' · mata-mata' : ''} · ${wk(f.w)}</div>
   <div class="match-hero" style="margin:8px 0 12px"><div>${crest(hc, 56)}<div class="nm">${esc(hc.name)}</div></div><div class="vs">VS</div><div>${crest(ac, 56)}<div class="nm">${esc(ac.name)}</div></div></div>
   ${probs.length ? `<div class="hint bad" style="margin-bottom:8px">⚠️ Há jogador indisponível na escalação.</div>` : ''}
-  ${tired.length ? `<div class="hint warn" style="margin-bottom:8px">😮‍💨 Cansados: ${tired.map((p) => esc(shortName(p.n))).join(', ')}</div>` : ''}
+  ${tired.length ? `<div class="hint warn row" style="margin-bottom:8px;gap:8px;align-items:center"><span class="grow">😮‍💨 Cansados: ${tired.map((p) => esc(shortName(p.n)) + ' ' + Math.round(p.fit) + '%').join(', ')}</span><button class="btn sm" data-a="poupar" data-v="${f.i}">🔁 Poupar</button></div>` : ''}
   ${pm ? `<div class="card flat press-card"><h3>🎤 Coletiva pré-jogo</h3><div class="sm" style="margin-bottom:6px">${esc(pm.body)}</div>${pm.opts.map((o, i) => `<button class="btn sm blk" style="justify-content:flex-start;margin-bottom:4px;text-align:left" data-a="prepress" data-v="${pm.id}:${i}:${f.i}">“${esc(o.l)}”</button>`).join('')}</div>` : ''}
   ${!youth && ana >= 9 ? `<div class="hint" style="margin-bottom:8px">🔎 Analista (${ana}/20): o ${esc(opp.name)} joga no ${esc(opp.tact.form)} com mentalidade ${['defensiva', 'equilibrada', 'ofensiva'][opp.tact.ment]}. Ponto fraco: <b>${weak}</b>.</div>` : ''}
   ${!youth ? (() => { const st = oppStudy(G, opp); const rv = rivalOfClub(G, opp); const lines = R ? scoutReport(G, opp, R) : []; return `<div class="card flat"><h3>📋 Relatório do adversário</h3>${lines.map((l) => `<div class="xs" style="margin-bottom:3px">• ${esc(l)}</div>`).join('')}${st.extra > 0 ? `<div class="hint warn" style="margin-top:6px">🧠 Eles estudaram você: seu ${esc(st.form)} apareceu em ${Math.round(st.share * 100)}% dos últimos jogos. Vão neutralizá-lo (+${st.extra} de força para eles). Varie a formação!</div>` : st.n >= 5 ? '<div class="xs ok" style="margin-top:4px">✅ Você tem variado a tática: o rival não conseguiu te estudar.</div>' : ''}${rv ? `<div class="hint" style="margin-top:6px">⚔️ ${rv === 2 ? 'Grande rival' : 'Rival'}: ${esc(coachOf(G, opp)?.n || '')}. Jogo com mais repercussão na torcida e na imprensa.</div>` : ''}</div>`; })() : ''}
@@ -59,7 +59,18 @@ function setup(f) {
   return { m: new LiveMatch(G, f, side ? [theirs, mine] : [mine, theirs], { neutral: comp.kind === 'cont' && f.ko === comp.koWeeks.length - 1 }), side };
 }
 
-H.goquick = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m } = setup(f); finishMatch(f, m.finish()); };
+H.poupar = (v) => {
+  const G = S.G; const { xi, bench } = myLineup(); const youth = G.me.job.youth; const c = myClub(G);
+  const form = formOf(youth ? (G.me.u20tact || c.tact) : c.tact); const pool = G.players.filter((p) => p && p.club === c.id && !!p.u20 === !!youth && available(p));
+  let n = 0;
+  xi.forEach((id, k) => {
+    const p = G.players[id]; if (!p || p.fit >= 65) return; const slot = form[k][0];
+    let best = null, bv = -1; for (const q of pool) { if (xi.includes(q.id) || q.fit < Math.max(70, p.fit + 12)) continue; const v = effAt(q, slot); if (v > bv) { bv = v; best = q; } }
+    if (best && bv >= effAt(p, slot) * 0.85) { xi[k] = best.id; const bi = bench.indexOf(best.id); if (bi >= 0) bench[bi] = id; else if (!bench.includes(id)) { bench.pop(); bench.unshift(id); } n++; }
+  });
+  save(); toast(n ? `${n} titular${n > 1 ? 'es' : ''} poupado${n > 1 ? 's' : ''}` : 'Sem reservas descansados à altura'); closeSheet(true); preMatch(G.fix[+v]);
+};
+H.goquick = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m } = setup(f); finishMatch(f, m.finish(true)); };
 H.golive = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m, side } = setup(f); launchLive(f, m, side, S.G.clubs[f.h], S.G.clubs[f.a], null); };
 export function launchLive(f, m, side, hc, ac, done) {
   const G = S.G;
@@ -69,7 +80,7 @@ export function launchLive(f, m, side, hc, ac, done) {
      <div class="lv-team">${crest(hc, 30)}<span class="b ell">${esc(hc.name)}</span></div>
      <div class="lv-score"><span id="lsc">0 – 0</span><span class="lv-min" id="lmin">0'</span></div>
      <div class="lv-team r"><span class="b ell">${esc(ac.name)}</span>${crest(ac, 30)}</div>
-     <div class="lv-btns"><button class="btn sm" data-a="lnames" title="Nomes">Aa</button><button class="btn sm" data-a="lrep" id="lrp" title="Replays">🎬</button><button class="btn sm" data-a="lpause" id="lpb">⏸</button><button class="btn sm" data-a="lspeed" id="lsp">2x</button><button class="btn sm pri" data-a="ltact">Tática</button><button class="btn sm" data-a="lskip">⏭</button></div>
+     <div class="lv-btns"><button class="btn sm" data-a="lnames" title="Nomes">Aa</button><button class="btn sm" data-a="lrep" id="lrp" title="Replays">🎬</button><button class="btn sm qs-btn" data-a="lqs" id="lqsb" title="Trocas rápidas">🔄<i id="lqsn"></i></button><button class="btn sm" data-a="lpause" id="lpb">⏸</button><button class="btn sm" data-a="lspeed" id="lsp">2x</button><button class="btn sm pri" data-a="ltact">Tática</button><button class="btn sm" data-a="lskip">⏭</button></div>
    </div>
    <div class="lv-tl"><i id="ltlp"></i><span style="left:50%" class="ht"></span><div id="ltlm"></div></div>
    <div class="lv-main"><div class="lv-pitch"><canvas id="lcv"></canvas><div class="lv-nar" id="lnar"></div></div>
@@ -96,7 +107,7 @@ function loop(now) {
   if (!L) return;
   const dt = (now - L.last) / 1000; L.last = now;
   L.viz.update(dt); L.viz.draw();
-  if (L.m.min !== L.lastMin) { L.lastMin = L.m.min; narrate(); }
+  if (L.m.min !== L.lastMin) { L.lastMin = L.m.min; narrate(); qsRefresh(); }
   if (L.narT && now > L.narT) { const n = document.getElementById('lnar'); if (n) n.classList.remove('on'); L.narT = 0; }
   const mn = document.getElementById('lmin'); if (mn) mn.textContent = `${L.m.min}'`;
   const tp = document.getElementById('ltlp'); if (tp) tp.style.width = Math.min(100, L.m.min / 90 * 100) + '%';
@@ -165,7 +176,7 @@ function updPause() { const b = document.getElementById('lpb'); if (b) b.textCon
 H.lnames = () => { L.viz.names = !L.viz.names; };
 H.lpause = () => { L.viz.paused = !L.viz.paused; updPause(); };
 H.lspeed = () => { const v = L.viz; v.speed = v.speed === 1 ? 2 : v.speed === 2 ? 4 : v.speed === 4 ? 8 : 1; document.getElementById('lsp').textContent = v.speed + 'x'; };
-H.lskip = () => { L.viz.skipToEnd(); document.getElementById('lsc').textContent = `${L.m.score[0]} – ${L.m.score[1]}`; };
+H.lskip = () => { for (const sd of L.m.s) sd.user = false; L.viz.skipToEnd(); document.getElementById('lsc').textContent = `${L.m.score[0]} – ${L.m.score[1]}`; };
 
 H.ltact = () => {
   if (!L) return;
@@ -176,7 +187,7 @@ H.ltact = () => {
   openSheet(`<h2>Tática e substituições</h2>
   <div class="card flat"><h3>Mentalidade</h3><div class="seg" style="margin:0">${MENT.map((x, i) => `<button class="${sd.tact.ment === i ? 'on' : ''}" data-a="lment" data-v="${i}">${x}</button>`).join('')}</div>
   <h3 style="margin-top:12px">Pressão</h3><div class="seg" style="margin:0">${PRESS.map((x, i) => `<button class="${sd.tact.press === i ? 'on' : ''}" data-a="lpress" data-v="${i}">${x}</button>`).join('')}</div></div>
-  <div class="card flat"><h3><span>Substituições</span><span>${m.subs[s]}/5</span></h3><div class="hint" style="margin-bottom:8px">${L.subOut != null ? 'Agora escolha quem entra.' : 'Toque em quem vai sair.'}</div>
+  <div class="card flat"><h3><span>Substituições</span><span>${m.subs[s]}/5</span></h3><button class="btn sm blk" style="margin-bottom:8px" data-a="lqsheet">⚡ Fazer as trocas sugeridas (${m.suggestSubs(s, 3).length})</button><div class="hint" style="margin-bottom:8px">${L.subOut != null ? 'Agora escolha quem entra.' : 'Toque em quem vai sair.'}</div>
   <div class="cols2"><div class="list">${sd.xi.map((id, i) => { const p = G.players[id]; if (!p) return ''; const off = m.sent[s].has(id); const inj = m.ev.some((e) => e.t === 'les' && e.p === id); return `<div class="li tap" ${off ? '' : `data-a="lout" data-v="${id}"`} style="${L.subOut === id ? 'background:#f4c54222' : ''}${off ? ';opacity:.4' : ''}"><span class="xs mut" style="width:30px">${form[i][0]}</span><span class="grow b ell">${esc(p.n)} ${inj ? '🩹' : ''}${off ? ' 🟥' : ''}</span><span class="xs">⚡${Math.round(Math.max(30, p.fit - Math.max(0, m.min - 55) * 0.35))}</span><b style="width:24px;text-align:right">${p.ovr}</b></div>`; }).join('')}</div>
   <div class="list">${sd.bench.map((id) => { const p = G.players[id]; if (!p || used.has(id)) return ''; return `<div class="li tap" data-a="lin" data-v="${id}">${posTag(p.pos)}<span class="grow b ell">${esc(p.n)}</span><b style="width:24px;text-align:right">${p.ovr}</b></div>`; }).join('') || '<div class="empty">Banco vazio</div>'}</div></div></div>
   <button class="btn pri blk" data-a="lclose">Voltar ao jogo</button>`);
@@ -190,6 +201,28 @@ H.lin = (v) => {
   if (ok) { addFeed(L.m.ev[L.m.ev.length - 1]); toast('Substituição feita'); } else toast('Não foi possível (limite de 5)');
   L.subOut = null; closeSheet(); H.ltact();
 };
+// ===== trocas rápidas =====
+function qsRefresh() {
+  if (!L || L.m.done) return; const sg = L.m.suggestSubs(L.side, 3); L.qs = sg;
+  const n = document.getElementById('lqsn'); if (n) { n.textContent = sg.length || ''; n.className = sg.length ? 'on' : ''; }
+  const urgent = sg.some((x) => x.why === 'lesionado') || (sg.length && [60, 70, 78].includes(L.m.min) && L.qsAt !== L.m.min);
+  if (urgent && SET.qsPop !== false) { L.qsAt = L.m.min; qsPop(sg); }
+}
+function qsPop(sg) {
+  let el = document.getElementById('lqspop');
+  if (!el) { el = document.createElement('div'); el.id = 'lqspop'; el.className = 'qs-pop'; document.getElementById('live')?.appendChild(el); }
+  const G = S.G; const nm = (id) => esc(shortName(G.players[id]?.n || '?'));
+  el.innerHTML = `<div class="qs-h"><b>🔄 ${sg.length} troca${sg.length > 1 ? 's' : ''} sugerida${sg.length > 1 ? 's' : ''}</b><span class="xs mut">${L.m.min}' · ${5 - L.m.subs[L.side]} restantes</span></div>
+  ${sg.map((x, k) => `<div class="qs-row" data-a="lqs1" data-v="${k}"><span class="qs-out">⬇ ${nm(x.out)}</span><span class="qs-in">⬆ ${nm(x.in)}</span><span class="qs-why ${x.why}">${x.why}</span></div>`).join('')}
+  <div class="row" style="gap:6px;margin-top:6px"><button class="btn pri sm grow" data-a="lqsall">Fazer ${sg.length > 1 ? 'todas' : 'troca'}</button><button class="btn sm" data-a="lqsx">Agora não</button></div>`;
+  el.classList.add('on');
+}
+H.lqs = () => { if (!L) return; const sg = L.m.suggestSubs(L.side, 3); if (!sg.length) { toast(L.m.subs[L.side] >= 5 ? 'Você já fez as 5 trocas' : 'Nenhuma troca necessária agora 👍'); return; } qsPop(sg); };
+H.lqsheet = () => { const sg = L.m.suggestSubs(L.side, 3); if (!sg.length) { toast('Nenhuma troca necessária agora'); return; } L.qs = sg; doQs(sg); closeSheet(); H.ltact(); };
+H.lqsx = () => { document.getElementById('lqspop')?.classList.remove('on'); };
+function doQs(list) { let n = 0; for (const x of list) if (L.m.sub(L.side, x.out, x.in)) { addFeed(L.m.ev[L.m.ev.length - 1]); n++; } toast(n ? `${n} troca${n > 1 ? 's' : ''} feita${n > 1 ? 's' : ''}` : 'Não foi possível'); H.lqsx(); qsRefresh(); }
+H.lqsall = () => doQs(L.qs || []);
+H.lqs1 = (v) => { const x = (L.qs || [])[+v]; if (x) doQs([x]); };
 H.lclose = () => { closeSheet(); L.viz.paused = false; updPause(); };
 
 function endLive() {

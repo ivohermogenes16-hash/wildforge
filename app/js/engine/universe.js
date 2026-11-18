@@ -23,8 +23,8 @@ const PREF = ['jovens velozes', 'jogadores experientes', 'meias criativos', 'zag
 export function coachTraits(k) {
   if (!k) return k;
   const h = hash(k.n + k.id);
-  if (!TRAITS.includes(k.trait)) k.trait = TRAITS[h % TRAITS.length];
-  k.pref ||= PREF[(h >> 3) % PREF.length]; k.brel ??= 50 + (h % 30) - 10;
+  if (!TRAITS.includes(k.trait)) k.trait = TRAITS[(h >>> 0) % TRAITS.length];
+  if (!PREF.includes(k.pref)) k.pref = PREF[(h >>> 3) % PREF.length]; k.brel ??= 50 + (h % 30) - 10;
   return k;
 }
 // o traço do técnico muda o orçamento de contratações da IA
