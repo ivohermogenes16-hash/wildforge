@@ -76,8 +76,8 @@ export function render() {
   if (same) app.querySelector('main').scrollTop = sc;
   try { S.afterRender?.(); } catch (e) { console.warn(e); }
 }
-H.tab = (v) => { S.tab = v; S.page = null; S.sel = null; app.dataset.view = ''; render(); };
-H.go = (v) => { S.page = v; app.dataset.view = ''; render(); };
+H.tab = (v) => { try { window.LumbraAnalytics?.event('tela', { aba: v }); } catch {} S.tab = v; S.page = null; S.sel = null; app.dataset.view = ''; render(); };
+H.go = (v) => { try { window.LumbraAnalytics?.event('tela', { pagina: v }); } catch {} S.page = v; app.dataset.view = ''; render(); };
 H.back = () => { S.page = PAGES_BACK[S.page] || null; render(); };
 H.sub = (v) => { const [k, s] = v.split(':'); S.sub[k] = s; S.sel = null; render(); };
 const seg = (k, items) => `<div class="seg">${items.map(([v, l]) => `<button class="${S.sub[k] === v ? 'on' : ''}" data-a="sub" data-v="${k}:${v}">${l}</button>`).join('')}</div>`;

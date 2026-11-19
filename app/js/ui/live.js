@@ -76,6 +76,7 @@ H.goquick = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m } = setu
 H.golive = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m, side } = setup(f); launchLive(f, m, side, S.G.clubs[f.h], S.G.clubs[f.a], null); };
 export function launchLive(f, m, side, hc, ac, done) {
   const G = S.G;
+  try { window.LumbraAnalytics?.event('partida_inicio', { modo: m || '', base: G.me.job?.youth ? 1 : 0 }); } catch {}
   const wrap = document.createElement('div'); wrap.className = 'live-wrap'; wrap.id = 'live';
   wrap.innerHTML = `<div class="lv">
    <div class="lv-top">
@@ -320,6 +321,7 @@ H.postana = (v) => {
 };
 export function finishMatch(f, res) {
   const G = S.G;
+  try { window.LumbraAnalytics?.event('partida_fim', { mata_mata: f.ko >= 0 ? 1 : 0 }); } catch {}
   if (f.ko >= 0 && res.hg === res.ag) res.pen = penalties();
   const w = f.w, sl = f.s, c = myClub(G);
   playSlot(G, res);

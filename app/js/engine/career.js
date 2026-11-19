@@ -50,6 +50,7 @@ export function invest(G, kind, amount) {
 // ---------- Clube próprio ----------
 export function foundClub(G, o) {
   const me = G.me;
+  try { window.LumbraAnalytics?.event('clube_criado'); } catch {}
   if (me.own != null) return { ok: false, why: 'Você já tem um clube.' };
   if (me.money < FOUND_COST + o.aporte) return { ok: false, why: `Você precisa de ${money(FOUND_COST + o.aporte)}.` };
   me.money -= FOUND_COST + o.aporte;
@@ -95,6 +96,7 @@ export function safQuote(G, cid, pct, fund) {
 
 export function buySAF(G, cid, pct, fund) {
   const c = G.clubs[cid]; const me = G.me;
+  try { window.LumbraAnalytics?.event('saf_compra', { pct }); } catch {}
   const free = c.own.assoc;
   if (pct + (fund ? Math.min(30, 90 - pct) : 0) > free) return { ok: false, why: `Só ${free}% das ações estão disponíveis.` };
   const q = safQuote(G, cid, pct, fund);

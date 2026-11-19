@@ -18,6 +18,7 @@ import { initBiz, bizWeek, bizSeasonEnd, groupWeek, academyWeek, academySeason, 
 import { coachOf, isDerby as derbyOf } from './life.js';
 
 export function newGame(opts) {
+  try { window.LumbraAnalytics?.event('carreira_nova', { base: opts?.youth ? 1 : 0 }); } catch {}
   const G = { v: 1, year: START_YEAR, week: 0, slot: 0, t: 0, inbox: [], news: [], events: [], vac: [], short: [], seen: {}, qual: null };
   createWorld(G);
   G.me = {
