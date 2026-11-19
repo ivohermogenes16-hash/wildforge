@@ -28,6 +28,12 @@ export const INSTR = {
   passe: { n: 'Passes', o: ['Curtos', 'Mistos', 'Longos'], fx: [{ ctl: 1.5, att: -0.5 }, {}, { att: 1, ctl: -1.5 }] },
   marc: { n: 'Marcação', o: ['Por zona', 'Individual'], fx: [{}, { def: 0.8, ctl: -0.4 }] },
   bola: { n: 'Bolas paradas', o: ['Curtas', 'Na área'], fx: [{ ctl: 0.3 }, { att: 0.6 }] },
+  contra: { n: 'Contra-ataque', o: ['Não', 'Sim'], fx: [{}, { att: 0.4, ctl: -0.8, def: 0.4 }] },
+  impd: { n: 'Linha de impedimento', o: ['Não', 'Sim'], fx: [{}, { def: 0.5, ctl: 0.3 }] },
+  foco: { n: 'Lado do ataque', o: ['Esquerda', 'Equilibrado', 'Direita'], fx: [{ att: 0.3 }, {}, { att: 0.3 }] },
+  perda: { n: 'Ao perder a bola', o: ['Recompor', 'Normal', 'Pressionar na hora'], fx: [{ def: 0.8, ctl: -0.4 }, {}, { ctl: 0.9, def: -0.5 }] },
+  cera: { n: 'Segurar o jogo', o: ['Não', 'Quando estiver ganhando'], fx: [{}, {}] },
+  liber: { n: 'Liberdade criativa', o: ['Disciplinado', 'Normal', 'Livre'], fx: [{ def: 0.5, att: -0.4 }, {}, { att: 0.8, def: -0.5 }] },
 };
 export function instrFx(t) { const r = { att: 0, def: 0, ctl: 0 }; for (const [k, d] of Object.entries(INSTR)) { const f = d.fx[t?.[k] ?? (d.o.length === 3 ? 1 : 0)] || {}; for (const x of ['att', 'def', 'ctl']) r[x] += f[x] || 0; } return r; }
 // formação do time (aceita formação personalizada arrastando no campinho)
@@ -114,8 +120,8 @@ export function ratings(G, club, xi, minute = 0, tact = club.tact, extra = 0, bo
 
 export function lambdas(Rh, Ra, neutral) {
   const ctl = Math.exp((Rh.ctl - Ra.ctl) / 40);
-  const lh = clamp(1.16 * Math.exp((Rh.att - Ra.def) / 20) * Math.sqrt(ctl) * (neutral ? 0.92 : 1.08), 0.08, 5.5);
-  const la = clamp(1.16 * Math.exp((Ra.att - Rh.def) / 20) / Math.sqrt(ctl) * (neutral ? 0.92 : 0.86), 0.08, 5.5);
+  const lh = clamp(1.16 * Math.exp((Rh.att - Ra.def) / 17) * Math.sqrt(ctl) * (neutral ? 0.92 : 1.08), 0.08, 5.5);
+  const la = clamp(1.16 * Math.exp((Ra.att - Rh.def) / 17) / Math.sqrt(ctl) * (neutral ? 0.92 : 0.86), 0.08, 5.5);
   return [lh, la];
 }
 
@@ -156,22 +162,42 @@ export class LiveMatch {
     this.ball = { x: 0.5, y: 0.5, own: 0 }; this.played = [new Set(sides[0].xi), new Set(sides[1].xi)];
     this.done = false; this.half = false;
     this.en = {}; for (const sd of sides) for (const id of sd.xi) { const p = G.players[id]; if (p) this.en[id] = p.fit; }
+    // clima, gramado, árbitro e estatísticas avançadas
+    const wk = f?.w ?? 0; const cold = wk > 20 && wk < 33;
+    this.weather = opt.weather || pick(cold ? ['sol', 'nublado', 'chuva', 'frio', 'frio'] : ['sol', 'sol', 'nublado', 'chuva', 'calor']);
+    this.pitch = opt.pitch || pick(['ótimo', 'bom', 'bom', 'irregular']);
+    this.ref = opt.ref || makeRef(f);
+    this.st.xg = [0, 0]; this.st.pas = [0, 0]; this.st.pok = [0, 0]; this.st.imp = [0, 0];
+    this.heat = [new Array(48).fill(0), new Array(48).fill(0)]; this.net = [{}, {}]; this.lances = 0; this.pend = null;
   }
+  wx() { return { chuva: { ctl: -1.5, err: 0.06 }, calor: { fit: 1.15 }, frio: { fit: 0.95 }, sol: {}, nublado: {} }[this.weather] || {}; }
   form(i) { return formOf(this.s[i].tact); }
-  R(i) { const sd = this.s[i]; return ratings(this.G, sd.club, sd.xi.map((id) => (this.sent[i].has(id) ? -1 : id)), this.min, sd.tact, sd.extra || 0, sd.bon, this.en); }
+  R(i) { const sd = this.s[i]; const r = ratings(this.G, sd.club, sd.xi.map((id) => (this.sent[i].has(id) ? -1 : id)), this.min, sd.tact, (sd.extra || 0) + tacticEdge(sd.tact, this.s[1 - i].tact), sd.bon, this.en);
+    const w = this.wx(); if (w.ctl) { r.ctl += w.ctl * (sd.tact.passe === 0 ? 1.4 : 0.6); } if (this.pitch === 'irregular' && sd.tact.passe === 0) r.ctl -= 1;
+    if (sd.tact.cera === 1 && this.score[i] > this.score[1 - i] && this.min > 70) { r.def += 1.2; r.att -= 1.5; }
+    return r; }
   name(id) { const p = this.G.players[id]; return p ? p.n : '—'; }
   push(e) { e.m = this.min; this.ev.push(e); return e; }
   step() {
     if (this.done) return [];
+    if (this.pend) { if (this.auto || (!this.s[0].user && !this.s[1].user)) return this.resolveLance(rnd() < (this.pend.q || 0.3)); return []; }
     this.min++;
-    for (const i of [0, 1]) { const sd = this.s[i]; for (const id of sd.xi) { if (this.sent[i].has(id)) continue; const p = this.G.players[id]; if (!p) continue; if (this.en[id] == null) this.en[id] = p.fit; this.en[id] = Math.max(15, this.en[id] - fitRate(p, sd.tact) * (this.min > 45 ? 1.12 : 0.88) * (0.85 + Math.random() * 0.3)); } }
+    for (const i of [0, 1]) { const sd = this.s[i]; for (const id of sd.xi) { if (this.sent[i].has(id)) continue; const p = this.G.players[id]; if (!p) continue; if (this.en[id] == null) this.en[id] = p.fit; this.en[id] = Math.max(15, this.en[id] - fitRate(p, sd.tact) * (this.wx().fit || 1) * (this.min > 45 ? 1.12 : 0.88) * (0.85 + Math.random() * 0.3)); } }
     for (const i of [0, 1]) aiInMatch(this.G, i, this.s[i], this.score, this.min);
     const out = [];
     const R0 = this.R(0), R1 = this.R(1);
     const [l0, l1] = lambdas(R0, R1, this.opt.neutral);
     const pos0 = clamp(0.5 + (R0.ctl - R1.ctl) / 50, 0.28, 0.72);
     const own = rnd() < pos0 ? 0 : 1; this.st.pos[own]++;
-    this.ball.own = own;
+    this.ball.own = own; this.track(own, R0, R1);
+    if (this.pend) return out;
+    // pênalti em falta na área (com checagem do VAR às vezes)
+    if (this.min !== 45 && this.min < 89 && rnd() < 0.0055) { const sdp = this.s[own]; const xip = sdp.xi.filter((id) => !this.sent[own].has(id)); const tk = pickScorer(this.G, xip, this.form(own)); const gkp = this.s[1 - own].xi.find((id, k) => this.form(1 - own)[k][0] === 'GOL');
+      if (this.s[own].user && !this.auto) { this.pend = { t: 'lance', kind: 'pen', side: own, p: tk, gk: gkp, q: 0.76, xg: 0.76, var: rnd() < 0.3 }; out.push(this.push({ ...this.pend })); return out; }
+      if (this.s[1 - own].user && !this.auto) { this.pend = { t: 'lance', kind: 'defpen', side: own, p: tk, gk: gkp, q: 0.76, xg: 0.76, var: rnd() < 0.3 }; out.push(this.push({ ...this.pend })); return out; }
+      this.st.sh[own]++; this.st.xg[own] += 0.76; out.push(this.push({ t: 'pen', side: own, p: tk }));
+      if (rnd() < 0.76) { this.score[own]++; this.st.ont[own]++; out.push(this.push({ t: 'gol', side: own, p: tk, as: -1, pen: true, xg: 0.76 })); } else out.push(this.push({ t: 'def', side: own, p: tk, gk: gkp, pen: true, xg: 0.76 }));
+    }
     const lam = own === 0 ? l0 : l1, posS = own === 0 ? pos0 : 1 - pos0;
     const conv = 0.3;
     const pChance = lam / (conv * 90 * posS);
@@ -182,18 +208,25 @@ export class LiveMatch {
       const gkId = opp.xi.find((id, i) => this.form(1 - own)[i][0] === 'GOL');
       const sp = this.G.players[shooter], gk = this.G.players[gkId];
       const q = conv * Math.exp(((sp ? sp.ovr : 60) - (gk ? gk.ovr : 60)) / 40);
-      this.st.sh[own]++;
+      this.st.sh[own]++; const xg = Math.round(clamp(q * (0.6 + rnd() * 0.8), 0.02, 0.85) * 100) / 100; this.st.xg[own] = Math.round((this.st.xg[own] + xg) * 100) / 100;
+      // lance decisivo jogável (só para o time do usuário, nos momentos que importam)
+      const userSide = this.s[own].user && !this.auto; const close = Math.abs(this.score[0] - this.score[1]) <= 1;
+      if (userSide && this.lances < 2 && this.min >= 55 && this.min < 89 && close && rnd() < 0.22) { this.lances++; const kind = pick(['pen', 'falta', '1x1']); this.pend = { t: 'lance', kind, side: own, p: shooter, gk: gkId, q, xg }; out.push(this.push({ ...this.pend })); return out; }
+      if (!this.s[1 - own].user || this.auto ? false : (this.lances < 2 && this.min >= 60 && this.min < 89 && close && rnd() < 0.12)) { this.lances++; this.pend = { t: 'lance', kind: 'defpen', side: own, p: shooter, gk: gkId, q, xg }; out.push(this.push({ ...this.pend })); return out; }
       const r = rnd();
       if (r < q) {
         this.score[own]++; this.st.ont[own]++;
         const as = rnd() < 0.7 ? pickScorer(this.G, xi, this.form(own), AW, shooter) : -1;
-        out.push(this.push({ t: 'gol', side: own, p: shooter, as }));
-      } else if (r < q + 0.32) { this.st.ont[own]++; out.push(this.push({ t: 'def', side: own, p: shooter, gk: gkId })); }
-      else if (r < q + 0.38) out.push(this.push({ t: 'trave', side: own, p: shooter }));
-      else { out.push(this.push({ t: 'fora', side: own, p: shooter })); if (rnd() < 0.35) { this.st.cor[own]++; } }
+        const ge = this.push({ t: 'gol', side: own, p: shooter, as, xg });
+        if (rnd() < 0.07) { this.score[own]--; ge.t = 'var'; ge.res = 'anulado'; ge.why = pick(['impedimento', 'falta no início da jogada', 'mão na bola']); }
+        else if (rnd() < 0.06) ge.var = 'confirmado';
+        out.push(ge);
+      } else if (r < q + 0.32) { this.st.ont[own]++; out.push(this.push({ t: 'def', side: own, p: shooter, gk: gkId, xg })); }
+      else if (r < q + 0.38) out.push(this.push({ t: 'trave', side: own, p: shooter, xg }));
+      else { out.push(this.push({ t: 'fora', side: own, p: shooter, xg })); if (rnd() < 0.35) { this.st.cor[own]++; } }
     } else if (rnd() < 0.035 * (opp.tact.press + 1) / 2) {
       this.st.fal[1 - own]++;
-      if (rnd() < 0.16) {
+      if (rnd() < 0.16 * (this.ref?.k || 1)) {
         const oxi = opp.xi.filter((id) => !this.sent[1 - own].has(id));
         const p = pick(oxi);
         const already = this.ev.some((e) => e.t === 'am' && e.p === p);
@@ -263,11 +296,38 @@ export class LiveMatch {
     const n = inj ? 1 : this.min === 60 ? 2 - this.subs[i] : 1;
     for (const sg of this.suggestSubs(i, Math.max(1, n))) if (this.sub(i, sg.out, sg.in)) out.push(this.ev[this.ev.length - 1]);
   }
-  finish(auto) { if (auto) for (const sd of this.s) sd.user = false; while (!this.done) this.step(); return this.result(); }
+  track(own, R0, R1) {
+    const sd = this.s[own], form = this.form(own), xi = sd.xi.filter((id) => !this.sent[own].has(id)); const R = own ? R1 : R0, O = own ? R0 : R1;
+    const n = 4 + Math.round(rnd() * 4 + (sd.tact.passe === 0 ? 3 : sd.tact.passe === 2 ? -1 : 0)); const acc = clamp(0.78 + (R.ctl - O.ctl) / 120 + (sd.tact.passe === 0 ? 0.04 : sd.tact.passe === 2 ? -0.06 : 0) - (this.wx().err || 0), 0.6, 0.93);
+    this.st.pas[own] += n; this.st.pok[own] += Math.round(n * acc);
+    for (let k = 0; k < n; k++) { const a = Math.floor(rnd() * xi.length), b = Math.floor(rnd() * xi.length); if (a === b) continue; const ia = sd.xi.indexOf(xi[a]), ib = sd.xi.indexOf(xi[b]); const fa = form[ia], fb = form[ib]; if (!fa || !fb) continue;
+      if (Math.hypot(fa[1] - fb[1], fa[2] - fb[2]) > 0.42) continue; const key = xi[a] < xi[b] ? xi[a] + '-' + xi[b] : xi[b] + '-' + xi[a]; this.net[own][key] = (this.net[own][key] || 0) + 1; }
+    const adv = clamp(0.5 + (R.att - O.def) / 60 + (sd.tact.ment - 1) * 0.08, 0.2, 0.85);
+    for (let k = 0; k < 3; k++) { const y = clamp(Math.floor((rnd() < adv ? 0.45 + rnd() * 0.55 : rnd() * 0.6) * 8), 0, 7); const wide = sd.tact.larg === 2 ? (rnd() < 0.6 ? (rnd() < 0.5 ? 0 : 5) : Math.floor(rnd() * 6)) : sd.tact.larg === 0 ? 1 + Math.floor(rnd() * 4) : Math.floor(rnd() * 6); this.heat[own][y * 6 + wide]++; }
+  }
+  // resultado do lance decisivo jogado pelo usuário
+  resolveLance(ok) {
+    const L = this.pend; if (!L) return []; this.pend = null; const out = [];
+    this.st.sh[L.side]++; this.st.xg[L.side] = Math.round((this.st.xg[L.side] + (L.xg || 0.3)) * 100) / 100;
+    if (L.kind === 'defpen') ok = !ok; // no pênalti contra, "ok" = o goleiro defendeu
+    if (ok) { this.score[L.side]++; this.st.ont[L.side]++; out.push(this.push({ t: 'gol', side: L.side, p: L.p, as: -1, lance: L.kind, pen: L.kind === 'pen' || L.kind === 'defpen', xg: L.xg })); }
+    else { this.st.ont[L.side]++; out.push(this.push({ t: 'def', side: L.side, p: L.p, gk: L.gk, lance: L.kind, xg: L.xg })); }
+    return out;
+  }
+  finish(auto) { this.auto = true; if (auto) for (const sd of this.s) sd.user = false; if (this.pend) this.resolveLance(rnd() < (this.pend.q || 0.3)); while (!this.done) this.step(); return this.result(); }
   result() {
     const tot = this.st.pos[0] + this.st.pos[1] || 1;
-    return { en: this.en, hg: this.score[0], ag: this.score[1], ev: this.ev.filter((e) => ['gol', 'am', 'ver', 'les', 'sub'].includes(e.t)), stats: { pos: [Math.round(this.st.pos[0] / tot * 100), 0], sh: this.st.sh, ont: this.st.ont }, played: this.played, xi: [this.s[0].xi, this.s[1].xi] };
+    return { en: this.en, hg: this.score[0], ag: this.score[1], ev: this.ev.filter((e) => ['gol', 'am', 'ver', 'les', 'sub'].includes(e.t)), stats: { pos: [Math.round(this.st.pos[0] / tot * 100), 0], sh: this.st.sh, ont: this.st.ont, xg: this.st.xg, pas: this.st.pas, pok: this.st.pok, cor: this.st.cor, fal: this.st.fal }, adv: { netXi: [this.s[0].xi.slice(), this.s[1].xi.slice()], weather: this.weather, pitch: this.pitch, ref: this.ref, heat: this.heat, net: this.net.map((o) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 14)), var: this.ev.filter((e) => e.t === 'var' || e.var).map((e) => ({ m: e.m, side: e.side, res: e.res || e.var, why: e.why || '' })) }, played: this.played, xi: [this.s[0].xi, this.s[1].xi] };
   }
 }
 
+const REFN = ['Anderson Daronco', 'Raphael Claus', 'Wilton Sampaio', 'Ramon Abatti', 'Bruno Arleu', 'Savio Pereira', 'Flávio de Souza', 'Paulo Zanovelli', 'Rafael Klein', 'Braulio Machado'];
+export function makeRef(f) { const k = ((f?.h ?? 1) * 31 + (f?.a ?? 2) * 17 + (f?.w ?? 0)) % REFN.length; const rig = [0.75, 1, 1, 1.3][k % 4]; return { n: 'Árbitro ' + (k + 1), nome: REFN[k], k: rig, perfil: rig > 1.1 ? 'rigoroso' : rig < 0.9 ? 'deixa o jogo correr' : 'equilibrado' }; }
+// vantagem tática: algumas escolhas funcionam melhor contra outras
+export function tacticEdge(a, b) { if (!a || !b) return 0; let e = 0;
+  if (a.contra === 1 && b.ment === 2) e += 1.2; if (a.contra === 1 && b.ment === 0) e -= 0.6;
+  if (a.press === 2 && b.passe === 2) e += 0.6; if (a.press === 2 && b.passe === 0) e -= 0.4;
+  if (a.linha === 2 && b.contra === 1) e -= 0.8; if (a.impd === 1 && b.passe === 2) e += 0.5;
+  if (a.larg === 2 && b.larg === 0) e += 0.4; if (a.perda === 2 && b.tempo === 0) e += 0.4;
+  return e; }
 export function penalties() { let a = 0, b = 0; for (let i = 0; i < 5; i++) { if (rnd() < 0.76) a++; if (rnd() < 0.76) b++; } while (a === b) { if (rnd() < 0.76) a++; if (rnd() < 0.76) b++; } return [a, b]; }

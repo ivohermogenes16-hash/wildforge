@@ -1,3 +1,4 @@
+import { playerExtraHtml } from './extra.js';
 import { SET } from '../settings.js';
 import { playerExtra, scoutNetView } from './universe.js';
 import { onPromote } from '../engine/universe.js';
@@ -68,6 +69,7 @@ H.player = (v) => {
       <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:3px">${posTag(p.pos)}<span class="xs">${POS_NAME[p.pos]}</span><span class="xs">· ${p.age} anos ${FLAG[p.nat] || ''}</span></div>
       <div class="xs" style="margin-top:5px">${c ? clubTag(c, 16) : '<span class="mut">Sem clube</span>'}</div></div>
     ${ring(p.ovr, potRange(p, mine), d)}</div>
+  ${playerExtraHtml(G, p, seniorMine && !p.u20)}
   <div class="pf-grid">
     <div class="card flat pf-card"><h3>Atributos</h3>${radar(at)}</div>
     <div class="card flat pf-card"><h3><span>Evolução</span>${d ? `<span class="dl ${d > 0 ? 'up' : 'dn'}">${d > 0 ? '▲' : '▼'}${Math.abs(d)} na temporada</span>` : '<span class="xs mut">estável</span>'}</h3>${evoChart(hist, p.pot, p)}</div>
@@ -228,7 +230,7 @@ H.ffree = () => { S.filt.free = !S.filt.free; render(); };
 // ---------- MAIS ----------
 PAGES.more = () => {
   const G = S.G; const unread = G.inbox.filter((m) => !m.read).length;
-  const T = [['inbox', '📩', 'Caixa de entrada', 'Propostas e avisos', unread], ['noticias', '📰', 'Notícias', 'O que rola no futebol'], ['financas', '💰', 'Patrimônio', 'Salário e investimentos'], ['meuclube', '🏗️', 'Meu clube & SAF', 'Fundar clube, comprar ações'], ['editor', '✏️', 'Editor', 'Nomes, escudos e fotos'], ['opcoes', '⚙️', 'Opções', 'Salvar, ajuda, nova carreira']];
+  const T = [['inbox', '📩', 'Caixa de entrada', 'Propostas e avisos', unread], ['noticias', '📰', 'Notícias', 'O que rola no futebol'], ['financas', '💰', 'Patrimônio', 'Salário e investimentos'], ['meuclube', '🏗️', 'Meu clube & SAF', 'Fundar clube, comprar ações'], ['trofeus', '🏆', 'Sala de troféus', 'Títulos, prêmios e temporadas'], ['lendas', '🌟', 'Mural de lendas', 'Lendas e Bola de Ouro'], ['estadio', '🏟️', 'Estádio e torcida', 'Público, sócios e mosaicos'], ['uniformes', '👕', 'Uniformes', 'Cores e modelos'], ['pacotes', '📦', 'Pacotes e escudos', 'Instalar, exportar, assistente'], ['editor', '✏️', 'Editor', 'Nomes, escudos e fotos'], ['opcoes', '⚙️', 'Opções', 'Salvar, ajuda, nova carreira']];
   return `<div class="tiles t3">${T.map(([k, ic, t, d, b]) => `<button class="tile" data-a="go" data-v="${k}"><span class="ic">${ic}</span><span class="tt">${t}</span><span class="ds">${d}</span>${b ? `<span class="badge">${b}</span>` : ''}</button>`).join('')}</div>`;
 };
 for (const k of ['inbox', 'noticias', 'clube', 'carreira', 'financas', 'meuclube', 'ligas', 'editor', 'opcoes']) PAGES_BACK[k] = null;

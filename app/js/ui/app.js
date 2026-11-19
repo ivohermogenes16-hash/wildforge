@@ -3,7 +3,7 @@ import { crest, face, ovrBadge, ICONS, FLAG, ovrColor, textOn } from './art.js';
 import { saveGame } from '../store.js';
 import { SEASON_WEEKS, playerValue } from '../engine/econ.js';
 import { myClub, userFixNow, nextUserFix, playSlot, strength, lineupFor, answerPress, takeJob, setObjective } from '../engine/game.js';
-import { standings, fixturesOf } from '../engine/season.js';
+import { standings, fixturesOf, koWinner } from '../engine/season.js';
 import { FORMATIONS, MENT, PRESS, ratings, autoLineup, available, formOf, roleAt } from '../engine/match.js';
 
 export const S = { G: null, tab: 'home', sub: { sq: 'elenco', jg: 'cal', mk: 'busca', base: 'elenco', tat: 'res' }, page: null, sel: null, comp: null, filt: { pos: '', min: '', age: '', league: '', free: false, q: '' }, sqView: 'main', sort: 'pos' };
@@ -68,12 +68,13 @@ export function render() {
   app.innerHTML = `<nav class="rail">${NAV.filter(([k]) => k !== 'nat' || S.G.me.nat).map(([k, l, ic]) => `<button class="${S.tab === k && !S.page ? 'on' : ''}" data-a="tab" data-v="${k}">${ICONS[ic]}<span>${l}</span>${k === 'more' && unread ? `<span class="badge">${unread}</span>` : ''}</button>`).join('')}</nav>
   <div class="right"><header class="top">${S.page ? `<button class="btn sm" data-a="back">‹ Voltar</button>` : c ? crest(c, 32) : '<span class="logo" style="font-size:20px">P<span>.</span></span>'}
     <div class="grow"><div class="t1 ell">${esc(S.page ? (PAGES_T[S.page] || '') : title)}</div><div class="t2">${dateStr(Math.min(G.week, SEASON_WEEKS - 1), true)} de ${G.year} ${G.me.job && !G.me.job.youth ? (inWindow(G) ? '<span class="mk-pill open">Mercado aberto</span>' : '<span class="mk-pill">Mercado fechado</span>') : `· sem. ${Math.min(G.week, SEASON_WEEKS - 1) + 1}/${SEASON_WEEKS}`}${c && G.me.obj ? ` · 🎯 ${esc(G.me.obj.text)}` : ''}</div></div>
-    <button class="icon-btn" data-a="go" data-v="inbox">📩${unread ? `<span class="badge">${unread}</span>` : ''}</button>
+    <button class="icon-btn" data-a="search" title="Buscar">🔎</button><button class="icon-btn" data-a="go" data-v="inbox">📩${unread ? `<span class="badge">${unread}</span>` : ''}</button>
     <span class="money-pill" data-a="go" data-v="financas">${money(G.me.money)}</span>
     <button class="btn pri cont" data-a="continue">${now ? '▶ Jogo' : 'Continuar'} ›</button></header>
   <main class="${same ? '' : 'enter'}">${body}</main></div>`;
   app.dataset.view = S.page || S.tab;
   if (same) app.querySelector('main').scrollTop = sc;
+  try { S.afterRender?.(); } catch (e) { console.warn(e); }
 }
 H.tab = (v) => { S.tab = v; S.page = null; S.sel = null; app.dataset.view = ''; render(); };
 H.go = (v) => { S.page = v; app.dataset.view = ''; render(); };
@@ -131,6 +132,7 @@ VIEWS.home = () => {
   if (unread.length) col3 += `<div class="card"><h3><span>Caixa de entrada</span><span class="badge">${unread.length}</span></h3><div class="list">${unread.slice(0, 4).map((m) => `<div class="li tap" data-a="msg" data-v="${m.id}"><div class="grow"><div class="b ell">${esc(m.title)}</div><div class="xs mut">${esc(m.from)}</div></div>›</div>`).join('')}</div></div>`;
   col3 += `<div class="card"><h3><span>Notícias</span><span class="sm" data-a="newsgo">ver jornal ›</span></h3><div>${S.newsHome ? S.newsHome(G) : ''}</div></div>`;
   if (me.nat) { const nf = nextNatFix(G); const T = G.nat.teams[me.nat.code]; const tm = (k) => G.nat.teams[k]; col1 += `<div class="card" data-a="tab" data-v="nat"><h3><span>${T.flag} Seleção ${esc(T.name)}</span><span class="pill">Federação ${Math.round(T.conf)}%</span></h3>${nf ? `<div class="row" style="justify-content:center;gap:10px"><span style="font-size:26px">${tm(nf.h).flag}</span><b>${esc(tm(nf.h).name)} x ${esc(tm(nf.a).name)}</b><span style="font-size:26px">${tm(nf.a).flag}</span></div><div class="xs mut" style="text-align:center">${wk(nf.w)}${nf.w === G.week && G.slot === 0 ? ' · HOJE' : ''}</div>` : '<div class="xs mut">Sem jogos marcados.</div>'}</div>`; }
+  col1 = `<div id="homex"></div>` + col1;
   return `<div class="dash"><div>${col1}</div><div>${col2 || col3}</div>${col2 ? `<div>${col3}</div>` : ''}</div>`;
 };
 
@@ -195,7 +197,9 @@ VIEWS.tat = () => {
     const bench = lu.bench.map((id) => G.players[id]).filter((p) => p && pool.includes(p));
     const out = pool.filter((p) => !lu.bench.includes(p.id)).sort((a, b) => b.ovr - a.ovr);
     const card = (p, n) => `<div class="bcard ${!available(p) ? 'off' : ''}" data-a="pickp" data-v="${p.id}"><span class="bnum">${n}</span><span class="grip" data-dragp="${p.id}">⠿</span><div class="grow" style="min-width:0"><div class="bpos">${posTag(p.pos)}</div><b class="ell bnm">${esc(shortName(p.n))}</b><div class="bfit"><i style="width:${Math.round(p.fit)}%;background:${p.fit < 65 ? '#ff9f43' : '#2fe08a'}"></i></div></div>${ovrBadge(p.ovr)}</div>`;
-    right += `<div class="hint" style="margin-bottom:8px">${S.sel ? '👉 Agora toque no jogador que vai entrar.' : '✋ Toque numa posição do campo e depois no jogador, ou arraste pelo ⠿.'}</div>
+    const sp = S.sel ? G.players[lu.xi[S.sel.i]] : null;
+    if (sp) right += `<div class="sel-card"><div class="row" style="gap:8px;align-items:center">${posTag(sp.pos)}<b class="grow ell">${esc(sp.n)}</b>${ovrBadge(sp.ovr)}</div><div class="sel-stats"><span>⚡ ${Math.round(sp.fit)}%</span><span>😊 ${Math.round(sp.mor)}</span><span>${sp.st.j} jogos</span><span>${sp.st.g} gols</span><span>${sp.st.a} assist.</span><span>nota ${sp.st.j ? (sp.st.ns / sp.st.j).toFixed(1) : '–'}</span></div><button class="btn sm blk" data-a="player" data-v="${sp.id}">Ver ficha completa</button></div>`;
+    right += `<div class="hint" style="margin-bottom:8px">${S.sel ? '👉 Agora toque no jogador que vai entrar (ou arraste o titular até um reserva).' : '✋ Toque num jogador do campo para ver os números e trocar. Arraste do campo para o banco (ou pelo ⠿) para substituir.'}</div>
     <div class="bench-head"><span>🪑 Banco de reservas</span><span class="pill">${bench.length}/9</span></div>
     <div class="bench-grid">${bench.map((p, i) => card(p, 12 + i)).join('')}${Array.from({ length: Math.max(0, 9 - bench.length) }, (_, i) => `<div class="bcard empty"><span class="bnum">${12 + bench.length + i}</span><span class="xs mut">vago</span></div>`).join('')}</div>
     <div class="bench-head" style="margin-top:10px"><span>Fora da lista</span><span class="pill">${out.length}</span></div>
@@ -332,6 +336,18 @@ function tablesView() { const G = S.G; const comp = G.comps[S.comp] || G.comps[m
   else if (comp) top = `<div class="comp-head"><div><div class="xs mut">${esc(KIND_L[comp.kind] || '')}</div><div class="ch-n">${esc(comp.name)}</div></div><div class="ch-ph"><div class="xs mut">Fase atual</div><b>${esc(comp.champion != null ? 'Encerrado' : comp.phase === 'ko' ? koRoundName(comp, comp.koRound) : 'Fase de grupos / pontos corridos')}</b></div></div>`;
   return myCompsCard() + compPicker() + top + compTables(comp); }
 H.comp = (v) => { S.comp = v; render(); };
+function bracketHtml(comp, my) {
+  const G = S.G; const R = comp.koWeeks?.length || comp.ko.length;
+  const team = (id, g, win) => { const c = G.clubs[id]; return c ? `<div class="bk-t ${win ? 'w' : ''} ${id === my ? 'me' : ''}">${crest(c, 16)}<span class="ell">${esc(c.short || c.name)}</span><b>${g ?? ''}</b></div>` : '<div class="bk-t tbd"><span>a definir</span></div>'; };
+  let h = '<div class="bracket">';
+  for (let r = 0; r < R; r++) {
+    const fx = (comp.ko[r] || []).map((i) => G.fix[i]); const seen = new Set(); const ties = [];
+    for (const f of fx) { const k = [f.h, f.a].sort().join('-'); if (seen.has(k)) { const t = ties.find((x) => x.k === k); t.f2 = f; continue; } seen.add(k); ties.push({ k, f }); }
+    h += `<div class="bk-col"><div class="bk-h">${esc(koRoundName(comp, r))}</div>${ties.length ? ties.map(({ f, f2 }) => { const ga = (f.hg ?? 0) + (f2 ? f2.ag ?? 0 : 0), gb = (f.ag ?? 0) + (f2 ? f2.hg ?? 0 : 0); const done = f.hg != null && (!f2 || f2.hg != null); const w = done ? (ga > gb ? f.h : gb > ga ? f.a : koWinner(f2 || f)) : null;
+      return `<div class="bk-m" data-a="fix" data-v="${f.i}">${team(f.h, f.hg != null ? ga : '', w === f.h)}${team(f.a, f.hg != null ? gb : '', w === f.a)}</div>`; }).join('') : '<div class="bk-m tbd">—</div>'}</div>`;
+  }
+  return h + '</div>';
+}
 export function compTables(comp) {
   const G = S.G; const my = myClub(G)?.id;
   let h = '';
@@ -356,7 +372,8 @@ export function compTables(comp) {
   }
   if (comp.ko.length) {
     const names = (r) => koRoundName(comp, r);
-    h += '<div class="cols2">';
+    h += bracketHtml(comp, my);
+    h += '<div class="cols2 adv-only">';
     for (let r = comp.ko.length - 1; r >= 0; r--) {
       h += `<div class="card flat"><h3>${names(r, comp.koWeeks.length)}</h3><div class="list">${comp.ko[r].map((i) => { const f = G.fix[i]; const a = G.clubs[f.h], b = G.clubs[f.a]; return `<div class="li tap sm" data-a="fix" data-v="${f.i}">${crest(a, 20)}<span class="grow ell ${f.h === my ? 'b ok' : ''}">${esc(a.name)}</span><b>${f.hg != null ? `${f.hg}–${f.ag}${f.pen ? '*' : ''}` : wk(f.w)}</b><span class="grow ell" style="text-align:right">${esc(b.name)}</span>${crest(b, 20)}</div>`; }).join('')}</div></div>`;
     }
@@ -435,6 +452,7 @@ function moveGhost(e) {
   document.querySelectorAll('.pslot.droptgt').forEach((x) => x.classList.remove('droptgt'));
   drag.g.style.display = 'none'; const el = document.elementFromPoint(e.clientX, e.clientY); drag.g.style.display = '';
   const t = el?.closest('.pslot[data-slot]'); if (t && +t.dataset.slot !== drag.slot) t.classList.add('droptgt');
+  document.querySelectorAll('.bcard.droptgt').forEach((x) => x.classList.remove('droptgt')); const bt = drag.slot != null ? el?.closest('.bcard[data-v]') : null; if (bt) bt.classList.add('droptgt');
   const pitch = document.getElementById('tpitch'); if (pitch) pitch.classList.toggle('dropzone', !!el?.closest('#tpitch') && !t && drag.slot != null);
 }
 document.addEventListener('pointermove', (e) => {
@@ -452,6 +470,8 @@ function endDrag(e, cancel) {
   const el = document.elementFromPoint(e.clientX, e.clientY);
   const t = el?.closest('.pslot[data-slot]');
   const { G, c, youth, tact } = mySide(); const lu = youth ? G.me.u20lineup : c.lineup;
+  const bt = el?.closest('.bcard[data-v], .li[data-a="pickp"]');
+  if (!t && bt && d.slot != null) { const p = G.players[+bt.dataset.v]; if (!p || !available(p)) { toast('Jogador indisponível'); render(); return; } const out = lu.xi[d.slot]; lu.xi[d.slot] = p.id; const bi = lu.bench.indexOf(p.id); if (bi >= 0) lu.bench[bi] = out; else if (out >= 0 && !lu.bench.includes(out)) { lu.bench.unshift(out); if (lu.bench.length > 9) lu.bench.pop(); } S.sel = null; toast(`🔄 ${shortName(p.n)} entra, ${shortName(G.players[out]?.n || '')} vai para o banco`); render(); save(); return; }
   if (t) {
     const j = +t.dataset.slot;
     if (d.slot != null) { if (j !== d.slot) { [lu.xi[d.slot], lu.xi[j]] = [lu.xi[j], lu.xi[d.slot]]; toast('Posições trocadas'); } }

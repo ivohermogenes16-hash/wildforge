@@ -139,6 +139,8 @@ export function userSign(G, p, fee, wage, years) {
   if (squad(G, c.id).length >= 32) return { ok: false, why: 'Elenco cheio (máx. 32). Dispense alguém primeiro.' };
   doTransfer(G, p, c.id, fee, wage, years);
   if (G.me.car) G.me.car.trans++;
+  const used = new Set(G.players.filter((x) => x && x.club === c.id && x.num).map((x) => x.num)); let num = [10, 9, 7, 11, 8, 19, 17, 21, 23, 27, 29, 30].find((n) => !used.has(n)) || 33; p.num = p.num && !used.has(p.num) ? p.num : num;
+  G.me.lastSign = { pid: p.id, fee, num: p.num };
   return { ok: true };
 }
 

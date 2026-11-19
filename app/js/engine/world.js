@@ -3,7 +3,7 @@ import { LEAGUES, CLUBS, RESERVE, COUNTRIES } from '../data/leagues.js';
 import { NAMES, FOREIGN } from '../data/names.js';
 import { SQUADS } from '../data/squads.js';
 import { NAT_OF, NAMES_EXTRA, NAME_POOL_OF } from '../data/nations.js';
-import { ri, rf, pick, rnd, clamp, gauss, POS, hash } from '../util.js';
+import { ri, rf, pick, rnd, clamp, gauss, POS, hash, withSeed } from '../util.js';
 import { playerWage, TICKET } from './econ.js';
 
 export const QUOTA = { GOL: 3, LD: 2, ZAG: 4, LE: 2, VOL: 3, MC: 3, MEI: 2, PE: 2, PD: 2, ATA: 3 };
@@ -127,7 +127,8 @@ function guessNat(n, country) {
   return country;
 }
 
-export function buildU17(G, c) {
+export function buildU17(G, c) { return withSeed(hash(`${c.key || c.name}:sub17:${G.year}`), () => buildU17x(G, c)); }
+function buildU17x(G, c) {
   const L = 44 + c.rep * 0.13;
   const q = { GOL: 2, LD: 1, ZAG: 3, LE: 1, VOL: 2, MC: 2, MEI: 2, PE: 1, PD: 1, ATA: 3 };
   for (const pos of POS) for (let i = 0; i < q[pos]; i++) {
@@ -139,7 +140,8 @@ export function buildU17(G, c) {
 export function ensureU17(G) {
   for (const c of G.clubs) if (c.league === 'BRA' && !G.players.some((p) => p && p.club === c.id && p.u17)) buildU17(G, c);
 }
-export function buildU20(G, c) {
+export function buildU20(G, c) { return withSeed(hash(`${c.key || c.name}:sub20:${G.year}`), () => buildU20x(G, c)); }
+function buildU20x(G, c) {
   const L = 49 + c.rep * 0.14;
   const ids = [];
   const q = { GOL: 2, LD: 2, ZAG: 3, LE: 2, VOL: 2, MC: 2, MEI: 2, PE: 2, PD: 2, ATA: 2 };

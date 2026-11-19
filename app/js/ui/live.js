@@ -7,6 +7,8 @@ import { S, H, render, toast, openSheet, closeSheet, save, myLineup, posTag, wk,
 import { LiveMatch, FORMATIONS, formOf, MENT, PRESS, available, penalties, effAt } from '../engine/match.js';
 import { lineupFor, playSlot, myClub } from '../engine/game.js';
 import { MatchViz } from './viz.js';
+import { Match3D } from './m3d.js';
+import { playLance } from './lance.js';
 import { ratings } from '../engine/match.js';
 const ratingsOf = (G, club, lu) => { try { return ratings(G, club, lu.xi, 0, club.tact); } catch { return null; } };
 import { userMatchBonus, isDerby, pressBefore, pressAfter, pressDecision, staffQ, resolveDecision } from '../engine/life.js';
@@ -89,12 +91,16 @@ export function launchLive(f, m, side, hc, ac, done) {
   document.body.appendChild(wrap);
   const cv = wrap.querySelector('#lcv');
   L = { f, m, side, raf: 0, last: performance.now(), done };
-  L.viz = new MatchViz(cv, G, m, side, {
+  const hooks = {
     onEvent: (e, quiet) => onEv(e, quiet),
-    onPause: (why) => { if (why === 'int') { L.viz.paused = true; updPause(); toast('Intervalo — ajuste a tática se quiser'); } },
+    onPause: (why) => { if (why === 'int') { L.viz.paused = true; updPause(); halfTalk(); } },
     onEnd: () => endLive(),
     onReplay: (on) => { const w = document.querySelector('.lv-pitch'); if (w) w.classList.toggle('rp', on); },
-  });
+    onFail: () => { if (!L || !(L.viz instanceof Match3D)) return; L.viz.destroy(); cv.style.display = ''; wrap.classList.remove('d3'); L.viz = new MatchViz(cv, G, m, side, hooks); L.viz.speed = SET.speed; L.viz.replays = SET.replays; L.viz.resize(); toast('3D indisponível neste aparelho — mostrando em 2D'); },
+  };
+  const use3d = SET.view3d !== '2d';
+  if (use3d) { cv.style.display = 'none'; wrap.classList.add('d3'); L.viz = new Match3D(wrap.querySelector('.lv-pitch'), G, m, side, hooks, { rain: m.weather === 'chuva' }); }
+  else L.viz = new MatchViz(cv, G, m, side, hooks);
   cv.addEventListener('click', () => L?.viz.skipReplay());
   L.lastNar = 0; L.viz.speed = SET.speed; L.viz.replays = SET.replays;
   { const b = document.getElementById('lsp'); if (b) b.textContent = SET.speed + 'x'; const r = document.getElementById('lrp'); if (r) r.style.opacity = SET.replays ? 1 : 0.4; }
@@ -115,14 +121,48 @@ function loop(now) {
 }
 
 const pk = (a) => a[Math.floor(Math.random() * a.length)];
+// narradores com personalidade: [gritos de gol, frases de jogo, frases de VAR]
+const NARRS = {
+  empolgado: [['GOOOOOOOL', 'É GOL, É GOL, É GOOOL', 'GOLAAAAÇO', 'BALANÇA A REDE, MINHA GENTE', 'QUE GOL, QUE GOL'], ['Que jogo, amigo! Que jogo!', 'A torcida não para de cantar!', 'Coração na boca aqui no estádio!'], ['Que drama!', 'Inacreditável!']],
+  classico: [['Gol', 'É gol', 'Gol, abre-se o placar do lado de cá', 'Bola na rede'], ['Partida truncada, muita marcação no meio.', 'As equipes trocam passes com paciência.', 'O treinador pede calma à beira do campo.'], ['Decisão correta da arbitragem.', 'O VAR fez o seu papel.']],
+  resenha: [['GOL, E QUE GOL, MEU POVO', 'Botou pra dentro sem pedir licença', 'Foi lá e fez, simples assim', 'Chorou na cama que é lugar quente: GOL'], ['Tem jogador aí que esqueceu a chuteira no vestiário…', 'Esse meio-campo tá mais embolado que fone no bolso.', 'Jogo de xadrez, mas ninguém mexe o rei.'], ['O VAR veio estragar a festa!', 'Tira a comemoração do Instagram, foi anulado!']],
+};
+const NARR = () => NARRS[SET.narrador || 'empolgado'] || NARRS.empolgado;
+async function doLance(e) {
+  if (!L) return; const G = S.G, m = L.m; L.viz.paused = true; updPause();
+  const mine = m.s[e.side].club, opp = m.s[1 - e.side].club;
+  const ok = await playLance(e, { G, kitA: (e.kind === 'defpen' ? opp : mine).c1 || '#2fe08a', kitB: (e.kind === 'defpen' ? mine : opp).c1 || '#c8102e', minute: m.min, shooter: G.players[e.p]?.n || 'Batedor', keeper: G.players[e.gk]?.n || 'Goleiro' });
+  if (!L) return; const out = m.resolveLance(ok);
+  for (const x of out) { if (x.t === 'gol') { if (L.viz.inject) L.viz.inject(x); else L.viz.score[x.side]++; } onEv(x); }
+  L.viz.paused = false; updPause();
+}
+// vestiário no intervalo
+function halfTalk() {
+  if (!L) return; const m = L.m, s = L.side, sd = m.s[s]; const d = m.score[s] - m.score[1 - s];
+  const opts = [['elogiar', '👏 Elogiar', 'Continuem assim, estão jogando muito!'], ['cobrar', '😤 Cobrar', 'Isso não é o que treinamos. Quero mais!'], ['acalmar', '🧘 Acalmar', 'Calma, joguem simples, o gol vai sair.'], ['motivar', '🔥 Motivar', 'É agora! Deixem tudo em campo neste segundo tempo!'], ['tatica', '📋 Falar de tática', 'Vamos ajustar: mais compactos e atenção às costas dos laterais.']];
+  openSheet(`<h2>Vestiário · intervalo</h2><div class="half-score">${esc(m.s[0].club.name)} <b>${m.score[0]} – ${m.score[1]}</b> ${esc(m.s[1].club.name)}</div>
+  <div class="xs mut" style="margin:6px 0 10px">Finalizações ${m.st.sh[0]}–${m.st.sh[1]} · xG ${m.st.xg[0].toFixed(1)}–${m.st.xg[1].toFixed(1)} · posse ${Math.round(m.st.pos[0] / (m.st.pos[0] + m.st.pos[1] || 1) * 100)}%</div>
+  <div class="hint" style="margin-bottom:8px">O que você fala para o time?</div><div class="list">${opts.map(([k, t, q]) => `<div class="li tap" data-a="halftalk" data-v="${k}"><div class="grow"><b>${t}</b><div class="xs mut">“${q}”</div></div></div>`).join('')}</div>
+  <button class="btn blk" style="margin-top:8px" data-a="ltact">Mudar tática e substituições</button>`);
+  L.halfCtx = d;
+}
+H.halftalk = (k) => {
+  if (!L) return; const sd = L.m.s[L.side]; const d = L.halfCtx || 0;
+  const good = { elogiar: d > 0 ? 0.8 : d === 0 ? 0.2 : -0.4, cobrar: d < 0 ? 0.7 : d === 0 ? 0.3 : -0.5, acalmar: d === 0 ? 0.5 : d > 0 ? 0.4 : 0.1, motivar: d <= 0 ? 0.6 : 0.2, tatica: 0.35 }[k] ?? 0;
+  sd.extra = (sd.extra || 0) + good; const r = good > 0.5 ? 'O time voltou ligado! 🔥' : good > 0.15 ? 'Os jogadores concordaram com a cabeça.' : good > -0.2 ? 'Reação morna no vestiário.' : 'Alguns jogadores não gostaram do tom… 😬';
+  closeSheet(); toast(r, 2600);
+};
+// gritos da beira do campo: mudam a tática na hora
+const SHOUTS = { ataque: ['⚔️ Todos ao ataque', { ment: 2, press: 2, linha: 2, tempo: 2 }], segurar: ['🛡️ Segurar o resultado', { ment: 0, press: 1, linha: 0, cera: 1, tempo: 0 }], pressao: ['🔥 Pressão total', { press: 2, perda: 2, linha: 2 }], contra: ['⚡ Jogar no contra-ataque', { ment: 0, contra: 1, linha: 0 }], calma: ['🧊 Calma, toca a bola', { tempo: 0, passe: 0, ment: 1 }] };
+H.lshout = (k) => { if (!L) return; Object.assign(L.m.s[L.side].tact, SHOUTS[k][1]); toast(SHOUTS[k][0].replace(/^\S+ /, '') + '!'); closeSheet(); };
 function evText(e) {
   const G = S.G, m = L.m; const nm = (id) => esc(G.players[id]?.n || '');
   const team = (s) => esc(m.s[s]?.club.name || '');
   const sc = () => `${L.viz.score[0]} a ${L.viz.score[1]}`;
   switch (e.t) {
     case 'ini': return pk(['🟢 Bola rolando! Começa o jogo.', '🟢 Apita o árbitro, está valendo!', '🟢 Rola a bola para mais um capítulo dessa história.']);
-    case 'gol': return `⚽ ${pk(['GOOOOL', 'É GOL', 'GOLAÇO', 'Balança a rede'])} do ${team(e.side)}! ${pk([`${nm(e.p)} não perdoa`, `${nm(e.p)} manda para o fundo da rede`, `${nm(e.p)} bate com categoria`, `${nm(e.p)} aparece livre e marca`])}${e.as >= 0 ? ` <span class="mut">(assist. ${nm(e.as)})</span>` : ''}. ${sc()}!`;
-    case 'def': return pk([`🧤 Que defesa de ${nm(e.gk)}! ${nm(e.p)} parou no goleiro`, `🧤 ${nm(e.p)} chuta e ${nm(e.gk)} espalma`, `🧤 ${nm(e.gk)} voa e segura o chute de ${nm(e.p)}`]);
+    case 'gol': return `⚽ ${e.lance ? '🎯 ' : ''}${pk(NARR()[0])} do ${team(e.side)}!${e.pen ? ' De pênalti!' : ''}${e.var ? ' (VAR confirma)' : ''} ${pk([`${nm(e.p)} não perdoa`, `${nm(e.p)} manda para o fundo da rede`, `${nm(e.p)} bate com categoria`, `${nm(e.p)} aparece livre e marca`])}${e.as >= 0 ? ` <span class="mut">(assist. ${nm(e.as)})</span>` : ''}. ${sc()}!`;
+    case 'def': if (e.pen || e.lance) return `🧤 ${nm(e.gk)} defende a cobrança de ${nm(e.p)}!`; return pk([`🧤 Que defesa de ${nm(e.gk)}! ${nm(e.p)} parou no goleiro`, `🧤 ${nm(e.p)} chuta e ${nm(e.gk)} espalma`, `🧤 ${nm(e.gk)} voa e segura o chute de ${nm(e.p)}`]);
     case 'trave': return pk([`😱 NA TRAVE! ${nm(e.p)} acerta o poste`, `😱 Explode no travessão! ${nm(e.p)} quase marca`, `😱 Que azar, ${nm(e.p)}! A bola bate na trave`]);
     case 'fora': return pk([`${nm(e.p)} finaliza para fora`, `${nm(e.p)} arrisca de longe… por cima`, `${nm(e.p)} pega mal na bola e manda à linha de fundo`, `Perigo! ${nm(e.p)} tira tinta da trave`]);
     case 'am': return pk([`🟨 Amarelo para ${nm(e.p)}`, `🟨 Falta dura de ${nm(e.p)}, cartão amarelo`, `🟨 ${nm(e.p)} reclama e leva o amarelo`]);
@@ -132,6 +172,9 @@ function evText(e) {
     case 'int': return `⏸ Intervalo: ${team(0)} ${sc()} ${team(1)}`;
     case 'fim': return `🏁 Fim de jogo! ${team(0)} ${sc()} ${team(1)}`;
     case 'nar': return `🎙️ ${e.txt}`;
+    case 'var': return `📺 VAR! Gol do ${team(e.side)} anulado por ${esc(e.why)}. ${pk(NARR()[2])}`;
+    case 'pen': return `⚠️ PÊNALTI para o ${team(e.side)}! ${nm(e.p)} vai para a cobrança.`;
+    case 'lance': return `⚡ Lance decisivo: ${{ pen: 'pênalti', falta: 'falta perigosa', '1x1': 'cara a cara', defpen: 'pênalti contra' }[e.kind]}!`;
   }
   return '';
 }
@@ -158,7 +201,9 @@ function addFeed(e) {
   if (SET.narr && ['gol', 'trave', 'def', 'ver', 'nar', 'int', 'fim'].includes(e.t)) { const n = document.getElementById('lnar'); if (n) { n.innerHTML = tx.replace(/<[^>]+>/g, ''); n.className = 'lv-nar on ' + e.t; L.narT = performance.now() + 3200; } }
 }
 function onEv(e, quiet) {
+  if (e.t === 'lance' && !quiet) { doLance(e); addFeed(e); return; }
   addFeed(e);
+  if (e.t === 'var') toast('📺 VAR: gol anulado');
   if (['gol', 'ver'].includes(e.t)) { const tm = document.getElementById('ltlm'); if (tm) tm.insertAdjacentHTML('beforeend', `<span class="mk ${e.t} ${e.side === L.side ? 'me' : ''}" style="left:${Math.min(100, e.m / 90 * 100)}%">${e.t === 'gol' ? '⚽' : '🟥'}</span>`); }
   document.getElementById('lsc').textContent = `${L.viz.score[0]} – ${L.viz.score[1]}`;
   stats();
@@ -181,6 +226,14 @@ function stats() {
 const enCol = (e) => (e >= 75 ? '#2fe08a' : e >= 60 ? '#f4c542' : e >= 45 ? '#ff9f43' : '#ff5a5f');
 const enTag = (e) => `<span class="xs b" style="color:${enCol(e)};width:34px;text-align:right">⚡${Math.round(e)}</span>`;
 H.lsttab = (v) => { L.stTab = v; stats(); };
+H.lpinfo = (v) => {
+  if (!L) return; const G = S.G, m = L.m, id = +v, p = G.players[id]; if (!p) return; const ev = m.ev.filter((e) => e.p === id || e.as === id);
+  const g = ev.filter((e) => e.t === 'gol' && e.p === id).length, a = ev.filter((e) => e.t === 'gol' && e.as === id).length, sh = ev.filter((e) => ['gol', 'def', 'trave', 'fora'].includes(e.t) && e.p === id).length;
+  const en = Math.round(m.en[id] ?? p.fit); const nota = Math.min(10, 6.2 + g * 1.1 + a * 0.6 + sh * 0.1 - (ev.some((e) => e.t === 'am' && e.p === id) ? 0.3 : 0));
+  openSheet(`<h2>${esc(p.n)}</h2><div class="row" style="gap:6px;margin-bottom:8px">${posTag(p.pos)}<span class="pill">geral ${p.ovr}</span><span class="pill" style="color:${enCol(en)}">⚡ ${en}%</span></div>
+  <div class="stat-grid"><div class="stat"><div class="v">${nota.toFixed(1)}</div><div class="l">nota no jogo</div></div><div class="stat"><div class="v">${g}</div><div class="l">gols</div></div><div class="stat"><div class="v">${a}</div><div class="l">assistências</div></div><div class="stat"><div class="v">${sh}</div><div class="l">finalizações</div></div></div>
+  <div class="xs mut" style="margin:6px 0">Na temporada: ${p.st.j} jogos, ${p.st.g} gols, ${p.st.a} assistências.</div><button class="btn blk" data-a="cs">Voltar</button>`);
+};
 function updPause() { const b = document.getElementById('lpb'); if (b) b.textContent = L.viz.paused ? '▶' : '⏸'; }
 H.lnames = () => { L.viz.names = !L.viz.names; };
 H.lpause = () => { L.viz.paused = !L.viz.paused; updPause(); };
@@ -194,10 +247,11 @@ H.ltact = () => {
   const form = formOf(sd.tact);
   const used = m.played[s];
   openSheet(`<h2>Tática e substituições</h2>
+  <div class="card flat"><h3>Gritos da beira do campo</h3><div class="row wrap" style="gap:6px">${Object.entries(SHOUTS).map(([k, [t]]) => `<button class="btn sm" data-a="lshout" data-v="${k}">${t}</button>`).join('')}</div></div>
   <div class="card flat"><h3>Mentalidade</h3><div class="seg" style="margin:0">${MENT.map((x, i) => `<button class="${sd.tact.ment === i ? 'on' : ''}" data-a="lment" data-v="${i}">${x}</button>`).join('')}</div>
   <h3 style="margin-top:12px">Pressão</h3><div class="seg" style="margin:0">${PRESS.map((x, i) => `<button class="${sd.tact.press === i ? 'on' : ''}" data-a="lpress" data-v="${i}">${x}</button>`).join('')}</div></div>
   <div class="card flat"><h3><span>Substituições</span><span>${m.subs[s]}/5</span></h3><button class="btn sm blk" style="margin-bottom:8px" data-a="lqsheet">⚡ Fazer as trocas sugeridas (${m.suggestSubs(s, 3).length})</button><div class="hint" style="margin-bottom:8px">${L.subOut != null ? 'Agora escolha quem entra.' : 'Toque em quem vai sair.'}</div>
-  <div class="cols2"><div class="list">${sd.xi.map((id, i) => { const p = G.players[id]; if (!p) return ''; const off = m.sent[s].has(id); const inj = m.ev.some((e) => e.t === 'les' && e.p === id); return `<div class="li tap" ${off ? '' : `data-a="lout" data-v="${id}"`} style="${L.subOut === id ? 'background:#f4c54222' : ''}${off ? ';opacity:.4' : ''}"><span class="xs mut" style="width:30px">${form[i][0]}</span><span class="grow b ell">${esc(p.n)} ${inj ? '🩹' : ''}${off ? ' 🟥' : ''}</span>${enTag(m.en[id] ?? p.fit)}<b style="width:24px;text-align:right">${p.ovr}</b></div>`; }).join('')}</div>
+  <div class="cols2"><div class="list">${sd.xi.map((id, i) => { const p = G.players[id]; if (!p) return ''; const off = m.sent[s].has(id); const inj = m.ev.some((e) => e.t === 'les' && e.p === id); return `<div class="li tap" ${off ? '' : `data-a="lout" data-v="${id}"`} style="${L.subOut === id ? 'background:#f4c54222' : ''}${off ? ';opacity:.4' : ''}"><span class="xs mut" style="width:30px">${form[i][0]}</span><span class="grow b ell">${esc(p.n)} ${inj ? '🩹' : ''}${off ? ' 🟥' : ''}</span>${enTag(m.en[id] ?? p.fit)}<b style="width:24px;text-align:right">${p.ovr}</b><button class="btn sm ghost" data-a="lpinfo" data-v="${id}" title="Números">ℹ</button></div>`; }).join('')}</div>
   <div class="list">${sd.bench.map((id) => { const p = G.players[id]; if (!p || used.has(id)) return ''; return `<div class="li tap" data-a="lin" data-v="${id}">${posTag(p.pos)}<span class="grow b ell">${esc(p.n)}</span>${enTag(p.fit)}<b style="width:24px;text-align:right">${p.ovr}</b></div>`; }).join('') || '<div class="empty">Banco vazio</div>'}</div></div></div>
   <button class="btn pri blk" data-a="lclose">Voltar ao jogo</button>`);
 };
@@ -240,11 +294,30 @@ function endLive() {
 }
 H.lfinish = () => {
   const f = L.f, res = L.m.result(), done = L.done;
-  cancelAnimationFrame(L.raf); window.removeEventListener('resize', L.onResize); document.getElementById('live')?.remove();
+  cancelAnimationFrame(L.raf); window.removeEventListener('resize', L.onResize); L.viz.destroy?.(); document.getElementById('live')?.remove();
   L = null;
   (done || finishMatch)(f, res);
 };
 
+const WXI = { sol: '☀️ Sol', nublado: '☁️ Nublado', chuva: '🌧️ Chuva', frio: '🥶 Frio', calor: '🥵 Calor' };
+function advLine(f) {
+  const st = f.stats || {}, a = f.adv; if (!st.xg && !a) return '';
+  const pc = (i) => (st.pas?.[i] ? Math.round(st.pok[i] / st.pas[i] * 100) + '%' : '–');
+  return `<div class="adv-strip">${st.xg ? `<span><b>${st.xg[0].toFixed(1)} – ${st.xg[1].toFixed(1)}</b><i>xG</i></span>` : ''}${st.pas ? `<span><b>${st.pas[0]} – ${st.pas[1]}</b><i>passes</i></span><span><b>${pc(0)} – ${pc(1)}</b><i>acerto</i></span>` : ''}${a ? `<span><b>${WXI[a.weather] || a.weather}</b><i>gramado ${a.pitch}</i></span><span><b>${esc(a.ref?.nome || '')}</b><i>árbitro ${a.ref?.perfil || ''}</i></span>` : ''}</div>
+  ${a?.var?.length ? `<div class="xs mut" style="text-align:center;margin-bottom:6px">📺 VAR: ${a.var.map((v) => `${v.m}' ${v.res}${v.why ? ' (' + esc(v.why) + ')' : ''}`).join(' · ')}</div>` : ''}
+  ${a ? `<button class="btn sm blk" style="margin-bottom:8px" data-a="postana" data-v="${f.i}">📊 Análise completa: mapa de calor e rede de passes</button>` : ''}`;
+}
+H.postana = (v) => {
+  const G = S.G, f = G.fix[+v], a = f.adv; if (!a) return; const hc = G.clubs[f.h], ac = G.clubs[f.a];
+  const lumH = (h) => { const n = parseInt((h || '#888888').slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; }; const vis = (c) => { for (const x of [c.c1, c.c2]) if (x && lumH(x) > 0.3 && Math.abs(lumH(x) - 0.35) > 0.06) return x; return '#ffffff'; }; const colH = vis(hc); let colA = vis(ac); if (colA === colH) colA = colH === '#ffffff' ? '#f4c542' : '#ffffff';
+  const heat = (arr, col) => { const mx = Math.max(1, ...arr); return `<svg viewBox="0 0 120 80" class="heat"><rect width="120" height="80" fill="#1b5e33" rx="3"/>${arr.map((v, i) => { const y = Math.floor(i / 6), x = i % 6; return `<rect x="${y * 15}" y="${x * 13.3}" width="15" height="13.3" fill="${col}" opacity="${(v / mx) * 0.85}"/>`; }).join('')}<g fill="none" stroke="#ffffff66" stroke-width=".6"><rect x="1" y="1" width="118" height="78"/><line x1="60" y1="1" x2="60" y2="79"/><circle cx="60" cy="40" r="9"/><rect x="1" y="22" width="16" height="36"/><rect x="103" y="22" width="16" height="36"/></g></svg>`; };
+  const net = (side, col) => { const xi = f.lu?.[side] || []; const pos = {}; const tact = side === 0 ? hc.tact : ac.tact; const form = formOf(tact); (a.netXi?.[side] || []).forEach((id, i) => { const fr = form[i]; if (fr) pos[id] = [10 + fr[2] * 100, 6 + fr[1] * 68]; });
+    const ls = a.net[side] || []; const mx = Math.max(1, ...ls.map((x) => x[1]));
+    return `<svg viewBox="0 0 120 80" class="heat"><rect width="120" height="80" fill="#1b5e33" rx="3"/><g fill="none" stroke="#ffffff55" stroke-width=".6"><rect x="1" y="1" width="118" height="78"/><line x1="60" y1="1" x2="60" y2="79"/></g>${ls.map(([k, n]) => { const [p, q] = k.split('-').map(Number); const A = pos[p], B = pos[q]; if (!A || !B) return ''; return `<line x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}" stroke="${col}" stroke-width="${0.6 + (n / mx) * 2.6}" opacity=".85"/>`; }).join('')}${Object.entries(pos).map(([id, [x, y]]) => `<circle cx="${x}" cy="${y}" r="3.2" fill="${col}" stroke="#fff" stroke-width=".6"/><text x="${x}" y="${y + 7.5}" font-size="3.6" fill="#fff" text-anchor="middle">${esc(shortName(G.players[id]?.n || ''))}</text>`).join('')}</svg>`; };
+  openSheet(`<h2>Análise da partida</h2><div class="cols2"><div class="card flat"><h3>Mapa de calor · ${esc(hc.short || hc.name)}</h3>${heat(a.heat[0], colH)}</div><div class="card flat"><h3>Mapa de calor · ${esc(ac.short || ac.name)}</h3>${heat(a.heat[1].slice().reverse(), colA)}</div></div>
+  <div class="cols2"><div class="card flat"><h3>Rede de passes · ${esc(hc.short || hc.name)}</h3>${net(0, colH)}</div><div class="card flat"><h3>Rede de passes · ${esc(ac.short || ac.name)}</h3>${net(1, colA)}</div></div>
+  <div class="xs mut">Linhas mais grossas = mais passes trocados entre os dois jogadores. O mapa mostra onde cada time mais jogou (ataque para a direita).</div>`);
+};
 export function finishMatch(f, res) {
   const G = S.G;
   if (f.ko >= 0 && res.hg === res.ag) res.pen = penalties();
@@ -263,6 +336,7 @@ export function finishMatch(f, res) {
    <div class="match-hero" style="margin:6px 0"><div>${crest(hc, 48)}<div class="nm">${esc(hc.name)}</div>${gl(0)}</div><div class="score">${f.hg}–${f.ag}</div><div>${crest(ac, 48)}<div class="nm">${esc(ac.name)}</div>${gl(1)}</div></div>
    ${f.pen ? `<div style="text-align:center" class="b">Pênaltis: ${f.pen[0]} – ${f.pen[1]}</div>` : ''}
    ${st.pos ? `<div class="stat-grid" style="margin:8px 0"><div class="stat"><div class="v">${st.pos[0]}%</div><div class="l">posse (casa)</div></div><div class="stat"><div class="v">${st.sh?.[0] ?? 0}–${st.sh?.[1] ?? 0}</div><div class="l">finalizações</div></div><div class="stat"><div class="v">${st.ont ? `${st.ont[0]}–${st.ont[1]}` : '–'}</div><div class="l">no gol</div></div></div>` : ''}
+   ${advLine(f)}
    ${motm ? `<div class="hint" style="margin-bottom:8px">⭐ Melhor do seu time: <b>${esc(motm[0].n)}</b> (${motm[1].toFixed(1)})</div>` : ''}
    <div class="cols2"><div class="card flat"><h3>Notas</h3><div class="list">${notas.map(([p, n]) => `<div class="li sm"><span class="grow ell b">${esc(p.n)}</span><span class="pill ${n >= 7.5 ? 'g' : n < 6 ? 'r' : ''}">${n.toFixed(1)}</span></div>`).join('')}</div></div>
    <div class="card flat"><h3>Outros resultados</h3><div class="list">${others.map((x) => `<div class="li xs">${crest(G.clubs[x.h], 16)}<span class="grow ell">${esc(G.clubs[x.h].short)}</span><b>${x.hg}–${x.ag}</b><span class="grow ell" style="text-align:right">${esc(G.clubs[x.a].short)}</span>${crest(G.clubs[x.a], 16)}</div>`).join('') || '<div class="mut sm">—</div>'}</div></div></div>

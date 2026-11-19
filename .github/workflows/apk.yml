@@ -40,7 +40,7 @@ jobs:
       - name: Copiar o jogo para dentro do app
         run: |
           mkdir -p android/app/src/main/assets
-          cp -r app/index.html app/css app/js android/app/src/main/assets/
+          cp -r app/index.html app/css app/js app/m3d android/app/src/main/assets/
 
       - name: Montar o APK
         working-directory: android

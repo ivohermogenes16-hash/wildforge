@@ -14,12 +14,18 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.webkit.ValueCallback;
+import android.content.Intent;
+import android.net.Uri;
 
 import androidx.webkit.WebViewAssetLoader;
 
 /* O jogo inteiro vem dentro do aplicativo (pasta assets) e roda numa WebView em tela cheia. */
 public class MainActivity extends Activity {
     private WebView web;
+    private ValueCallback<Uri[]> fileCb;
+    private static final int PICK = 4242;
     static volatile boolean inFront = false;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -46,7 +52,7 @@ public class MainActivity extends Activity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setAllowFileAccess(false);
-        s.setAllowContentAccess(false);
+        s.setAllowContentAccess(true);
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -60,6 +66,23 @@ public class MainActivity extends Activity {
             }
         });
 
+        // escolher arquivos (escudos, fotos e pacotes) a partir do celular
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams params) {
+                if (fileCb != null) fileCb.onReceiveValue(null);
+                fileCb = cb;
+                try {
+                    Intent i = params.createIntent();
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    String[] acc = params.getAcceptTypes();
+                    if (acc == null || acc.length == 0 || (acc.length == 1 && acc[0].isEmpty()) || acc[0].contains(".")) i.setType("*/*");
+                    startActivityForResult(Intent.createChooser(i, "Escolher arquivo"), PICK);
+                } catch (Throwable t) { fileCb = null; return false; }
+                return true;
+            }
+        });
         web.addJavascriptInterface(new NativeBridge(this), "PranchetaNative");
         NotifReceiver.channel(this);
         setContentView(web);
@@ -115,5 +138,17 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (web != null) { web.destroy(); web = null; }
         super.onDestroy();
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req != PICK || fileCb == null) return;
+        Uri[] out = null;
+        if (res == RESULT_OK && data != null) {
+            if (data.getClipData() != null) { int n = data.getClipData().getItemCount(); out = new Uri[n]; for (int k = 0; k < n; k++) out[k] = data.getClipData().getItemAt(k).getUri(); }
+            else if (data.getData() != null) out = new Uri[]{ data.getData() };
+        }
+        fileCb.onReceiveValue(out); fileCb = null;
     }
 }

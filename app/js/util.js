@@ -1,4 +1,7 @@
-export const rnd = Math.random;
+let _r = Math.random;
+export const rnd = () => _r();
+// executa fn com sorteios previsíveis (mesma semente = mesmo resultado em qualquer save)
+export function withSeed(seed, fn) { const o = _r, om = Math.random; const sr = seeded(seed); _r = sr; Math.random = sr; try { return fn(); } finally { _r = o; Math.random = om; } }
 export const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 export const rf = (a, b) => a + rnd() * (b - a);
 export const pick = (arr) => arr[Math.floor(rnd() * arr.length)];

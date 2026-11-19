@@ -419,7 +419,7 @@ export function requestFunds(G) {
 }
 
 // ===================== VESTIÁRIO =====================
-function captain(G, c) { const sq = G.players.filter((p) => p && p.club === c.id && !p.u20); return sq.filter((p) => p.per === 'Líder').sort((a, b) => b.tot.j - a.tot.j)[0] || sq.sort((a, b) => b.age - a.age)[0]; }
+function captain(G, c) { if (c.capId != null) { const cp = G.players[c.capId]; if (cp && cp.club === c.id) return cp; } const sq = G.players.filter((p) => p && p.club === c.id && !p.u20); return sq.filter((p) => p.per === 'Líder').sort((a, b) => b.tot.j - a.tot.j)[0] || sq.sort((a, b) => b.age - a.age)[0]; }
 export function captainOf(G, c) { return captain(G, c); }
 // chamado depois de cada jogo do usuário
 export function afterUserMatch(G, f, res, won, lost) {
@@ -473,7 +473,7 @@ function squadWeek(G) {
   // promessas vencidas
   for (const pr of G.me.promises) if (!pr.done && !pr.broken && G.t > pr.until) {
     pr.broken = true;
-    if (pr.k === 'titular') { const p = G.players[pr.pid]; if (p && p.club === c.id) { p.rel = clamp(p.rel - 25, 0, 100); p.sat = clamp(p.sat - 20, 0, 100); p.mor = clamp(p.mor - 15, 0, 100); c.chem = clamp(c.chem - 5, 0, 100); msg(G, p.n, `😠 ${p.n} se sente enganado`, `Você prometeu que ele seria titular e não cumpriu. A relação de vocês piorou e o vestiário comenta.`); } }
+    if (pr.k === 'titular') { const p = G.players[pr.pid]; if (p && p.club === c.id) { p.rel = clamp(p.rel - 10, 0, 100); p.sat = clamp(p.sat - 8, 0, 100); p.mor = clamp(p.mor - 6, 0, 100); c.chem = clamp(c.chem - 2, 0, 100); msg(G, p.n, `😠 ${p.n} se sente enganado`, `Você prometeu que ele seria titular e não cumpriu. A relação de vocês piorou e o vestiário comenta.`); } }
     if (pr.k === 'reacao') { const ok = (pr.pts0 != null) && (ptsOf(G, c) - pr.pts0) >= 6; if (!ok) { c.board.conf = clamp(c.board.conf - 15, 0, 100); msg(G, 'Diretoria', '❌ Promessa de reação não cumprida', 'Você prometeu reação e ela não veio. A paciência da diretoria está no fim.'); } else { pr.done = true; c.board.conf = clamp(c.board.conf + 8, 0, 100); msg(G, 'Diretoria', '✅ A reação veio', 'A diretoria reconhece a resposta do time. Confiança em alta.'); } }
   }
   G.me.promises = G.me.promises.filter((p) => G.t - p.until < 10);
@@ -495,7 +495,7 @@ function squadEvent(G, c, sq, key) {
   if (ok('jov') && (p = sq.find((x) => x.age <= 21 && x.pot >= x.ovr + 8 && x.bw >= 3 && pcd(x, 'jov')))) return fire('jov', p, `🌱 ${p.n} quer mais oportunidades`, `O jovem ${p.n} (${p.age} anos, potencial alto) sente que não está tendo chances e teme estagnar.`,
     [{ l: 'Prometer minutos nas próximas semanas', act: 'promTit' }, { l: 'Pedir calma, a hora dele vai chegar', act: 'explicar' }, ...(youth ? [] : [{ l: 'Emprestar/negociar o jogador', act: 'liberar' }])], 1);
   // pede transferência
-  if (!youth && ok('transf', 6) && (p = sq.find((x) => x.sat < 28 && ['Ambicioso', 'Individualista', 'Temperamental'].includes(x.per) && !x.lst && pcd(x, 'transf')))) return fire('transf', p, `✈️ ${p.n} pede para ser negociado`, `${p.n} está insatisfeito (satisfação ${Math.round(p.sat)}) e pediu publicamente para sair.`,
+  if (!youth && ok('transf', 26) && Math.random() < 0.12 && (p = sq.find((x) => x.sat < 22 && ['Ambicioso', 'Individualista', 'Temperamental'].includes(x.per) && !x.lst && pcd(x, 'transf')))) return fire('transf', p, `✈️ ${p.n} pede para ser negociado`, `${p.n} está insatisfeito (satisfação ${Math.round(p.sat)}) e pediu publicamente para sair.`,
     [{ l: 'Aceitar e colocar à venda', act: 'liberar' }, { l: 'Recusar: ele tem contrato', fx: { pmor: -15, prel: -15, chem: -4, psat: -5 } }, { l: 'Conversar e tentar convencê-lo', act: 'convencer' }], 1);
   // insatisfação salarial
   if (!youth && ok('sal') && (p = sq.find((x) => key.has(x.id) && x.wage < playerWage(x, c.country) * 0.6 && x.sat < 60 && x.con > G.year && pcd(x, 'sal')))) return fire('sal', p, `💬 ${p.n} reclama do salário`, `${p.n} ganha ${money(p.wage)}/sem., bem abaixo do que acha justo (${money(playerWage(p, c.country))}). O empresário dele quer conversar.`,

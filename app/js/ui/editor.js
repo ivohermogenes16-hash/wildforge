@@ -143,3 +143,4 @@ H.bulkcrest = async (v, el) => {
   }
   S.impRep = { ok, bad }; el.value = ''; toast(`${ok.length} escudo${ok.length === 1 ? '' : 's'} aplicado${ok.length === 1 ? '' : 's'}`); render();
 };
+export { unzip, crestIndex };

@@ -7,6 +7,7 @@ import { autoLineup, quickSim, penalties, validLineup, FORMATIONS, FITPOS } from
 import { aiTransferWeek, inWindow, anyWindow, windowInfo, expireContracts, playerInterest } from './market.js';
 import { weeklyPersonal, ownClubWeek, ownSeasonEnd } from './career.js';
 import { ensureBase, scoutWeek, baseBudget } from './youth.js';
+import { extraWeek, seededYouth, goldenGen, bigAwards, legendsCapture, seasonRecap, attendance, mosaicFor } from './extra.js';
 import { migrate, appointAI, coachLeaves, aiCoachResult, coachChampion, titleWeight, lifeWeek, lifeSeasonEnd, seasonAwards, secondaryEnd, secondaryObjective, afterUserMatch, boardK, devMul, injMul, recovBonus, retiredToCoach, tl } from './life.js';
 import { BOARD_TYPES } from './world.js';
 import { initNations, natSetupYear, natSlot, natWeek, natSeasonEnd } from './nations.js';
@@ -20,7 +21,7 @@ export function newGame(opts) {
   const G = { v: 1, year: START_YEAR, week: 0, slot: 0, t: 0, inbox: [], news: [], events: [], vac: [], short: [], seen: {}, qual: null };
   createWorld(G);
   G.me = {
-    name: opts.name || 'Técnico', age: opts.age || 32, rep: opts.mode === 'livre' ? 45 : 12, money: opts.mode === 'livre' ? 150000 : 25000,
+    name: opts.name || 'Técnico', age: opts.age || 32, rep: opts.mode === 'livre' ? 45 : opts.mode === 'baixo' ? 18 : 12, money: opts.mode === 'livre' ? 150000 : opts.mode === 'baixo' ? 40000 : 25000,
     job: null, hist: [], titles: [], stats: { j: 0, v: 0, e: 0, d: 0 }, inv: { cdi: 0, acoes: 0, imoveis: 0, imovelVal: 0 }, own: null, shares: {}, mode: opts.mode, apps: [], pressOn: true,
   };
   migrate(G);
@@ -28,9 +29,9 @@ export function newGame(opts) {
   initUniverse(G); initBiz(G);
   setupSeason(G);
   natSetupYear(G);
-  takeJob(G, opts.club, opts.mode !== 'livre', true);
+  takeJob(G, opts.club, opts.mode === 'sub20', true);
   preseason(G);
-  G.news.push({ t: 0, txt: `${G.me.name} assume o ${opts.mode !== 'livre' ? 'sub-20 do ' : ''}${G.clubs[opts.club].name}. Começa a temporada ${G.year}!` });
+  G.news.push({ t: 0, txt: `${G.me.name} assume o ${opts.mode === 'sub20' ? 'sub-20 do ' : ''}${G.clubs[opts.club].name}. Começa a temporada ${G.year}!` });
   welcome(G);
   return G;
 }
@@ -190,12 +191,13 @@ function applyMatch(G, f, res) {
   }
   for (const [id, n] of Object.entries(ratingsOut)) { const p = G.players[id]; if (p) p.st.ns += clamp(n, 3, 10); }
   f.notas = isUserFix(G, f) ? Object.fromEntries(Object.entries(ratingsOut).map(([k, v]) => [k, Math.round(clamp(v, 3, 10) * 10) / 10])) : undefined;
-  f.stats = res.stats;
+  f.stats = res.stats; if (res.adv && isUserFix(G, f)) f.adv = res.adv;
   // bilheteria
   const hc = clubs[0];
   if (!youth && comp.kind !== 'amateur' && !hc.closed) {
-    const occ = clamp(0.3 + hc.rep / 170 + (G.clubs[f.a].rep > 75 ? 0.12 : 0) + (f.ko >= 0 ? 0.1 : 0), 0.15, 1);
-    const inc = Math.round(hc.cap * 1000 * occ * (hc.price ?? TICKET[hc.country] ?? 20) * (comp.kind === 'cont' ? 1.6 : 1));
+    const pub = attendance(G, hc, G.clubs[f.a], f, comp); f.pub = pub; if (isUserFix(G, f)) f.mos = mosaicFor(G, f);
+    const soc = hc.socio ? Math.min(hc.socio.n * 0.7, pub * 0.6) : 0;
+    const inc = Math.round(Math.max(0, pub - soc) * (hc.price ?? TICKET[hc.country] ?? 20) * (comp.kind === 'cont' ? 1.6 : 1));
     hc.money += inc; hc.fin.tick += inc;
   }
   // técnico (usuário)
@@ -241,7 +243,7 @@ function recoverHalf(G) {
     const isMine = job && p.club === job.cid && !!p.u20 === !!job.youth;
     const tr = isMine ? (p.u20 ? G.me.u20train || club.train : club.train) : { foco: 'equilibrado', int: 1 };
     const ag = p.age >= 33 ? 0.78 : p.age >= 30 ? 0.88 : p.age <= 22 ? 1.1 : 1;
-    const base = [12.5, 10.5, 8][tr.int] ?? 10.5;
+    const base = ([1.15, 1, 0.8][tr.int] ?? 1) * (7 + 0.32 * (100 - p.fit)); // recupera mais rápido quanto mais cansado
     p.fit = Math.min(100, p.fit + (base + (isMine ? (recovBonus(G, club) + (TRAIN_FX[tr.foco]?.rec || 0)) / 2 : 0)) * ag * (p.inj > 0 ? 0.6 : 1));
   }
 }
@@ -347,6 +349,7 @@ function endWeek(G) {
   universeWeek(G); bizWeek(G); groupWeek(G); academyWeek(G); scoutNetWeek(G);
   if (G.nat) natWeek(G);
   marketWeek(G);
+  extraWeek(G);
   // ofertas expiram
   for (const m of G.inbox) if (m.exp != null && m.exp < G.t && !m.done) { m.done = true; m.expired = true; }
 }
@@ -476,7 +479,7 @@ function endSeason(G) {
     const comp = G.comps[L.id]; if (!comp) continue;
     comp.groups.forEach((g, gi) => standings(G, comp, gi).forEach((cid, i) => { const c = G.clubs[cid]; const pr = L.tv * 0.2 * Math.max(0, 1 - i / g.length); c.money += pr; c.fin.prize += pr; c.hist.push({ y, lg: L.short, pos: i + 1 }); if (c.hist.length > 15) c.hist.shift(); }));
   }
-  seasonAwards(G); secondaryEnd(G); loansSeasonEnd(G);
+  seasonAwards(G); try { bigAwards(G); seasonRecap(G); } catch (e) { console.warn(e); } secondaryEnd(G); loansSeasonEnd(G);
   // classificação continental
   G.qual = continentalQual(G);
   // acesso e rebaixamento
@@ -556,6 +559,7 @@ function endSeason(G) {
   expireContracts(G);
   // agentes livres há muito tempo somem do jogo
   for (const p of G.players) if (p && p.club === -1) { p.fa = (p.fa || 0) + 1; if ((p.fa >= 2 || p.age >= 33 || p.ovr < 45) && !G.short.includes(p.id)) p.ret = true; } else if (p) p.fa = 0;
+  try { legendsCapture(G); } catch (e) { console.warn(e); }
   // jogadores aposentados são removidos de vez
   for (let i = 0; i < G.players.length; i++) { const p = G.players[i]; if (p && p.ret && !p.keep) G.players[i] = null; }
   youthIntake(G);
@@ -602,12 +606,17 @@ function initSponsor(G, c) {
 function youthIntake(G) {
   for (const c of G.clubs) {
     if (!c.league) continue;
+    seededYouth(G, c, () => youthIntakeClub(G, c));
+  }
+}
+function youthIntakeClub(G, c) {
+  {
     const L = clubLevel(c.rep);
     const sq = G.players.filter((p) => p && p.club === c.id && !p.u20);
     const n = sq.length < 22 ? 22 - sq.length + 2 : ri(1, 3);
     const youthClub = G.players.some((p) => p && p.club === c.id && p.u20);
     if (youthClub) {
-      const has17 = c.league === 'BRA'; for (let i = 0; i < 6; i++) { const pos = pick(Object.keys(QUOTA)); const p = makePlayer(G, { n: genName('BR'), pos, age: has17 ? 15 : 16, ovr: 45 + c.rep * 0.12 + gauss() * 4, club: c.id, u20: true, wage: 300 }); if (has17) p.u17 = true; p.pot = youthBonus(G, c) + clamp(p.ovr + ri(10, 32), p.ovr, 93); }
+      const has17 = c.league === 'BRA'; const kids = []; for (let i = 0; i < 6; i++) { const pos = pick(Object.keys(QUOTA)); const p = makePlayer(G, { n: genName('BR'), pos, age: has17 ? 15 : 16, ovr: 45 + c.rep * 0.12 + gauss() * 4, club: c.id, u20: true, wage: 300 }); if (has17) p.u17 = true; p.pot = youthBonus(G, c) + clamp(p.ovr + ri(10, 32), p.ovr, 93); kids.push(p); } goldenGen(G, c, kids);
       // completa vagas do profissional
       const need = Math.max(0, 22 - sq.length);
       for (let i = 0; i < need; i++) { const p = makePlayer(G, { n: genName(c.country), pos: pick(Object.keys(QUOTA)), age: ri(19, 29), ovr: L - ri(2, 8), club: c.id, nat: c.country }); void p; }

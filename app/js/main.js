@@ -9,6 +9,8 @@ import { migrate } from './engine/life.js';
 import './ui/nations.js';
 import './ui/universe.js';
 import './ui/nego.js';
+import { afterRender, applyTheme } from './ui/extra.js';
+import { checkUpdate } from './ui/pacotes.js';
 import { startIcons, stripEmoji } from './ui/icons.js';
 import { initUniverse } from './engine/universe.js';
 import { initBiz } from './engine/business.js';
@@ -35,11 +37,11 @@ async function title() {
     <div class="logo big">PRAN<span>CHETA</span></div>
     <div class="t-sub">Do sub-20 ao império do futebol.</div>
     <div class="t-stats"><div><b>960+</b><span>clubes reais</span></div><div><b>28</b><span>ligas</span></div><div><b>18</b><span>países</span></div><div><b>7</b><span>continentais</span></div></div>
-    <div class="xs dim" style="margin-top:10px">Versão 2.0 · nov/2026</div></div>
+    <div class="xs dim" style="margin-top:10px">Versão 3.0 · nov/2026${window.PranchetaNative?.versionCode ? ` · build ${(() => { try { return window.PranchetaNative.versionCode(); } catch { return ''; } })()}` : ''}</div></div>
   <div class="t-right">
     ${m ? `<div class="t-save" data-a="loadsave" style="--c1:${m.c1 || '#1b2a25'};--c2:${m.c2 || '#0b1210'}"><div class="xs mut">Continuar · ${slotName(cur)}</div><div class="xb" style="font-size:18px">${esc(m.club)}</div><div class="xs">${esc(m.name || '')}${m.year ? ` · ${m.year}, semana ${m.week + 1}` : ''}${m.rep != null && !m.legacy ? ` · rep. ${m.rep} · ${m.titles} títulos` : ''}</div><span class="t-play">▶</span></div>` : ''}
     <button class="btn ${m ? '' : 'pri'} big blk" data-a="ng">✨ Nova carreira</button>
-    <div class="t-grid"><button class="btn" data-a="tslots">💾 Carreiras</button><button class="btn" data-a="tset">⚙️ Configurações</button><button class="btn" data-a="tnews">🆕 Novidades</button><button class="btn" data-a="thelp">❓ Como jogar</button></div>
+    <div class="t-grid"><button class="btn" data-a="tpack">📦 Instalar pacote</button><button class="btn" data-a="tslots">💾 Carreiras</button><button class="btn" data-a="tset">⚙️ Configurações</button><button class="btn" data-a="tnews">🆕 Novidades</button><button class="btn" data-a="thelp">❓ Como jogar</button></div>
     <button class="btn ghost blk" data-a="fs">⛶ Tela cheia</button>
   </div></div>`;
   startBg();
@@ -57,8 +59,14 @@ H.tset = () => openSheet(setHtml());
 function setHtml() {
   const seg = (k, opts) => `<div class="seg" style="margin:0">${opts.map(([v, l]) => `<button class="${SET[k] === v ? 'on' : ''}" data-a="setv" data-v="${k}:${typeof v === 'boolean' ? (v ? 1 : 0) : v}">${l}</button>`).join('')}</div>`;
   return `<h2>Configurações</h2>
+  <div class="field"><label>Partida ao vivo</label>${seg('view3d', [['3d', '3D'], ['2d', '2D']])}</div>
+  <div class="field"><label>Qualidade do 3D</label>${seg('q3d', [[0, 'Leve'], [1, 'Normal'], [2, 'Alta']])}</div>
+  <div class="field"><label>Tema</label>${seg('theme', [['escuro', 'Escuro'], ['claro', 'Claro']])}</div>
+  <div class="field"><label>Cores do seu clube na interface</label>${seg('clubTheme', [[true, 'Ligado'], [false, 'Desligado']])}</div>
+  <div class="field"><label>Interface</label>${seg('simple', [[false, 'Completa'], [true, 'Simplificada']])}</div>
   <div class="field"><label>Velocidade inicial da partida ao vivo</label>${seg('speed', [[1, '1x'], [2, '2x'], [4, '4x'], [8, '8x']])}</div>
   <div class="field"><label>Replays dos gols</label>${seg('replays', [[true, 'Ligados'], [false, 'Desligados']])}</div>
+  <div class="field"><label>Narrador</label>${seg('narrador', [['empolgado', 'Empolgado'], ['classico', 'Clássico'], ['resenha', 'Resenha']])}</div>
   <div class="field"><label>Legenda de narração no campo</label>${seg('narr', [[true, 'Mostrar'], [false, 'Esconder']])}</div>
   <div class="field"><label>Vibração nos gols</label>${seg('vib', [[true, 'Ligada'], [false, 'Desligada']])}</div>
   <div class="field"><label>Notificações (lembretes de jogos, propostas e empresas)</label>${seg('notif', [[true, 'Ligadas'], [false, 'Desligadas']])}${notifSupported() ? '<button class="btn sm" style="margin-top:6px" data-a="setnotif">🔔 Permitir notificações</button>' : '<div class="xs mut">Este navegador não suporta notificações; no APK elas funcionam.</div>'}</div>
@@ -66,18 +74,20 @@ function setHtml() {
   <div class="field"><label>Tamanho do texto</label>${seg('size', [['pequeno', 'Pequeno'], ['normal', 'Normal'], ['grande', 'Grande']])}</div>
   <div class="field"><label>Ao clicar em Continuar com jogo do seu time</label>${seg('fast', [[false, 'Abrir pré-jogo'], [true, 'Resultado rápido direto']])}</div>`;
 }
-H.setv = (v) => { const [k, x] = v.split(':'); SET[k] = typeof DEFV[k] === 'boolean' ? x === '1' : typeof DEFV[k] === 'number' ? +x : x; saveSet(); replaceSheet(setHtml()); if (S.G) render(); };
-const DEFV = { speed: 2, replays: true, narr: true, vib: true, notif: true, accent: 'verde', size: 'normal', fast: false };
+H.setv = (v) => { const [k, x] = v.split(':'); SET[k] = typeof DEFV[k] === 'boolean' ? x === '1' : typeof DEFV[k] === 'number' ? +x : x; saveSet(); replaceSheet(setHtml()); applyTheme(); if (S.G) render(); };
+const DEFV = { narrador: 'empolgado', view3d: '3d', q3d: 1, theme: 'escuro', clubTheme: true, simple: false, speed: 2, replays: true, narr: true, vib: true, notif: true, accent: 'verde', size: 'normal', fast: false };
 H.setnotif = async () => { const ok = await askNotif(); toast(ok ? '🔔 Notificações liberadas' : 'Permissão negada ou indisponível'); };
-H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 2.0</h2><div class="list">${[
-  ['📰', 'Jornal com manchetes ilustradas focado no seu clube, rivais e grandes transferências'],
-  ['🧠', 'Universo vivo: rivalidades, torcidas, crises, agentes, federações e legado'],
-  ['💼', 'Negócios: funde marcas, patrocine clubes e monte um grupo multiclube'],
-  ['🌍', '16 ligas reais novas, copas e 7 competições continentais'],
-  ['📋', 'Mais formações, instruções táticas, táticas salvas e novo banco de reservas'],
-  ['⚽', 'Partidas mais realistas: finalizações de dentro da área e replays'],
-  ['🔔', 'Notificações de jogos, propostas e empresas (no APK)'],
-  ['💾', 'Até 3 carreiras salvas e configurações'],
+H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 3.0</h2><div class="list">${[
+  ['⚽', 'Partida em 3D com estádio, torcida, câmera de TV e replays (o 2D continua como opção nas Configurações)'],
+  ['⚡', 'Lances decisivos jogáveis: pênalti, falta, cara a cara e pênalti contra'],
+  ['📋', 'Mais táticas, gritos da beira do campo, vestiário no intervalo e vantagens táticas entre estilos'],
+  ['🌧', 'Clima, gramado, perfil do árbitro, VAR, xG, mapa de calor, rede de passes e narradores com personalidade'],
+  ['🏆', 'Premiações animadas: Bola de Ouro, melhores das ligas e seleção do campeonato; sala de troféus e mural de lendas'],
+  ['🧢', 'Capitão e líderes, promessas leves, lesões detalhadas, base com garotos fixos e gerações de ouro'],
+  ['🏟', 'Estádio, público, sócio-torcedor e mosaicos; uniformes; convocações; propostas milionárias de fim de janela'],
+  ['🌍', 'Nova carreira em qualquer clube, país e divisão'],
+  ['🎨', 'Tema com as cores do seu clube, tema claro, busca, gestos, chaveamento, resumo da semana e interface simplificada'],
+  ['📦', 'Instalar e exportar pacotes de escudos e o assistente de escudos'],
 ].map(([i, t]) => `<div class="li"><span style="font-size:20px">${i}</span><span class="grow">${t}</span></div>`).join('')}</div>`);
 H.thelp = () => openSheet(`<h2>Como jogar</h2><div class="list">${[
   ['▶ Continuar', 'Avança o calendário. Nos jogos do seu time você escolhe jogar ao vivo ou ver só o resultado.'],
@@ -141,15 +151,18 @@ function wiz() {
     <div class="field"><label>Idade</label><input id="ngage" type="number" min="25" max="65" value="${n.age}"></div>
     <button class="btn pri big blk" data-a="w1">Próximo ›</button></div>`;
   } else if (n.step === 1) {
-    h += `<div class="cols2"><button class="card tile" style="min-height:0;text-align:left;${n.mode === 'sub20' ? 'border-color:var(--ac)' : ''}" data-a="wmode" data-v="sub20"><span class="ic">🌱</span><span class="tt">Carreira real — começando no Sub-20</span><span class="ds">Você é técnico da base de um clube da Série A. Pouco dinheiro, pouca fama. Ganhe, cresça, receba propostas, junte dinheiro e chegue a dono de clube.</span></button>
-    <button class="card tile" style="min-height:0;text-align:left;${n.mode === 'livre' ? 'border-color:var(--ac)' : ''}" data-a="wmode" data-v="livre"><span class="ic">🌍</span><span class="tt">Modo livre</span><span class="ds">Escolha qualquer clube profissional das 12 divisões e assuma o time principal na hora.</span></button></div>
+    h += `<div class="cols3"><button class="card tile" style="min-height:0;text-align:left;${n.mode === 'sub20' ? 'border-color:var(--ac)' : ''}" data-a="wmode" data-v="sub20"><span class="ic">🌱</span><span class="tt">Carreira real — começando no Sub-20</span><span class="ds">Você é técnico da base de um clube da Série A. Pouco dinheiro, pouca fama. Ganhe, cresça, receba propostas, junte dinheiro e chegue a dono de clube.</span></button>
+    <button class="card tile" style="min-height:0;text-align:left;${n.mode === 'baixo' ? 'border-color:var(--ac)' : ''}" data-a="wmode" data-v="baixo"><span class="ic">🧗</span><span class="tt">Carreira real — qualquer clube profissional</span><span class="ds">Assuma o time principal de qualquer clube, de qualquer país e divisão, como técnico em início de carreira: pouca fama e pouco dinheiro.</span></button>
+    <button class="card tile" style="min-height:0;text-align:left;${n.mode === 'livre' ? 'border-color:var(--ac)' : ''}" data-a="wmode" data-v="livre"><span class="ic">🌍</span><span class="tt">Modo livre</span><span class="ds">Qualquer clube de qualquer país e divisão, já como técnico experiente e com dinheiro no bolso.</span></button></div>
     <button class="btn pri big blk" style="max-width:420px;margin:6px auto 0" data-a="w2">Próximo ›</button>`;
   } else {
     const lgs = n.mode === 'sub20' ? LEAGUES.filter((l) => l.id === 'BRA') : LEAGUES;
     if (n.mode === 'sub20') n.lg = 'BRA';
     const clubs = S.preview.clubs.filter((c) => c.league === n.lg).sort((a, b) => b.rep - a.rep);
     h += `<div class="hint" style="margin-bottom:10px">${n.mode === 'sub20' ? 'Escolha o clube onde você vai treinar o Sub-20.' : 'Escolha seu clube.'}</div>`;
-    if (n.mode !== 'sub20') h += `<select data-ch="wlg" style="margin-bottom:10px">${lgs.map((l) => `<option value="${l.id}" ${n.lg === l.id ? 'selected' : ''}>${COUNTRIES[l.country].flag} ${esc(l.name)}</option>`).join('')}</select>`;
+    if (n.mode !== 'sub20') { const cts = [...new Set(LEAGUES.map((l) => l.country))]; const ct = n.ct || LEAGUES.find((l) => l.id === n.lg)?.country || 'BR';
+      h += `<div class="chips" style="margin-bottom:8px">${cts.map((k) => `<span class="chip ${ct === k ? 'on' : ''}" data-a="wct" data-v="${k}">${COUNTRIES[k]?.flag || ''} ${esc(COUNTRIES[k]?.name || k)}</span>`).join('')}</div>`;
+      h += `<div class="seg" style="margin:0 0 10px">${lgs.filter((l) => l.country === ct).map((l) => `<button class="${n.lg === l.id ? 'on' : ''}" data-a="wlg" data-v="${l.id}">${esc(l.short || l.name)}</button>`).join('')}</div>`; }
     h += `<div class="clubgrid">${clubs.map((c) => `<div class="li tap ${n.club === c.id ? 'sel' : ''}" data-a="wclub" data-v="${c.id}">${crest(c, 34)}<div class="grow"><div class="b ell">${esc(c.name)}</div><div class="xs mut ell">${stars(c.rep)}</div></div></div>`).join('')}</div></div>
     <div style="padding-top:10px"><button class="btn pri big blk" data-a="w3" ${n.club == null ? 'disabled' : ''}>Começar carreira ⚽</button></div>`;
     app.innerHTML = h + '</div>'; return;
@@ -166,6 +179,7 @@ H.w2 = () => {
   S.preview = { clubs }; S.ng.step = 2; S.ng.club = null; window.scrollTo(0, 0); wiz();
 };
 H.wlg = (v) => { S.ng.lg = v; S.ng.club = null; wiz(); };
+H.wct = (v) => { S.ng.ct = v; S.ng.lg = LEAGUES.find((l) => l.country === v)?.id; S.ng.club = null; wiz(); };
 H.wclub = (v) => { S.ng.club = +v; wiz(); };
 H.w3 = () => {
   const n = S.ng;
@@ -187,10 +201,12 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && S.G
 window.PRANCHETA = S;
 const rot = document.createElement('div'); rot.className = 'rotate'; rot.innerHTML = '<div class="ph"></div><div class="xb" style="font-size:20px">Gire o celular</div><div class="mut">O Prancheta é jogado na horizontal.</div>'; document.body.appendChild(rot);
 applySet();
+S.afterRender = afterRender; applyTheme();
 startIcons();
 try { if (window.PranchetaNative && SET.notif && !localStorage.getItem('prancheta.askedNotif')) { localStorage.setItem('prancheta.askedNotif', '1'); setTimeout(() => askNotif(), 2500); } } catch {}
 (async function boot() {
   try { await loadImages(); } catch (e) { console.warn(e); }
   title();
+  checkUpdate();
 })();
 window.addEventListener('error', (e) => { toast('Erro: ' + e.message, 4000); });

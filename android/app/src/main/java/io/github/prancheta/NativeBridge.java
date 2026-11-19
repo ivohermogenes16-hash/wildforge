@@ -10,6 +10,14 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.SystemClock;
 import android.webkit.JavascriptInterface;
+import android.net.Uri;
+import android.content.ContentValues;
+import android.provider.MediaStore;
+import android.os.Environment;
+import android.util.Base64;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 
 /* Ponte chamada pelo jogo (window.PranchetaNative) para agendar lembretes no Android. */
 public class NativeBridge {
@@ -56,5 +64,41 @@ public class NativeBridge {
             }
         }
         return true;
+    }
+
+    /* versão instalada (para o aviso de atualização obrigatória) */
+    @JavascriptInterface
+    public int versionCode() {
+        try { return (int) act.getPackageManager().getPackageInfo(act.getPackageName(), 0).getLongVersionCode(); }
+        catch (Throwable t) { try { return act.getPackageManager().getPackageInfo(act.getPackageName(), 0).versionCode; } catch (Throwable t2) { return 0; } }
+    }
+
+    /* abre um link no navegador do celular (baixar a atualização, procurar escudos) */
+    @JavascriptInterface
+    public void openUrl(String url) {
+        try { Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url)); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); act.startActivity(i); } catch (Throwable ignored) {}
+    }
+
+    /* salva um arquivo (pacote exportado) na pasta Downloads */
+    @JavascriptInterface
+    public String saveFile(String name, String base64, String mime) {
+        try {
+            byte[] data = Base64.decode(base64, Base64.DEFAULT);
+            if (Build.VERSION.SDK_INT >= 29) {
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.Downloads.DISPLAY_NAME, name);
+                v.put(MediaStore.Downloads.MIME_TYPE, mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
+                Uri u = act.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                if (u == null) return "";
+                try (OutputStream o = act.getContentResolver().openOutputStream(u)) { o.write(data); }
+                return "Downloads/" + name;
+            } else {
+                File dir = act.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (dir == null) return "";
+                File f = new File(dir, name);
+                try (FileOutputStream o = new FileOutputStream(f)) { o.write(data); }
+                return f.getAbsolutePath();
+            }
+        } catch (Throwable t) { return ""; }
     }
 }

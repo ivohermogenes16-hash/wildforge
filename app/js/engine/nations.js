@@ -73,9 +73,9 @@ function callUps(G, tour) {
       const out = [];
       for (const id of sq) { const p = G.players[id]; const ch = 0.025 + (['Individualista', 'Temperamental'].includes(p.per) ? 0.06 : 0) + (p.age >= 34 ? 0.08 : 0); if (rnd() < ch && !p.virt) out.push(p); }
       if (out.length) { sq = sq.filter((id) => !out.some((p) => p.id === id)); msg(G, 'Federação', `📋 Pedido de dispensa: ${out.map((p) => p.n).join(', ')}`, `${out.map((p) => `${p.n} (${p.per?.toLowerCase() || ''})`).join(', ')} pediu dispensa da convocação${out.some((p) => p.age >= 34) ? ' — alguns veteranos pensam em se despedir da seleção' : ''}. A federação convocou substitutos automaticamente.`); for (const p of autoSquad(G, T.code)) if (sq.length < 23 && !sq.includes(p)) sq.push(p); }
-      T.squad = sq; me.natSquad = sq.slice();
+      T.squad = sq; T.callT = G.t; me.natSquad = sq.slice();
       msg(G, 'Federação', `📋 Convocação: ${T.flag} ${T.name}`, `${tour ? 'Lista para o torneio' : 'Lista para a data FIFA'} definida com ${sq.length} jogadores. Você pode ajustar na aba Seleção antes do jogo.`);
-    } else T.squad = autoSquad(G, T.code);
+    } else { T.squad = autoSquad(G, T.code); T.callT = G.t; }
   }
 }
 

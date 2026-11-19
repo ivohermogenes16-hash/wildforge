@@ -1,5 +1,5 @@
 // Configurações do jogo (ficam salvas no aparelho) e notificações
-const DEF = { speed: 2, replays: true, narr: true, vib: true, notif: true, accent: 'verde', size: 'normal', fast: false, autosave: true };
+const DEF = { narrador: 'empolgado', view3d: '3d', q3d: 1, theme: 'escuro', clubTheme: true, simple: false, speed: 2, replays: true, narr: true, vib: true, notif: true, accent: 'verde', size: 'normal', fast: false, autosave: true };
 export const SET = { ...DEF };
 try { Object.assign(SET, JSON.parse(localStorage.getItem('prancheta.set') || '{}')); } catch {}
 export const ACCENTS = { verde: ['#2fe08a', '#19b46b'], azul: ['#4aa8ff', '#1f7fe0'], ouro: ['#f4c542', '#d39e16'], rubro: ['#ff5a5f', '#d63339'], roxo: ['#a77bff', '#7b4fe0'] };

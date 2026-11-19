@@ -1,5 +1,9 @@
 // Ícones vetoriais no lugar de emojis: todo emoji que aparecer na tela vira um ícone desenhado no estilo do jogo.
 const P = {
+  shirt: '<path d="M8 3l-5 3 2 5 3-1v11h8V10l3 1 2-5-5-3a4 4 0 0 1-8 0z"/>',
+  box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
+  wand: '<path d="M4 20L16 8M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM19 11l.5 1 1 .5-1 .5-.5 1-.5-1-1-.5 1-.5z"/>',
+  pin: '<path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/>',
   ball: '<circle cx="12" cy="12" r="9"/><path d="M12 7l4 3-1.5 4.5h-5L8 10z"/><path d="M12 3v4M21 10.5l-5-.5M18 19l-3.5-4.5M6 19l3.5-4.5M3 10.5l5-.5"/>',
   check: '<path d="M4.5 12.5l5 5 10-11"/>',
@@ -95,7 +99,7 @@ add(['❤', '💚', '💛', '🧡', '💙', '💜'], 'heart', 'hot'); add(['👍
 add(['📊'], 'chart'); add(['🧤', '🛡'], 'shield'); add(['🎉', '🎊'], 'spark', 'gold'); add(['🎁'], 'gift', 'gold'); add(['⏸'], 'pause'); add(['▶'], 'play'); add(['⏩', '⏭'], 'ffwd');
 add(['⚙'], 'gear'); add(['🏠'], 'home'); add(['📅', '🗓'], 'cal'); add(['🎓', '🧢'], 'cap'); add(['❓', '❔'], 'help', 'blue'); add(['⛶'], 'expand');
 add(['🏳', '🏁', '🚩'], 'flag'); add(['🎵', '🎶'], 'music'); add(['💨'], 'wind'); add(['🔎', '🔍', '🔭'], 'search'); add(['🏷'], 'tag'); add(['🏋'], 'dumbbell');
-add(['👀'], 'eye'); add(['🪑'], 'bench'); add(['🏫'], 'school'); add(['🆕'], 'new', 'ok'); add(['⬜'], 'dot', 'mut'); add(['☆'], 'star', 'mut'); add(['🧑‍🏫'], 'user');
+add(['👕', '👚'], 'shirt'); add(['📦'], 'box'); add(['🪄'], 'wand', 'gold'); add(['🩺'], 'med', 'bad'); add(['🎫', '🎟'], 'tag'); add(['🎨'], 'spark', 'gold'); add(['🧗'], 'up', 'ok'); add(['⏱'], 'clock'); add(['🧘', '🧊'], 'meh'); add(['🛡️'], 'shield'); add(['👏'], 'fist', 'ok'); add(['📺'], 'camera'); add(['👀'], 'eye'); add(['🪑'], 'bench'); add(['🏫'], 'school'); add(['🆕'], 'new', 'ok'); add(['⬜'], 'dot', 'mut'); add(['☆'], 'star', 'mut'); add(['🧑‍🏫'], 'user');
 const CACHE = {};
 export function icon(name, tone = '') { const k = name + tone; return CACHE[k] ||= `<svg class="ic ${tone}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || P.dot}</svg>`; }
 // bandeiras (dois indicadores regionais) viram uma etiqueta com a sigla do país
