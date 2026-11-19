@@ -104,7 +104,7 @@ PAGES.pacotes = () => {
 };
 
 // ---------- atualização obrigatória (APK) ----------
-const APK_URL = 'https://github.com/ivohermogenes16-hash/wildforge/releases/download/prancheta-apk/prancheta.apk';
+const APK_URL = 'https://github.com/lumbragames/prancheta/releases/latest/download/prancheta.apk';
 const REL_API = 'https://api.github.com/repos/ivohermogenes16-hash/wildforge/releases/tags/prancheta-apk';
 export async function checkUpdate() {
   const N = window.PranchetaNative; if (!N?.versionCode) return false;
