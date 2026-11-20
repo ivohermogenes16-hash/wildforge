@@ -25,6 +25,10 @@ android {
             storePassword System.getenv("LUMBRA_KEY_PASS")
             keyAlias "lumbra"
             keyPassword System.getenv("LUMBRA_KEY_PASS")
+            // assinaturas antiga (v1) e novas (v2/v3): algumas lojas exigem a v1
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
         }
     }
 
