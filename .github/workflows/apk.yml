@@ -42,10 +42,18 @@ jobs:
           mkdir -p android/app/src/main/assets
           cp -r app/index.html app/css app/js app/m3d android/app/src/main/assets/
 
+      - name: Abrir a chave de assinatura
+        env:
+          LUMBRA_KEY_PASS: ${{ secrets.LUMBRA_KEY_PASS }}
+        run: |
+          if [ -z "$LUMBRA_KEY_PASS" ]; then echo "Falta o secret LUMBRA_KEY_PASS"; exit 1; fi
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in android/lumbra.keystore.enc -out android/lumbra.keystore -pass env:LUMBRA_KEY_PASS
+
       - name: Montar o APK
         working-directory: android
         env:
           VCODE: ${{ github.run_number }}
+          LUMBRA_KEY_PASS: ${{ secrets.LUMBRA_KEY_PASS }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Preparar o arquivo

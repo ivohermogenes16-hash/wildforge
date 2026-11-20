@@ -10,7 +10,7 @@ android {
     compileSdk 34
 
     defaultConfig {
-        applicationId "io.github.ivohermogenes16.prancheta"
+        applicationId "com.lumbragames.prancheta"
         minSdk 24
         targetSdk 34
         versionCode vcode
@@ -19,10 +19,12 @@ android {
 
     signingConfigs {
         release {
-            storeFile file("../prancheta.keystore")
-            storePassword "prancheta-campo"
-            keyAlias "prancheta"
-            keyPassword "prancheta-campo"
+            // a chave fica criptografada no repositório e só é aberta na montagem,
+            // com a senha guardada nos "Secrets" do GitHub (LUMBRA_KEY_PASS)
+            storeFile file("../lumbra.keystore")
+            storePassword System.getenv("LUMBRA_KEY_PASS")
+            keyAlias "lumbra"
+            keyPassword System.getenv("LUMBRA_KEY_PASS")
         }
     }
 
