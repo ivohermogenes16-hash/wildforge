@@ -10,6 +10,7 @@ import './ui/nations.js';
 import './ui/universe.js';
 import './ui/nego.js';
 import { afterRender, applyTheme } from './ui/extra.js';
+import './ui/picker.js';
 import { checkUpdate } from './ui/pacotes.js';
 import { startIcons, stripEmoji } from './ui/icons.js';
 import { initUniverse } from './engine/universe.js';
@@ -37,7 +38,7 @@ async function title() {
     <div class="logo big">PRAN<span>CHETA</span></div>
     <div class="t-sub">Do sub-20 ao império do futebol.</div>
     <div class="t-stats"><div><b>960+</b><span>clubes reais</span></div><div><b>28</b><span>ligas</span></div><div><b>18</b><span>países</span></div><div><b>7</b><span>continentais</span></div></div>
-    <div class="xs dim" style="margin-top:10px">Versão 3.0 · nov/2026${window.PranchetaNative?.versionCode ? ` · build ${(() => { try { return window.PranchetaNative.versionCode(); } catch { return ''; } })()}` : ''}</div></div>
+    <div class="xs dim" style="margin-top:10px">Versão 4.0 · nov/2026${window.PranchetaNative?.versionCode ? ` · build ${(() => { try { return window.PranchetaNative.versionCode(); } catch { return ''; } })()}` : ''}</div></div>
   <div class="t-right">
     ${m ? `<div class="t-save" data-a="loadsave" style="--c1:${m.c1 || '#1b2a25'};--c2:${m.c2 || '#0b1210'}"><div class="xs mut">Continuar · ${slotName(cur)}</div><div class="xb" style="font-size:18px">${esc(m.club)}</div><div class="xs">${esc(m.name || '')}${m.year ? ` · ${m.year}, semana ${m.week + 1}` : ''}${m.rep != null && !m.legacy ? ` · rep. ${m.rep} · ${m.titles} títulos` : ''}</div><span class="t-play">▶</span></div>` : ''}
     <button class="btn ${m ? '' : 'pri'} big blk" data-a="ng">✨ Nova carreira</button>
@@ -77,17 +78,16 @@ function setHtml() {
 H.setv = (v) => { const [k, x] = v.split(':'); SET[k] = typeof DEFV[k] === 'boolean' ? x === '1' : typeof DEFV[k] === 'number' ? +x : x; saveSet(); replaceSheet(setHtml()); applyTheme(); if (S.G) render(); };
 const DEFV = { narrador: 'empolgado', view3d: '3d', q3d: 1, theme: 'escuro', clubTheme: true, simple: false, speed: 2, replays: true, narr: true, vib: true, notif: true, accent: 'verde', size: 'normal', fast: false };
 H.setnotif = async () => { const ok = await askNotif(); toast(ok ? '🔔 Notificações liberadas' : 'Permissão negada ou indisponível'); };
-H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 3.0</h2><div class="list">${[
-  ['⚽', 'Partida em 3D com estádio, torcida, câmera de TV e replays (o 2D continua como opção nas Configurações)'],
-  ['⚡', 'Lances decisivos jogáveis: pênalti, falta, cara a cara e pênalti contra'],
-  ['📋', 'Mais táticas, gritos da beira do campo, vestiário no intervalo e vantagens táticas entre estilos'],
-  ['🌧', 'Clima, gramado, perfil do árbitro, VAR, xG, mapa de calor, rede de passes e narradores com personalidade'],
-  ['🏆', 'Premiações animadas: Bola de Ouro, melhores das ligas e seleção do campeonato; sala de troféus e mural de lendas'],
-  ['🧢', 'Capitão e líderes, promessas leves, lesões detalhadas, base com garotos fixos e gerações de ouro'],
-  ['🏟', 'Estádio, público, sócio-torcedor e mosaicos; uniformes; convocações; propostas milionárias de fim de janela'],
-  ['🌍', 'Nova carreira em qualquer clube, país e divisão'],
-  ['🎨', 'Tema com as cores do seu clube, tema claro, busca, gestos, chaveamento, resumo da semana e interface simplificada'],
-  ['📦', 'Instalar e exportar pacotes de escudos e o assistente de escudos'],
+H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 4.0</h2><div class="list">${[
+  ['🧑‍💼', 'Criação do treinador nova: cartão animado, nacionalidade, estilo de jogo e origem'],
+  ['💼', 'Sala de negociação para contratar: rodadas de propostas, paciência do clube, empresário e assinatura animada'],
+  ['🎉', 'Apresentação do reforço com camisa girando, nome e número, holofotes e confete'],
+  ['🎤', 'Coletivas com repórteres, muito mais perguntas e respostas diferentes e manchete do jornal'],
+  ['📋', 'Escalação salva nunca muda sozinha; quem está fora da lista pode ir para o banco'],
+  ['🔽', 'Todos os seletores viraram listas bonitas com cards de jogador e busca'],
+  ['🛒', 'Mercado mais limpo e compacto; empresas organizadas em abas fáceis de entender'],
+  ['⚽', '3D mais real: impedimento com bandeirinhas, jogadores espaçados e passes cortados pelos adversários'],
+  ['✨', 'Animações em telas, listas, botões, números e barras em todo o jogo'],
 ].map(([i, t]) => `<div class="li"><span style="font-size:20px">${i}</span><span class="grow">${t}</span></div>`).join('')}</div>`);
 H.thelp = () => openSheet(`<h2>Como jogar</h2><div class="list">${[
   ['▶ Continuar', 'Avança o calendário. Nos jogos do seu time você escolhe jogar ao vivo ou ver só o resultado.'],
@@ -141,19 +141,40 @@ async function goFull() {
   try { await screen.orientation?.lock?.('landscape'); } catch {}
 }
 H.loadsave = async () => { goFull(); const G = await loadGame(); if (!G) { toast('Nenhum jogo salvo'); return; } S.G = G; migrate(G); if (!G.nat) { initNations(G); natSetupYear(G); G.nat.fix.forEach((f) => { if (f.w < G.week) f.skip = true; }); G.nat.fix = G.nat.fix.filter((f) => !f.skip); G.nat.fix.forEach((f, i) => (f.i = i)); for (const T of Object.values(G.nat.tours)) T.ko = []; } else initNations(G); G.me.cd ||= {}; initUniverse(G); initBiz(G); if (!G.comps.U17) { if (G.week < 24) setupU17(G, G.week + 1); else ensureU17(G); } if (G.me.job) ensureBase(G, G.me.job.cid); S.tab = 'home'; S.page = null; render(); };
-H.ng = () => { goFull(); S.ng = { step: 0, name: '', age: 32, mode: 'sub20', lg: 'BRA', club: null }; wiz(); };
+H.ng = () => { goFull(); S.ng = { step: 0, name: '', age: 32, mode: 'sub20', lg: 'BRA', club: null, nat: 'BR', style: 'equil', origin: 'exjog', color: 'esmeralda' }; wiz(); };
 
+const CSTYLE = { ofens: ['⚔️', 'Ofensivo', 'Time pra frente, muitos gols'], equil: ['⚖️', 'Equilibrado', 'Nem tanto ao ataque, nem à defesa'], defens: ['🛡️', 'Defensivo', 'Primeiro não sofrer gols'], posse: ['🎯', 'Posse de bola', 'Toque curto e paciência'], contra: ['⚡', 'Contra-ataque', 'Espera e mata em velocidade'] };
+const CORIG = { exjog: ['👟', 'Ex-jogador', 'Respeito no vestiário'], analista: ['📊', 'Analista', 'Leitura tática apurada'], professor: ['📚', 'Professor', 'Começou dando aula de Educação Física'], base: ['🌱', 'Formador', 'Anos revelando garotos na base'] };
+const CCOL = { esmeralda: ['#2fe08a', '#0e5a37'], ouro: ['#f4c542', '#6b4e0b'], gelo: ['#7fd6ff', '#164a66'], rubi: ['#ff5d73', '#5e1020'], ametista: ['#b38cff', '#3a1f6b'], grafite: ['#e9f2ee', '#2b3532'] };
+const CNATS = ['BR', 'AR', 'UY', 'PT', 'ES', 'IT', 'EN', 'DE', 'FR', 'NL', 'CO', 'MX', 'US', 'JP'];
+function coachCard(n) {
+  const [c1, c2] = CCOL[n.color] || CCOL.esmeralda; const st = CSTYLE[n.style], og = CORIG[n.origin];
+  const ini = (n.name || 'Seu Nome').split(/\s+/).filter(Boolean).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+  const lv = Math.max(1, Math.min(5, Math.round((n.age - 22) / 9)));
+  return `<div class="cc-card" style="--c1:${c1};--c2:${c2}"><div class="cc-holo"></div><div class="cc-top"><span class="cc-tag">TÉCNICO</span><span class="cc-flag">${COUNTRIES[n.nat]?.flag || '🏳️'}</span></div>
+    <div class="cc-av"><svg viewBox="0 0 100 100"><defs><linearGradient id="ccg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset="1" stop-color="#fff" stop-opacity=".05"/></linearGradient></defs><circle cx="50" cy="34" r="17" fill="url(#ccg)"/><path d="M16 96c3-24 17-36 34-36s31 12 34 36z" fill="url(#ccg)"/><path d="M42 62l8 14 8-14" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="3"/></svg><b>${esc(ini || '?')}</b></div>
+    <div class="cc-name" id="ccname">${esc(n.name || 'Seu nome')}</div>
+    <div class="cc-sub"><span id="ccage">${n.age} anos</span> · ${esc(COUNTRIES[n.nat]?.name || '')}</div>
+    <div class="cc-badges"><span>${st[0]} ${st[1]}</span><span>${og[0]} ${og[1]}</span></div>
+    <div class="cc-exp"><small>Experiência</small><i>${'★'.repeat(lv)}<u>${'★'.repeat(5 - lv)}</u></i></div></div>`;
+}
+function wizSteps(i) { return `<div class="wz-steps">${['Treinador', 'Modo', 'Clube'].map((l, k) => `<div class="${k < i ? 'ok' : k === i ? 'on' : ''}"><span>${k < i ? '✓' : k + 1}</span>${l}</div>`).join('<i></i>')}</div>`; }
 function wiz() {
   const n = S.ng;
-  let h = `<div class="wiz"><div class="row" style="margin-bottom:12px"><button class="btn sm" data-a="wback">‹ Voltar</button><div class="grow xb" style="font-size:18px;text-align:center">Nova carreira</div><span class="pill">${n.step + 1}/3</span></div><div class="body">`;
+  let h = `<div class="wiz"><div class="wz-top"><button class="btn sm" data-a="wback">‹ Voltar</button>${wizSteps(n.step)}<span style="width:70px"></span></div><div class="body">`;
   if (n.step === 0) {
-    h += `<div class="card" style="max-width:520px;margin:0 auto"><div class="field"><label>Seu nome de técnico</label><input id="ngname" value="${esc(n.name)}" placeholder="Ex.: Ivo Hermógenes" maxlength="30"></div>
-    <div class="field"><label>Idade</label><input id="ngage" type="number" min="25" max="65" value="${n.age}"></div>
-    <button class="btn pri big blk" data-a="w1">Próximo ›</button></div>`;
+    h += `<div class="cc-wrap"><div class="cc-left">${coachCard(n)}</div><div class="cc-form">
+      <div class="cc-f"><label>Nome do técnico</label><input id="ngname" value="${esc(n.name)}" placeholder="Ex.: Carlos Andrade" maxlength="30" data-in="wname" autocomplete="off"></div>
+      <div class="cc-row"><div class="cc-f"><label>Idade</label><div class="cc-age"><button class="btn sm" data-a="wage" data-v="-1">−</button><b id="ngage2">${n.age}</b><button class="btn sm" data-a="wage" data-v="1">+</button></div></div>
+        <div class="cc-f grow"><label>Nacionalidade</label><select data-ch="wnat" data-title="Nacionalidade">${CNATS.filter((k) => COUNTRIES[k]).map((k) => `<option value="${k}" ${n.nat === k ? 'selected' : ''}>${COUNTRIES[k].flag} ${esc(COUNTRIES[k].name)}</option>`).join('')}</select></div></div>
+      <div class="cc-f"><label>Estilo de jogo</label><div class="cc-opts">${Object.entries(CSTYLE).map(([k, [i, t, d]]) => `<button class="cc-o ${n.style === k ? 'on' : ''}" data-a="wsty" data-v="${k}" title="${esc(d)}"><span>${i}</span>${t}</button>`).join('')}</div><div class="xs mut" style="margin-top:3px">${esc(CSTYLE[n.style][2])} · vira a tática inicial do seu time.</div></div>
+      <div class="cc-f"><label>Origem</label><div class="cc-opts">${Object.entries(CORIG).map(([k, [i, t, d]]) => `<button class="cc-o ${n.origin === k ? 'on' : ''}" data-a="wori" data-v="${k}" title="${esc(d)}"><span>${i}</span>${t}</button>`).join('')}</div><div class="xs mut" style="margin-top:3px">${esc(CORIG[n.origin][2])}.</div></div>
+      <div class="cc-f"><label>Cor do seu cartão</label><div class="cc-cols">${Object.entries(CCOL).map(([k, [a, b2]]) => `<button class="cc-sw ${n.color === k ? 'on' : ''}" style="background:linear-gradient(135deg,${a},${b2})" data-a="wcol" data-v="${k}"></button>`).join('')}</div></div>
+      <button class="btn pri big blk" data-a="w1">Continuar ›</button></div></div>`;
   } else if (n.step === 1) {
-    h += `<div class="cols3"><button class="card tile" style="min-height:0;text-align:left;${n.mode === 'sub20' ? 'border-color:var(--ac)' : ''}" data-a="wmode" data-v="sub20"><span class="ic">🌱</span><span class="tt">Carreira real — começando no Sub-20</span><span class="ds">Você é técnico da base de um clube da Série A. Pouco dinheiro, pouca fama. Ganhe, cresça, receba propostas, junte dinheiro e chegue a dono de clube.</span></button>
-    <button class="card tile" style="min-height:0;text-align:left;${n.mode === 'baixo' ? 'border-color:var(--ac)' : ''}" data-a="wmode" data-v="baixo"><span class="ic">🧗</span><span class="tt">Carreira real — qualquer clube profissional</span><span class="ds">Assuma o time principal de qualquer clube, de qualquer país e divisão, como técnico em início de carreira: pouca fama e pouco dinheiro.</span></button>
-    <button class="card tile" style="min-height:0;text-align:left;${n.mode === 'livre' ? 'border-color:var(--ac)' : ''}" data-a="wmode" data-v="livre"><span class="ic">🌍</span><span class="tt">Modo livre</span><span class="ds">Qualquer clube de qualquer país e divisão, já como técnico experiente e com dinheiro no bolso.</span></button></div>
+    h += `<div class="cols3 wz-modes"><button class="card tile ${n.mode === 'sub20' ? 'on' : ''}" style="min-height:0;text-align:left" data-a="wmode" data-v="sub20"><span class="ic">🌱</span><span class="tt">Carreira real — começando no Sub-20</span><span class="ds">Você é técnico da base de um clube da Série A. Pouco dinheiro, pouca fama. Ganhe, cresça, receba propostas, junte dinheiro e chegue a dono de clube.</span></button>
+    <button class="card tile ${n.mode === 'baixo' ? 'on' : ''}" style="min-height:0;text-align:left" data-a="wmode" data-v="baixo"><span class="ic">🧗</span><span class="tt">Carreira real — qualquer clube profissional</span><span class="ds">Assuma o time principal de qualquer clube, de qualquer país e divisão, como técnico em início de carreira: pouca fama e pouco dinheiro.</span></button>
+    <button class="card tile ${n.mode === 'livre' ? 'on' : ''}" style="min-height:0;text-align:left" data-a="wmode" data-v="livre"><span class="ic">🌍</span><span class="tt">Modo livre</span><span class="ds">Qualquer clube de qualquer país e divisão, já como técnico experiente e com dinheiro no bolso.</span></button></div>
     <button class="btn pri big blk" style="max-width:420px;margin:6px auto 0" data-a="w2">Próximo ›</button>`;
   } else {
     const lgs = n.mode === 'sub20' ? LEAGUES.filter((l) => l.id === 'BRA') : LEAGUES;
@@ -170,7 +191,11 @@ function wiz() {
   app.innerHTML = h + '</div></div>';
 }
 H.wback = () => { if (S.ng.step === 0) title(); else { S.ng.step--; wiz(); } };
-H.w1 = () => { const n = S.ng; n.name = document.getElementById('ngname').value.trim(); n.age = +document.getElementById('ngage').value || 32; if (n.name.length < 2) { toast('Digite seu nome'); return; } n.step = 1; wiz(); };
+H.w1 = () => { const n = S.ng; n.name = document.getElementById('ngname').value.trim(); if (n.name.length < 2) { const i = document.getElementById('ngname'); i.classList.remove('shake'); void i.offsetWidth; i.classList.add('shake'); i.focus(); toast('Digite o nome do seu técnico'); return; } n.step = 1; wiz(); };
+H.wname = (v) => { S.ng.name = v; const e = document.getElementById('ccname'); if (e) e.textContent = v.trim() || 'Seu nome'; const av = document.querySelector('.cc-av b'); if (av) av.textContent = (v.trim().split(/\s+/).filter(Boolean).map((x) => x[0]).slice(0, 2).join('') || '?').toUpperCase(); };
+const wre = () => { const nm = document.getElementById('ngname')?.value; if (nm != null) S.ng.name = nm; wiz(); const c = document.querySelector('.cc-card'); if (c) { c.classList.add('pop'); } };
+H.wage = (v) => { S.ng.age = Math.max(25, Math.min(70, S.ng.age + +v)); wre(); };
+H.wnat = (v) => { S.ng.nat = v; wre(); }; H.wsty = (v) => { S.ng.style = v; wre(); }; H.wori = (v) => { S.ng.origin = v; wre(); }; H.wcol = (v) => { S.ng.color = v; wre(); };
 H.wmode = (v) => { S.ng.mode = v; wiz(); };
 H.w2 = () => {
   // pré-visualização simples dos clubes (sem gerar o mundo ainda)
@@ -186,6 +211,9 @@ H.w3 = () => {
   app.innerHTML = `<div class="title-screen" style="align-items:center;text-align:center"><div style="font-size:48px">⚽</div><div class="xb">Montando o mundo do futebol…</div><div class="mut sm">12 divisões, copas nacionais, Libertadores e Champions</div></div>`;
   setTimeout(async () => {
     S.G = newGame({ name: n.name, age: n.age, mode: n.mode, club: n.club });
+    S.G.me.bio = { nat: n.nat, style: n.style, origin: n.origin, color: n.color };
+    if (n.origin === 'exjog') S.G.me.rep = Math.min(99, S.G.me.rep + 2);
+    { const jc = S.G.clubs[S.G.me.job.cid]; const t = S.G.me.job.youth ? (S.G.me.u20tact ||= { ...jc.tact }) : jc.tact; const M = { ofens: { ment: 2, press: 2 }, equil: { ment: 1, press: 1 }, defens: { ment: 0, press: 1 }, posse: { ment: 1, press: 1, tempo: 0 }, contra: { ment: 0, press: 0, tempo: 2 } }[n.style]; if (M) Object.assign(t, M); }
     S.tab = 'home'; S.page = null; S.comp = null;
     await save(true); hasSave = true;
     render();

@@ -65,38 +65,58 @@ function foundHtml() {
 H.cfseg = (v) => { S.cf.seg = v; }; H.cfhome = (v) => { S.cf.home = v; }; H.cfident = (v) => { S.cf.ident = v; }; H.cfgoal = (v) => { S.cf.goal = v; };
 H.cfi = (v) => { S.cf.inv = +v; document.getElementById('cfi').textContent = money(+v); };
 H.cofound2 = () => { S.cf.n = document.getElementById('cfn').value.trim(); const r = B.foundCompany(S.G, S.cf); toast(r.ok ? `🏢 ${r.co.n} fundada!` : r.why, 3000); if (r.ok) { closeSheet(); S.sub.neg = 'emp'; render(); save(); } };
-H.coopen = (v) => { S.coId = +v; openSheet(coSheet()); };
+H.coopen = (v) => { S.coId = +v; S.coTab = 'resumo'; openSheet(coSheet())?.parentElement?.classList.add('wide'); };
 function coSheet() {
   const G = S.G; const c = B.coById(G, S.coId); const mine = c.user && c.sh >= 51;
-  const ctr = B.contractsOf(G, c);
-  let h = `<h2>${esc(c.n)}</h2><div class="xs mut">${B.SEGS[c.seg].n} · fundada em ${c.founded}${c.ident ? ` · ${esc(c.ident)}` : ''}${c.goal ? ` · objetivo: ${esc(c.goal)}` : ''}</div>
-  ${coCard(G, c, true)}
-  <div class="card flat"><h3>Finanças (por semana)</h3><div class="kv"><span>Receita</span><b class="ok">${money(c.rev)}</b></div><div class="kv"><span>Despesas</span><b class="bad">${money(c.exp)}</b></div><div class="kv"><span>Lucro / prejuízo</span><b class="${c.prof >= 0 ? 'ok' : 'bad'}">${money(c.prof)}</b></div>
-  <div class="kv"><span>Caixa</span><b>${money(c.cash)}</b></div><div class="kv"><span>Dívida</span><b class="${c.debt ? 'bad' : ''}">${money(c.debt)}</b></div><div class="kv"><span>Capacidade de produção</span><b>${money(B.capacity(c))}/sem.${c.rev >= B.capacity(c) * 0.98 ? ' ⚠️ no limite' : ''}</b></div>
-  <div class="kv"><span>Folha</span><b>${money(c.emp * B.empWage(c))}/sem.</b></div><div class="kv"><span>Produtos</span><b>${c.prods}${c.proj ? ` (+1 em ${c.proj.left} sem.)` : ''}</b></div></div>
-  <div class="card flat"><h3>Departamentos</h3>${Object.entries(B.DEPTS).map(([k, l]) => `<div class="li"><span class="grow">${l} <span class="xs mut">nível ${c.d[k]}</span></span>${mine ? `<button class="btn sm" data-a="coact" data-v="dept:${k}">Investir ${money(120000 * Math.pow(2.2, c.d[k] - 1))}</button>` : ''}</div>`).join('')}</div>
-  <div class="card flat"><h3>Contratos de patrocínio (${ctr.length})</h3>${ctr.slice(0, 30).map(({ c: cl, s }) => `<div class="li sm">${crest(cl, 20)}<span class="grow">${esc(cl.name)} <span class="xs mut">${B.SLOTS[s.slot]?.n || s.slot}</span></span><b>${money(s.val)}/ano até ${s.until}</b></div>`).join('') || '<div class="xs mut">Nenhum.</div>'}</div>`;
-  if (mine) h += socialCard(G, c, true);
-  if (mine) { const mx = Math.max(10000, Math.floor(G.me.money / 10000) * 10000); S.cq ||= { ap: Math.min(mx, 200000), wd: 0, hire: 10, ads: 100000, inf: 50000 }; const q = S.cq; q.ap = Math.min(q.ap, mx); const wmx = Math.max(0, Math.floor(c.cash / 10000) * 10000); q.wd = Math.min(q.wd, wmx);
-    h += `<div class="card"><h3>Dinheiro</h3>
-    <div class="field"><label>Aportar do seu bolso: <b id="cqap">${money(q.ap)}</b> <span class="xs mut">(você tem ${money(G.me.money)})</span></label><input type="range" min="10000" max="${mx}" step="10000" value="${q.ap}" data-in="cqap"></div>
-    <div class="row" style="gap:6px;margin-bottom:8px">${[0.1, 0.25, 0.5, 1].map((f) => `<span class="chip" data-a="cqset" data-v="ap:${Math.max(10000, Math.floor(G.me.money * f / 10000) * 10000)}">${f === 1 ? 'Tudo' : Math.round(f * 100) + '%'}</span>`).join('')}<button class="btn sm pri grow" data-a="cqgo" data-v="ap">💰 Aportar</button></div>
-    <div class="field"><label>Retirar da empresa: <b id="cqwd">${money(q.wd)}</b> <span class="xs mut">(caixa ${money(c.cash)} · você recebe ${c.sh}%)</span></label><input type="range" min="0" max="${wmx}" step="10000" value="${q.wd}" data-in="cqwd"></div>
-    <button class="btn sm blk" data-a="cqgo" data-v="wd">🏦 Retirar dividendos</button></div>
-    <div class="card"><h3>Administrar</h3>
-    <div class="field"><label>Contratar funcionários: <b id="cqhire">${q.hire}</b> <span class="xs mut">(${money(q.hire * 2500)} de custo + ${money(q.hire * B.empWage(c))}/sem. · cada um produz ~${money(B.capacity({ ...c, emp: c.emp + 1 }) - B.capacity(c))}/sem.)</span></label><input type="range" min="1" max="500" step="1" value="${q.hire}" data-in="cqhire"></div>
-    <div class="row" style="gap:6px;margin-bottom:8px"><button class="btn sm pri grow" data-a="cqgo" data-v="hire">+ Contratar</button><button class="btn sm red" data-a="coact" data-v="fire:${Math.min(q.hire, Math.max(0, c.emp - 2))}">Demitir ${Math.min(q.hire, Math.max(0, c.emp - 2))}</button></div>
-    ${c.rev >= B.capacity(c) * 0.98 ? '<div class="hint warn" style="margin-bottom:8px">⚠️ A fábrica está no limite: há mais pedidos do que você consegue produzir. Contratar funcionários aumenta a receita.</div>' : ''}
-    <div class="field"><label>Publicidade: <b id="cqads">${money(q.ads)}</b></label><input type="range" min="10000" max="${Math.max(20000, Math.floor(c.cash / 10000) * 10000)}" step="10000" value="${Math.min(q.ads, Math.max(20000, c.cash))}" data-in="cqads"></div>
-    <div class="row" style="gap:6px;margin-bottom:8px"><button class="btn sm grow" data-a="cqgo" data-v="ads">📣 Lançar campanha</button><button class="btn sm grow" data-a="coact" data-v="prod:">🧪 Novo produto (${money(250000 * c.prods)})</button></div>
-    <div class="field"><label>Expandir para outro país (${money(400000 + c.cc.length * 350000)})</label><select data-ch="coexp"><option value="">Escolha…</option>${Object.keys(B.MKT_W).filter((k) => !c.cc.includes(k)).map((k) => `<option value="${k}">${flag(k)} ${COUNTRIES[k]?.name || k} (mercado ${Math.round(B.MKT_W[k] * 100)}%)</option>`).join('')}</select></div>
-    <button class="btn sm blk" style="margin-top:6px" data-a="spoNew" data-v="${c.id}">🤝 Negociar patrocínio com um clube</button></div>`; }
-  h += `<div class="card flat"><h3>Participação</h3><div class="kv"><span>Valor de mercado</span><b>${money(B.coValuation(G, c))}</b></div><div class="kv"><span>Sua parte</span><b>${c.sh}%</b></div><div class="row" style="gap:6px;flex-wrap:wrap">
+  const ctr = B.contractsOf(G, c); const cap = B.capacity(c); const use = Math.min(100, Math.round(c.rev / Math.max(1, cap) * 100));
+  const tabs = mine ? [['resumo', '📊 Resumo'], ['dinheiro', '💰 Dinheiro'], ['equipe', '👷 Equipe'], ['crescer', '🚀 Crescer'], ['social', '📱 Redes'], ['socios', '📈 Ações']] : [['resumo', '📊 Resumo'], ['socios', '📈 Ações']];
+  if (!tabs.some(([k]) => k === S.coTab)) S.coTab = 'resumo';
+  const kpi = (l, v, cls = '', sub = '') => `<div class="co-k"><small>${l}</small><b class="${cls}">${v}</b>${sub ? `<span>${sub}</span>` : ''}</div>`;
+  let h = `<div class="co-hd"><div class="co-logo">${esc(c.n.slice(0, 1))}</div><div class="grow"><h2 style="margin:0">${esc(c.n)}</h2><div class="xs mut">${B.SEGS[c.seg].n} · desde ${c.founded} · ${c.cc.map(flag).join('')}${c.sh ? ` · você tem <b>${c.sh}%</b>` : ''}</div></div></div>
+  <div class="co-kpis">${kpi('Caixa', money(c.cash), c.cash < 0 ? 'bad' : '')}${kpi('Lucro por semana', (c.prof >= 0 ? '+' : '') + money(c.prof), c.prof >= 0 ? 'ok' : 'bad', c.prof >= 0 ? 'dando lucro' : 'dando prejuízo')}${kpi('Vendas por semana', money(c.rev))}${kpi('Valor da empresa', money(B.coValuation(G, c)))}</div>
+  <div class="co-tabs">${tabs.map(([k, l]) => `<button class="${S.coTab === k ? 'on' : ''}" data-a="cotab" data-v="${k}">${l}</button>`).join('')}</div><div class="co-body">`;
+  if (S.coTab === 'resumo') {
+    const mx = Math.max(c.rev, c.exp, 1);
+    h += `<div class="co-card"><div class="co-t">Esta semana</div>
+      <div class="co-bar"><span>Vendas</span><div><i class="g" style="width:${c.rev / mx * 100}%"></i></div><b class="ok">${money(c.rev)}</b></div>
+      <div class="co-bar"><span>Gastos</span><div><i class="r" style="width:${c.exp / mx * 100}%"></i></div><b class="bad">${money(c.exp)}</b></div>
+      <div class="co-bar"><span>Produção</span><div><i class="${use >= 98 ? 'y' : 'b'}" style="width:${use}%"></i></div><b>${use}%</b></div>
+      ${use >= 98 ? '<div class="co-tip warn">⚠️ Fábrica no limite: contrate funcionários (aba Equipe) para vender mais.</div>' : ''}${c.debt ? `<div class="co-tip bad">Dívida: ${money(c.debt)}</div>` : ''}</div>
+      <div class="co-grid2"><div class="co-card"><div class="co-t">Números</div><div class="kv"><span>Funcionários</span><b>${c.emp}</b></div><div class="kv"><span>Produtos</span><b>${c.prods}${c.proj ? ` <span class="xs mut">(+1 em ${c.proj.left} sem.)</span>` : ''}</b></div><div class="kv"><span>Reputação</span><b>${Math.round(c.rep)}</b></div><div class="kv"><span>Seguidores</span><b>${B.fmtK(c.fol || 0)}</b></div></div>
+      <div class="co-card"><div class="co-t">Patrocínios (${ctr.length})</div>${ctr.slice(0, 6).map(({ c: cl, s }) => `<div class="li sm">${crest(cl, 20)}<span class="grow ell">${esc(cl.name)}</span><b>${money(s.val)}/ano</b></div>`).join('') || '<div class="xs mut">Nenhum contrato ainda.</div>'}${ctr.length > 6 ? `<div class="xs mut">+${ctr.length - 6} contratos</div>` : ''}</div></div>`;
+  } else if (S.coTab === 'dinheiro' && mine) {
+    const mx = Math.max(10000, Math.floor(G.me.money / 10000) * 10000); S.cq ||= { ap: Math.min(mx, 200000), wd: 0, hire: 10, ads: 100000, inf: 50000 }; const q = S.cq; q.ap = Math.min(q.ap, mx); const wmx = Math.max(0, Math.floor(c.cash / 10000) * 10000); q.wd = Math.min(q.wd, wmx);
+    h += `<div class="co-grid2"><div class="co-card act"><div class="co-t">⬇️ Colocar dinheiro na empresa</div><div class="co-big" id="cqap">${money(q.ap)}</div><div class="xs mut">Sai do seu bolso (você tem ${money(G.me.money)})</div>
+      <input type="range" min="10000" max="${mx}" step="10000" value="${q.ap}" data-in="cqap"><div class="chips">${[0.1, 0.25, 0.5, 1].map((f) => `<span class="chip" data-a="cqset" data-v="ap:${Math.max(10000, Math.floor(G.me.money * f / 10000) * 10000)}">${f === 1 ? 'Tudo' : Math.round(f * 100) + '%'}</span>`).join('')}</div><button class="btn pri blk" data-a="cqgo" data-v="ap">💰 Colocar</button></div>
+      <div class="co-card act"><div class="co-t">⬆️ Tirar dinheiro (dividendos)</div><div class="co-big" id="cqwd">${money(q.wd)}</div><div class="xs mut">Do caixa da empresa (${money(c.cash)}) · você recebe ${c.sh}%</div>
+      <input type="range" min="0" max="${wmx}" step="10000" value="${q.wd}" data-in="cqwd"><div class="chips">${[0.25, 0.5, 1].map((f) => `<span class="chip" data-a="cqset" data-v="wd:${Math.floor(wmx * f / 10000) * 10000}">${f === 1 ? 'Tudo' : Math.round(f * 100) + '%'}</span>`).join('')}</div><button class="btn blk" data-a="cqgo" data-v="wd">🏦 Retirar</button></div></div>`;
+  } else if (S.coTab === 'equipe' && mine) {
+    S.cq ||= { ap: 200000, wd: 0, hire: 10, ads: 100000, inf: 50000 }; const q = S.cq; const per = B.capacity({ ...c, emp: c.emp + 1 }) - cap; const nf = Math.min(q.hire, Math.max(0, c.emp - 2));
+    h += `<div class="co-grid2"><div class="co-card"><div class="co-t">Sua equipe</div><div class="co-big">${c.emp} <small>funcionários</small></div>
+      <div class="kv"><span>Salário de cada um</span><b>${money(B.empWage(c))}/sem.</b></div><div class="kv"><span>Cada um produz</span><b class="ok">~${money(per)}/sem.</b></div><div class="kv"><span>Folha total</span><b>${money(c.emp * B.empWage(c))}/sem.</b></div>
+      <div class="co-bar" style="margin-top:6px"><span>Produção usada</span><div><i class="${use >= 98 ? 'y' : 'b'}" style="width:${use}%"></i></div><b>${use}%</b></div>
+      <div class="co-tip ${use >= 98 ? 'warn' : ''}">${use >= 98 ? '⚠️ Tem mais pedido do que produção: contratar vai aumentar as vendas.' : '✅ A produção dá conta dos pedidos. Contratar agora só aumenta o gasto.'}</div></div>
+      <div class="co-card act"><div class="co-t">Contratar ou demitir</div><div class="co-step"><button class="btn" data-a="cqh" data-v="-10">−10</button><button class="btn" data-a="cqh" data-v="-1">−1</button><div class="co-big" id="cqhire">${q.hire}</div><button class="btn" data-a="cqh" data-v="1">+1</button><button class="btn" data-a="cqh" data-v="10">+10</button></div>
+      <div class="co-prev"><span>Custo agora</span><b>${money(q.hire * 2500)}</b><span>Salários</span><b class="bad">+${money(q.hire * B.empWage(c))}/sem.</b><span>Produção</span><b class="ok">+${money(per * q.hire)}/sem.</b></div>
+      <div class="row" style="gap:6px"><button class="btn pri grow" data-a="cqgo" data-v="hire">+ Contratar ${q.hire}</button><button class="btn red" data-a="coact" data-v="fire:${nf}" ${nf ? '' : 'disabled'}>Demitir ${nf}</button></div></div></div>`;
+  } else if (S.coTab === 'crescer' && mine) {
+    S.cq ||= { ap: 200000, wd: 0, hire: 10, ads: 100000, inf: 50000 }; const q = S.cq; const amx = Math.max(20000, Math.floor(c.cash / 10000) * 10000);
+    h += `<div class="co-grid2"><div class="co-card act"><div class="co-t">📣 Campanha de publicidade</div><div class="co-big" id="cqads">${money(Math.min(q.ads, amx))}</div><div class="xs mut">Mais gente conhece a marca → mais vendas e seguidores.</div><input type="range" min="10000" max="${amx}" step="10000" value="${Math.min(q.ads, amx)}" data-in="cqads"><button class="btn pri blk" data-a="cqgo" data-v="ads">Lançar campanha</button></div>
+      <div class="co-card act"><div class="co-t">🧪 Novo produto</div><div class="co-big">${money(250000 * c.prods)}</div><div class="xs mut">Mais produtos = mais vendas. Fica pronto em algumas semanas.${c.proj ? ` Já tem um em desenvolvimento (${c.proj.left} sem.).` : ''}</div><button class="btn blk" data-a="coact" data-v="prod:" ${c.proj ? 'disabled' : ''}>Desenvolver</button></div>
+      <div class="co-card act"><div class="co-t">🌍 Novo país · ${money(400000 + c.cc.length * 350000)}</div><div class="xs mut" style="margin-bottom:6px">Abre um mercado novo para vender.</div><select data-ch="coexp" data-title="Expandir para"><option value="">Escolher país…</option>${Object.keys(B.MKT_W).filter((k) => !c.cc.includes(k)).map((k) => `<option value="${k}" data-sub="mercado ${Math.round(B.MKT_W[k] * 100)}%">${flag(k)} ${COUNTRIES[k]?.name || k}</option>`).join('')}</select></div>
+      <div class="co-card act"><div class="co-t">🤝 Patrocinar um clube</div><div class="xs mut" style="margin-bottom:6px">Sua marca na camisa: visibilidade e reputação.</div><button class="btn blk" data-a="spoNew" data-v="${c.id}">Negociar patrocínio</button></div></div>
+      <div class="co-card"><div class="co-t">Departamentos</div>${Object.entries(B.DEPTS).map(([k, l]) => `<div class="li"><span class="grow">${l}</span><span class="co-lv">${'●'.repeat(Math.min(6, c.d[k]))}<i>${'●'.repeat(Math.max(0, 6 - c.d[k]))}</i></span><button class="btn sm" data-a="coact" data-v="dept:${k}">Melhorar · ${money(120000 * Math.pow(2.2, c.d[k] - 1))}</button></div>`).join('')}</div>`;
+  } else if (S.coTab === 'social' && mine) h += socialCard(G, c, true);
+  else {
+    h += `<div class="co-card"><div class="co-t">Participação</div><div class="kv"><span>Valor de mercado</span><b>${money(B.coValuation(G, c))}</b></div><div class="kv"><span>Sua parte</span><b>${c.sh}%</b></div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
     ${c.sh < 100 && !c.dead ? `<button class="btn sm grow" data-a="cobuy" data-v="25">Comprar 25%</button><button class="btn sm grow pri" data-a="cobuy" data-v="${Math.max(51 - c.sh, 1)}">Comprar o controle</button><button class="btn sm grow" data-a="cobuy" data-v="${100 - c.sh}">Comprar tudo</button>` : ''}
     ${c.sh > 0 ? `<button class="btn sm grow red" data-a="cosell" data-v="${Math.min(25, c.sh)}">Vender ${Math.min(25, c.sh)}%</button><button class="btn sm grow red" data-a="cosell" data-v="${c.sh}">Vender tudo</button>` : ''}</div>
-    <p class="xs mut">O valor considera receita, lucro, crescimento, caixa, dívidas, contratos e reputação.</p></div>`;
-  return h;
+    <p class="xs mut">O valor considera vendas, lucro, crescimento, caixa, dívidas, contratos e reputação.</p></div>`;
+  }
+  return h + '</div>';
 }
+H.cotab = (v) => { S.coTab = v; const el = replaceSheet(coSheet()); el?.querySelector('.co-body')?.classList.add('swap'); };
+H.cqh = (v) => { S.cq.hire = Math.max(1, Math.min(500, S.cq.hire + +v)); replaceSheet(coSheet()); };
 const coAgain = (r) => { toast(r, 3000); replaceSheet(coSheet()); render(); save(); };
 for (const k of ['ap', 'wd', 'hire', 'ads', 'inf']) H['cq' + k] = (v) => { S.cq[k] = +v; const e = document.getElementById('cq' + k); if (e) e.textContent = k === 'hire' ? v : money(+v); };
 H.cqset = (v) => { const [k, x] = v.split(':'); S.cq[k] = +x; replaceSheet(coSheet()); };

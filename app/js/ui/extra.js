@@ -2,7 +2,8 @@
 // retrospectiva, título, apresentação de reforço, estádio e sócios, uniformes, busca global, gestos e tema.
 import { esc, money, clamp } from '../util.js';
 import { S, H, render, toast, openSheet, closeSheet, replaceSheet, save, posTag, shortName, PAGES, PAGES_T, PAGES_BACK } from './app.js';
-import { crest, face } from './art.js';
+import { crest, face, textOn } from './art.js';
+import { vibrate } from '../settings.js';
 import { myClub } from '../engine/game.js';
 import { describeInj, leadersOf, setCaptain, socioOf, socioTarget, SOCIO_BASE } from '../engine/extra.js';
 import { SET } from '../settings.js';
@@ -104,12 +105,52 @@ export function showRecap(G) {
 }
 
 // ---------------- apresentação de reforço ----------------
+function shirtBack(k, name, num, w = 210) {
+  const id = 'sb' + Math.random().toString(36).slice(2, 7); let pat = '';
+  if (k.pat === 'listras') pat = Array.from({ length: 5 }, (_, i) => `<rect x="${18 + i * 14}" y="0" width="7" height="100" fill="${k.c2}"/>`).join('');
+  else if (k.pat === 'faixa') pat = `<polygon points="20,10 40,10 90,100 70,100" fill="${k.c2}"/>`; else if (k.pat === 'meio') pat = `<rect x="50" y="0" width="50" height="100" fill="${k.c2}"/>`;
+  const tc = textOn(k.pat === 'liso' || !k.pat ? k.c1 : k.c1); const sh = 'M30 8 L42 6 Q50 9 58 6 L70 8 L94 22 L84 40 L74 34 L74 94 L26 94 L26 34 L16 40 L6 22 Z';
+  const fs = name.length > 11 ? 6.2 : name.length > 8 ? 7.4 : 8.6;
+  return `<svg viewBox="0 0 100 100" width="${w}" height="${w}"><defs><clipPath id="${id}"><path d="${sh}"/></clipPath><linearGradient id="${id}g" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".28"/><stop offset=".45" stop-color="#fff" stop-opacity=".12"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></linearGradient></defs>
+  <g clip-path="url(#${id})"><rect width="100" height="100" fill="${k.c1}"/>${pat}<path d="M42 6 Q50 10 58 6" stroke="${k.c2}" stroke-width="3" fill="none"/>
+  <text x="50" y="31" text-anchor="middle" font-family="'Barlow Condensed',system-ui" font-weight="800" font-size="${fs}" letter-spacing=".8" fill="${tc}" stroke="${k.c2}" stroke-width=".35" paint-order="stroke">${esc(name)}</text>
+  <text x="50" y="72" text-anchor="middle" font-family="'Barlow Condensed',system-ui" font-weight="800" font-size="40" fill="${tc}" stroke="${k.c2}" stroke-width=".8" paint-order="stroke">${num}</text>
+  <rect width="100" height="100" fill="url(#${id}g)"/></g><path d="${sh}" fill="none" stroke="#0007" stroke-width="1.2"/></svg>`;
+}
+function countTo(el, to, fmt, ms = 1100, delay = 0) { if (!el) return; setTimeout(() => { const t0 = performance.now(); const f = (t) => { const k = Math.min(1, (t - t0) / ms); el.textContent = fmt(Math.round(to * (1 - Math.pow(1 - k, 3)))); if (k < 1) requestAnimationFrame(f); }; requestAnimationFrame(f); }, delay); }
 function showSigning(G, s) {
   const p = G.players[s.pid]; const c = myClub(G); if (!p || !c) return;
-  const el = document.createElement('div'); el.className = 'sign-anim'; el.style.setProperty('--c1', c.c1); el.style.setProperty('--c2', c.c2);
-  el.innerHTML = `<div class="sg-lights"></div><div class="sg-in"><div class="aw-kicker">REFORÇO · ${esc(c.name.toUpperCase())}</div><div class="sg-shirt"><span>${esc(shortName(p.n).toUpperCase())}</span><b>${s.num || p.num || 10}</b></div><div class="aw-name">${esc(p.n)}</div><div class="aw-sub">${esc(p.pos)} · ${p.age} anos · geral ${p.ovr}${s.fee ? ` · ${money(s.fee)}` : ''}</div></div><button class="btn pri sg-b">Bem-vindo! 👏</button>`;
-  document.body.appendChild(el); el.querySelector('.sg-b').onclick = () => { el.classList.add('out'); setTimeout(() => el.remove(), 400); };
+  const k = c.kits?.h || { c1: c.c1, c2: c.c2, pat: 'liso' };
+  const nm = shortName(p.n).toUpperCase(); const num = s.num || p.num || 10;
+  const glow = (lum(c.c1) < 0.18 ? c.c2 : c.c1);
+  const letters = [...p.n].map((ch, i) => `<span style="animation-delay:${1.5 + i * 0.035}s">${ch === ' ' ? '&nbsp;' : esc(ch)}</span>`).join('');
+  const wage = p.wage ? money(p.wage) + '/sem.' : '';
+  const el = document.createElement('div'); el.className = 'sign-anim v4'; el.style.setProperty('--c1', c.c1); el.style.setProperty('--c2', c.c2); el.style.setProperty('--gl', glow);
+  el.innerHTML = `<div class="sg-bg"></div><div class="sg-beam l"></div><div class="sg-beam r"></div><div class="sg-crowd"></div><div class="sg-flash"></div>
+  <div class="sg-grid">
+    <div class="sg-left"><div class="sg-crest">${crest(c, 64)}</div><div class="sg-ring"></div><div class="sg-shirt3d"><div class="sg-face front">${kitSvg(k, 210)}</div><div class="sg-face back">${shirtBack(k, nm, num, 210)}</div></div><div class="sg-floor"></div></div>
+    <div class="sg-right">
+      <div class="sg-kick"><i></i>REFORÇO CONFIRMADO<i></i></div>
+      <div class="sg-club">${esc(c.name)}</div>
+      <div class="sg-name" style="font-size:${p.n.length > 20 ? 30 : p.n.length > 15 ? 36 : 46}px">${letters}</div>
+      <div class="sg-stats">
+        <div class="sg-st" style="--d:2.1s"><span class="pos ${p.pos ? ({ GOL: 'G', LD: 'D', ZAG: 'D', LE: 'D', VOL: 'M', MC: 'M', MEI: 'M', PE: 'A', PD: 'A', ATA: 'A' })[p.pos] : ''}">${p.pos}</span><small>posição</small></div>
+        <div class="sg-st" style="--d:2.25s"><b id="sgovr">0</b><small>geral</small></div>
+        <div class="sg-st" style="--d:2.4s"><b>${p.age}</b><small>anos</small></div>
+        <div class="sg-st" style="--d:2.55s"><b>#${num}</b><small>camisa</small></div>
+      </div>
+      <div class="sg-deal" style="--d:2.8s">${s.fee ? `<div><small>Transferência</small><b id="sgfee">R$ 0</b></div>` : '<div><small>Chegada</small><b>Sem custo</b></div>'}${wage ? `<div><small>Salário</small><b>${wage}</b></div>` : ''}<div><small>Contrato</small><b>até ${p.con}</b></div></div>
+      <button class="btn pri sg-go">Bem-vindo! 👏</button>
+    </div>
+  </div><div class="confetti sg-conf">${Array.from({ length: 46 }, () => `<i style="--x:${Math.random() * 100};--d:${(1.2 + Math.random() * 2.2).toFixed(2)}s;--c:${[c.c1, c.c2, '#f4c542', '#ffffff'][Math.floor(Math.random() * 4)]}"></i>`).join('')}</div>`;
+  document.body.appendChild(el);
+  countTo(el.querySelector('#sgovr'), p.ovr, (v) => String(v), 900, 2250);
+  if (s.fee) countTo(el.querySelector('#sgfee'), s.fee, (v) => money(v), 1200, 2850);
+  const fl = el.querySelector('.sg-flash'); let n = 0; const iv = setInterval(() => { if (!el.isConnected || n++ > 14) { clearInterval(iv); return; } const d = document.createElement('i'); d.style.left = Math.random() * 100 + '%'; d.style.top = 55 + Math.random() * 40 + '%'; fl.appendChild(d); setTimeout(() => d.remove(), 500); }, 260);
+  try { vibrate?.(30); } catch {}
+  el.querySelector('.sg-go').onclick = () => { el.classList.add('out'); setTimeout(() => el.remove(), 400); };
 }
+const lum = (hex) => { const h = (hex || '#000').replace('#', ''); const n = parseInt(h.length === 3 ? h.split('').map((x) => x + x).join('') : h, 16); return ((n >> 16 & 255) * 0.299 + (n >> 8 & 255) * 0.587 + (n & 255) * 0.114) / 255; };
 
 // ---------------- sala de troféus, lendas e prêmios ----------------
 PAGES_T.trofeus = 'Sala de troféus'; PAGES_BACK.trofeus = null;

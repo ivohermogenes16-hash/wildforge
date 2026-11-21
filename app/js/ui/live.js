@@ -9,6 +9,7 @@ import { lineupFor, playSlot, myClub } from '../engine/game.js';
 import { MatchViz } from './viz.js';
 import { Match3D } from './m3d.js';
 import { playLance } from './lance.js';
+import { openPress } from './press.js';
 import { ratings } from '../engine/match.js';
 const ratingsOf = (G, club, lu) => { try { return ratings(G, club, lu.xi, 0, club.tact); } catch { return null; } };
 import { userMatchBonus, isDerby, pressBefore, pressAfter, pressDecision, staffQ, resolveDecision } from '../engine/life.js';
@@ -19,7 +20,7 @@ export function preMatch(f) {
   const G = S.G; const c = myClub(G); const youth = G.me.job.youth;
   const hc = G.clubs[f.h], ac = G.clubs[f.a];
   const lu = myLineup();
-  const probs = lu.xi.map((id) => G.players[id]).filter((p) => !p || !available(p));
+  const probs = lu.xi.map((id) => G.players[id]).filter((p) => p && !available(p));
   const tired = lu.xi.map((id) => G.players[id]).filter((p) => p && p.fit < 65);
   const opp = G.clubs[f.h === c.id ? f.a : f.h];
   const oppLu = lineupFor(G, opp, youth);
@@ -33,9 +34,9 @@ export function preMatch(f) {
   const weak = R ? [['Ataque', R.att], ['Meio', R.ctl], ['Defesa', R.def]].sort((a, b) => a[1] - b[1])[0][0] : '';
   openSheet(`${derby ? '<div class="derby">🔥 CLÁSSICO</div>' : ''}<div class="xs mut" style="text-align:center">${esc(comp.name)} · ${esc(fixPhase(f))} · ${wk(f.w)}</div>
   <div class="match-hero" style="margin:8px 0 12px"><div>${crest(hc, 56)}<div class="nm">${esc(hc.name)}</div></div><div class="vs">VS</div><div>${crest(ac, 56)}<div class="nm">${esc(ac.name)}</div></div></div>
-  ${probs.length ? `<div class="hint bad" style="margin-bottom:8px">⚠️ Há jogador indisponível na escalação.</div>` : ''}
+  ${probs.length ? `<div class="hint bad row" style="margin-bottom:8px;gap:8px;align-items:center"><span class="grow">⚠️ Fora deste jogo: ${probs.map((p) => esc(shortName(p.n)) + (p.inj > 0 ? ' 🩹' : ' 🟥')).join(', ')}. Se você não trocar, o melhor reserva entra só nesta partida — sua escalação salva continua igual.</span><button class="btn sm" data-a="prelu">Trocar</button></div>` : ''}
   ${tired.length ? `<div class="hint warn row" style="margin-bottom:8px;gap:8px;align-items:center"><span class="grow">😮‍💨 Cansados: ${tired.map((p) => esc(shortName(p.n)) + ' ' + Math.round(p.fit) + '%').join(', ')}</span><button class="btn sm" data-a="poupar" data-v="${f.i}">🔁 Poupar</button></div>` : ''}
-  ${pm ? `<div class="card flat press-card"><h3>🎤 Coletiva pré-jogo</h3><div class="sm" style="margin-bottom:6px">${esc(pm.body)}</div>${pm.opts.map((o, i) => `<button class="btn sm blk" style="justify-content:flex-start;margin-bottom:4px;text-align:left" data-a="prepress" data-v="${pm.id}:${i}:${f.i}">“${esc(o.l)}”</button>`).join('')}</div>` : ''}
+  ${pm ? `<div class="press-cta" data-a="opress" data-v="${pm.id}:pre:${f.i}"><span class="pc-mic">🎤</span><div class="grow"><b>Coletiva pré-jogo</b><div class="xs mut ell">${esc(pm.rep?.n || 'Repórter')} (${esc(pm.rep?.o || 'Imprensa')}) quer uma palavra</div></div><span class="btn sm pri">Ir à coletiva</span></div>` : ''}
   ${!youth && ana >= 9 ? `<div class="hint" style="margin-bottom:8px">🔎 Analista (${ana}/20): o ${esc(opp.name)} joga no ${esc(opp.tact.form)} com mentalidade ${['defensiva', 'equilibrada', 'ofensiva'][opp.tact.ment]}. Ponto fraco: <b>${weak}</b>.</div>` : ''}
   ${!youth ? (() => { const st = oppStudy(G, opp); const rv = rivalOfClub(G, opp); const lines = R ? scoutReport(G, opp, R) : []; return `<div class="card flat"><h3>📋 Relatório do adversário</h3>${lines.map((l) => `<div class="xs" style="margin-bottom:3px">• ${esc(l)}</div>`).join('')}${st.extra > 0 ? `<div class="hint warn" style="margin-top:6px">🧠 Eles estudaram você: seu ${esc(st.form)} apareceu em ${Math.round(st.share * 100)}% dos últimos jogos. Vão neutralizá-lo (+${st.extra} de força para eles). Varie a formação!</div>` : st.n >= 5 ? '<div class="xs ok" style="margin-top:4px">✅ Você tem variado a tática: o rival não conseguiu te estudar.</div>' : ''}${rv ? `<div class="hint" style="margin-top:6px">⚔️ ${rv === 2 ? 'Grande rival' : 'Rival'}: ${esc(coachOf(G, opp)?.n || '')}. Jogo com mais repercussão na torcida e na imprensa.</div>` : ''}</div>`; })() : ''}
   <div class="card flat"><h3>Destaques do adversário · ${esc(opp.tact.form)}</h3><div class="list">${best.map((p) => `<div class="li">${face(p, 28, opp)}<span class="grow b ell">${esc(p.n)}</span>${posTag(p.pos)}<b>${p.ovr}</b></div>`).join('')}</div></div>
@@ -47,7 +48,7 @@ H.prelu = () => { closeSheet(true); S.tab = 'tat'; S.page = null; render(); };
 function setup(f) {
   const G = S.G; const c = myClub(G); const youth = G.me.job.youth;
   const side = f.h === c.id ? 0 : 1;
-  const lu = myLineup();
+  myLineup(); const lu = lineupFor(G, youth ? { ...c, tact: G.me.u20tact || c.tact } : c, youth);
   const tact = youth ? G.me.u20tact : c.tact;
   const train = youth ? G.me.u20train : c.train;
   const opp = G.clubs[side ? f.h : f.a];
@@ -114,7 +115,7 @@ function loop(now) {
   if (!L) return;
   const dt = (now - L.last) / 1000; L.last = now;
   L.viz.update(dt); L.viz.draw();
-  if (L.m.min !== L.lastMin) { L.lastMin = L.m.min; narrate(); qsRefresh(); if (L.stTab === "en") stats(); }
+  if (L.m.min !== L.lastMin) { L.lastMin = L.m.min; narrate(); qsRefresh(); stats(); }
   if (L.narT && now > L.narT) { const n = document.getElementById('lnar'); if (n) n.classList.remove('on'); L.narT = 0; }
   const mn = document.getElementById('lmin'); if (mn) mn.textContent = `${L.m.min}'`;
   const tp = document.getElementById('ltlp'); if (tp) tp.style.width = Math.min(100, L.m.min / 90 * 100) + '%';
@@ -342,11 +343,13 @@ export function finishMatch(f, res) {
    ${motm ? `<div class="hint" style="margin-bottom:8px">⭐ Melhor do seu time: <b>${esc(motm[0].n)}</b> (${motm[1].toFixed(1)})</div>` : ''}
    <div class="cols2"><div class="card flat"><h3>Notas</h3><div class="list">${notas.map(([p, n]) => `<div class="li sm"><span class="grow ell b">${esc(p.n)}</span><span class="pill ${n >= 7.5 ? 'g' : n < 6 ? 'r' : ''}">${n.toFixed(1)}</span></div>`).join('')}</div></div>
    <div class="card flat"><h3>Outros resultados</h3><div class="list">${others.map((x) => `<div class="li xs">${crest(G.clubs[x.h], 16)}<span class="grow ell">${esc(G.clubs[x.h].short)}</span><b>${x.hg}–${x.ag}</b><span class="grow ell" style="text-align:right">${esc(G.clubs[x.a].short)}</span>${crest(G.clubs[x.a], 16)}</div>`).join('') || '<div class="mut sm">—</div>'}</div></div></div>
-   ${pq ? `<div class="card flat press-card" id="postpress"><h3>🎤 Coletiva pós-jogo</h3><div class="sm" style="margin-bottom:6px">${esc(pq.body)}</div>${pq.opts.map((o, i) => `<button class="btn sm blk" style="justify-content:flex-start;margin-bottom:4px;text-align:left" data-a="postpress" data-v="${pq.id}:${i}">“${esc(o.l)}”</button>`).join('')}</div>` : ''}
+   ${pq ? `<div id="postpress"><div class="press-cta" data-a="opress" data-v="${pq.id}:post:${f.i}"><span class="pc-mic">🎤</span><div class="grow"><b>Coletiva pós-jogo</b><div class="xs mut ell">${esc(pq.rep?.n || 'Repórter')} (${esc(pq.rep?.o || 'Imprensa')}): “${esc(pq.body)}”</div></div><span class="btn sm pri">Responder</span></div></div>` : ''}
    <button class="btn pri blk big" data-a="sumclose">Continuar</button>`);
 }
 H.sumclose = () => { closeSheet(true); render(); };
 
+H.opress = (v) => { const G = S.G; const [id, when, fi] = v.split(':'); const m = G.inbox.find((x) => x.id === +id); if (!m) return;
+  openPress(m, (mm) => { if (when === 'pre') { closeSheet(true); preMatch(G.fix[+fi]); } else { const el = document.getElementById('postpress'); if (el) el.innerHTML = `<div class="press-done"><span>📰</span><div class="grow"><div class="xs mut">Manchete</div><b>${esc(mm.head || 'Coletiva encerrada')}</b></div></div>`; } render(); }); };
 H.prepress = (v) => { const G = S.G; const [id, i, fi] = v.split(':').map(Number); const m = G.inbox.find((x) => x.id === id); if (m) toast(resolveDecision(G, m, i), 2500); closeSheet(); preMatch(G.fix[fi]); save(); };
 H.postpress = (v) => { const G = S.G; const [id, i] = v.split(':').map(Number); const m = G.inbox.find((x) => x.id === id); if (m) toast(resolveDecision(G, m, i), 2600); const el = document.getElementById('postpress'); if (el) el.innerHTML = `<div class="sm ok">Resposta dada: “${esc(m.opts[i].l)}”</div>`; save(); };
 H.lrep = () => { const v = L.viz; v.replays = !v.replays; const b = document.getElementById('lrp'); if (b) b.style.opacity = v.replays ? 1 : 0.4; toast(v.replays ? 'Replays dos gols ligados' : 'Replays desligados'); };

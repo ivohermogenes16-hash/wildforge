@@ -2,7 +2,7 @@ import { esc, money, POS_LINE, clamp } from '../util.js';
 import { crest, face, ovrBadge, ICONS, FLAG, ovrColor, textOn } from './art.js';
 import { saveGame } from '../store.js';
 import { SEASON_WEEKS, playerValue } from '../engine/econ.js';
-import { myClub, userFixNow, nextUserFix, playSlot, strength, lineupFor, answerPress, takeJob, setObjective } from '../engine/game.js';
+import { myClub, userFixNow, nextUserFix, playSlot, strength, lineupFor, repairLineup, answerPress, takeJob, setObjective } from '../engine/game.js';
 import { standings, fixturesOf, koWinner } from '../engine/season.js';
 import { FORMATIONS, MENT, PRESS, ratings, autoLineup, available, formOf, roleAt } from '../engine/match.js';
 
@@ -11,16 +11,16 @@ export const H = {};
 const app = document.getElementById('app');
 
 // ---------- utilidades ----------
-export function toast(t, ms = 2200) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), ms); }
+export function toast(t, ms = 2200) { document.querySelectorAll('.toast').forEach((x) => x.remove()); const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 260); }, ms); }
 const sheetStack = [];
 export function openSheet(html, onClose) {
   const bg = document.createElement('div'); bg.className = 'modal-bg';
-  bg.innerHTML = `<button class="sheet-x" data-a="cs">✕</button><div class="sheet">${html}</div>`;
+  bg.innerHTML = `<button class="sheet-x" data-a="cs">✕</button><div class="sheet">${html}</div>`; bg.classList.add('fresh'); setTimeout(() => bg.classList.remove('fresh'), 700);
   bg.addEventListener('click', (e) => { if (e.target === bg) closeSheet(); });
   document.body.appendChild(bg); sheetStack.push({ bg, onClose });
   return bg.querySelector('.sheet');
 }
-export function closeSheet(all) { do { const s = sheetStack.pop(); if (!s) break; s.bg.remove(); s.onClose && s.onClose(); } while (all); }
+export function closeSheet(all) { do { const s = sheetStack.pop(); if (!s) break; const b = s.bg; b.querySelectorAll('[id]').forEach((e) => e.removeAttribute('id')); b.classList.add('out'); setTimeout(() => b.remove(), 200); s.onClose && s.onClose(); } while (all); }
 export function replaceSheet(html) { const s = sheetStack[sheetStack.length - 1]; if (!s) return openSheet(html); const el = s.bg.querySelector('.sheet'); el.innerHTML = html; return el; }
 H.cs = () => closeSheet();
 let saveT = null;
@@ -64,7 +64,7 @@ export function render() {
     else body = (VIEWS[S.tab] || VIEWS.home)();
   } catch (e) { console.error(e); body = `<div class="card bad">Erro: ${esc(e.message)}</div>`; }
   const now = userFixNow(G);
-  const sc = app.querySelector('main')?.scrollTop || 0; const same = app.dataset.view === (S.page || S.tab);
+  const sc = app.querySelector('main')?.scrollTop || 0; const vk = (S.page || S.tab) + ':' + (S.page ? '' : S.sub[S.tab] || ''); const same = app.dataset.view === vk;
   app.innerHTML = `<nav class="rail">${NAV.filter(([k]) => k !== 'nat' || S.G.me.nat).map(([k, l, ic]) => `<button class="${S.tab === k && !S.page ? 'on' : ''}" data-a="tab" data-v="${k}">${ICONS[ic]}<span>${l}</span>${k === 'more' && unread ? `<span class="badge">${unread}</span>` : ''}</button>`).join('')}</nav>
   <div class="right"><header class="top">${S.page ? `<button class="btn sm" data-a="back">‹ Voltar</button>` : c ? crest(c, 32) : '<span class="logo" style="font-size:20px">P<span>.</span></span>'}
     <div class="grow"><div class="t1 ell">${esc(S.page ? (PAGES_T[S.page] || '') : title)}</div><div class="t2">${dateStr(Math.min(G.week, SEASON_WEEKS - 1), true)} de ${G.year} ${G.me.job && !G.me.job.youth ? (inWindow(G) ? '<span class="mk-pill open">Mercado aberto</span>' : '<span class="mk-pill">Mercado fechado</span>') : `· sem. ${Math.min(G.week, SEASON_WEEKS - 1) + 1}/${SEASON_WEEKS}`}${c && G.me.obj ? ` · 🎯 ${esc(G.me.obj.text)}` : ''}</div></div>
@@ -72,7 +72,7 @@ export function render() {
     <span class="money-pill" data-a="go" data-v="financas">${money(G.me.money)}</span>
     <button class="btn pri cont" data-a="continue">${now ? '▶ Jogo' : 'Continuar'} ›</button></header>
   <main class="${same ? '' : 'enter'}">${body}</main></div>`;
-  app.dataset.view = S.page || S.tab;
+  app.dataset.view = vk;
   if (same) app.querySelector('main').scrollTop = sc;
   try { S.afterRender?.(); } catch (e) { console.warn(e); }
 }
@@ -144,10 +144,15 @@ function mySide() {
 }
 export function myLineup() {
   const { G, c, youth, tact } = mySide();
-  const lu0 = lineupFor(G, youth ? { ...c, tact } : c, youth);
-  const lu = { xi: lu0.xi.slice(), bench: lu0.bench.slice() };
-  if (youth) G.me.u20lineup = lu; else c.lineup = lu;
-  return lu;
+  let st = youth ? G.me.u20lineup : (c.lineup || c.luKeep);
+  if (!st || !st.xi || st.xi.length !== formOf(tact).length) st = st && st.xi ? repairLineup(G, { ...c, tact }, st, youth, true) : autoLineup(G, { ...c, tact }, youth);
+  else if (st.xi.concat(st.bench || []).some((id) => { const p = G.players[id]; return !p || p.club !== c.id || (youth && (!p.u20 || p.u17)); })) {
+    // só quem saiu do clube (vendido, emprestado, promovido) é trocado; lesionados continuam na sua escalação
+    const r = repairLineup(G, { ...c, tact }, st, youth, true); st = { xi: r.xi, bench: r.bench };
+  }
+  st = { xi: st.xi, bench: st.bench || [] };
+  if (youth) G.me.u20lineup = st; else { c.lineup = st; c.luKeep = st; }
+  return st;
 }
 const POS_ORDER = ['GOL', 'LD', 'ZAG', 'LE', 'VOL', 'MC', 'MEI', 'PD', 'PE', 'ATA'];
 export function squadTable(ps, o = {}) {
@@ -187,7 +192,7 @@ VIEWS.tat = () => {
   const pitch = `<div class="pitch" id="tpitch">${pitchLines()}${form.map(([pos, x, y], i) => {
     const p = G.players[lu.xi[i]]; const sel = S.sel && S.sel.i === i;
     const bad = p && p.pos !== pos;
-    return `<div class="pslot" style="left:${7 + y * 86}%;top:${8 + x * 84}%" data-a="slot" data-v="${i}" data-slot="${i}"><div class="dot ${sel ? 'sel' : ''} ${bad ? 'off' : ''}" style="--k:${pos === 'GOL' ? '#f4c542' : kit};--t:${pos === 'GOL' ? '#111' : textOn(kit)}"><b>${p ? p.ovr : '+'}</b></div><div class="rl ${bad ? 'warn' : ''}">${pos}</div><div class="nm">${p ? esc(shortName(p.n)) : '—'}</div></div>`;
+    return `<div class="pslot" style="left:${7 + y * 86}%;top:${8 + x * 84}%" data-a="slot" data-v="${i}" data-slot="${i}"><div class="dot ${sel ? 'sel' : ''} ${bad ? 'off' : ''}" style="--k:${pos === 'GOL' ? '#f4c542' : kit};--t:${pos === 'GOL' ? '#111' : textOn(kit)}"><b>${p ? p.ovr : '+'}</b>${p && !available(p) ? `<i class="injm">${p.inj > 0 ? '🩹' : '🟥'}</i>` : ''}</div><div class="rl ${bad ? 'warn' : ''}">${pos}</div><div class="nm">${p ? esc(shortName(p.n)) : '—'}</div></div>`;
   }).join('')}</div>`;
   const R = ratings(G, c, lu.xi, 0, tact);
   const bar = (l, v) => `<div style="margin-bottom:6px"><div class="row xs"><span class="grow mut">${l}</span><b>${Math.round(v)}</b></div><div class="bar"><i style="width:${clamp((v - 40) * 2, 3, 100)}%"></i></div></div>`;
@@ -196,14 +201,14 @@ VIEWS.tat = () => {
     const pool = G.players.filter((p) => p && p.club === c.id && (youth ? p.u20 && !p.u17 : !p.u20) && !lu.xi.includes(p.id));
     const bench = lu.bench.map((id) => G.players[id]).filter((p) => p && pool.includes(p));
     const out = pool.filter((p) => !lu.bench.includes(p.id)).sort((a, b) => b.ovr - a.ovr);
-    const card = (p, n) => `<div class="bcard ${!available(p) ? 'off' : ''}" data-a="pickp" data-v="${p.id}"><span class="bnum">${n}</span><span class="grip" data-dragp="${p.id}">⠿</span><div class="grow" style="min-width:0"><div class="bpos">${posTag(p.pos)}</div><b class="ell bnm">${esc(shortName(p.n))}</b><div class="bfit"><i style="width:${Math.round(p.fit)}%;background:${p.fit < 65 ? '#ff9f43' : '#2fe08a'}"></i></div></div>${ovrBadge(p.ovr)}</div>`;
+    const card = (p, n) => `<div class="bcard ${!available(p) ? 'off' : ''} ${S.swapIn != null ? 'swapt' : ''}" data-a="benchtap" data-v="${p.id}"><span class="bnum">${n}</span><span class="bx" data-a="unbench" data-v="${p.id}" title="Tirar do banco">✕</span><span class="grip" data-dragp="${p.id}">⠿</span><div class="grow" style="min-width:0"><div class="bpos">${posTag(p.pos)}</div><b class="ell bnm">${esc(shortName(p.n))}</b><div class="bfit"><i style="width:${Math.round(p.fit)}%;background:${p.fit < 65 ? '#ff9f43' : '#2fe08a'}"></i></div></div>${ovrBadge(p.ovr)}</div>`;
     const sp = S.sel ? G.players[lu.xi[S.sel.i]] : null;
     if (sp) right += `<div class="sel-card"><div class="row" style="gap:8px;align-items:center">${posTag(sp.pos)}<b class="grow ell">${esc(sp.n)}</b>${ovrBadge(sp.ovr)}</div><div class="sel-stats"><span>⚡ ${Math.round(sp.fit)}%</span><span>😊 ${Math.round(sp.mor)}</span><span>${sp.st.j} jogos</span><span>${sp.st.g} gols</span><span>${sp.st.a} assist.</span><span>nota ${sp.st.j ? (sp.st.ns / sp.st.j).toFixed(1) : '–'}</span></div><button class="btn sm blk" data-a="player" data-v="${sp.id}">Ver ficha completa</button></div>`;
-    right += `<div class="hint" style="margin-bottom:8px">${S.sel ? '👉 Agora toque no jogador que vai entrar (ou arraste o titular até um reserva).' : '✋ Toque num jogador do campo para ver os números e trocar. Arraste do campo para o banco (ou pelo ⠿) para substituir.'}</div>
+    right += `<div class="hint ${S.swapIn != null ? 'pulse' : ''}" style="margin-bottom:8px">${S.swapIn != null ? `👉 Toque no reserva que vai sair do banco para ${esc(shortName(G.players[S.swapIn].n))} entrar.` : S.sel ? '👉 Agora toque no jogador que vai entrar (ou arraste o titular até um reserva).' : '✋ Toque num jogador do campo para ver os números e trocar. Arraste do campo para o banco (ou pelo ⠿) para substituir. Quem está fora da lista entra no banco pelo botão ⇄.'}</div>
     <div class="bench-head"><span>🪑 Banco de reservas</span><span class="pill">${bench.length}/9</span></div>
     <div class="bench-grid">${bench.map((p, i) => card(p, 12 + i)).join('')}${Array.from({ length: Math.max(0, 9 - bench.length) }, (_, i) => `<div class="bcard empty"><span class="bnum">${12 + bench.length + i}</span><span class="xs mut">vago</span></div>`).join('')}</div>
     <div class="bench-head" style="margin-top:10px"><span>Fora da lista</span><span class="pill">${out.length}</span></div>
-    <div class="list">${out.map((p) => `<div class="li tap sm" data-a="pickp" data-v="${p.id}"><span class="grip" data-dragp="${p.id}">⠿</span>${posTag(p.pos)}<span class="grow b ell">${esc(p.n)}</span><span class="xs ${p.fit < 65 ? 'warn' : 'mut'}">⚡${Math.round(p.fit)}</span>${!available(p) ? '<span class="xs bad">indisp.</span>' : `<button class="btn sm" data-a="tobench" data-v="${p.id}">+ banco</button>`}${ovrBadge(p.ovr)}</div>`).join('')}</div>`;
+    <div class="list">${out.map((p) => `<div class="li tap sm ${S.swapIn === p.id ? 'swapsel' : ''}" data-a="pickp" data-v="${p.id}"><span class="grip" data-dragp="${p.id}">⠿</span>${posTag(p.pos)}<span class="grow b ell">${esc(p.n)}</span><span class="xs ${p.fit < 65 ? 'warn' : 'mut'}">⚡${Math.round(p.fit)}</span>${!available(p) ? `<span class="xs bad">${p.inj > 0 ? '🩹 lesionado' : '🟥 suspenso'}</span>` : ''}<button class="btn sm ${S.swapIn === p.id ? 'pri' : ''}" data-a="tobench" data-v="${p.id}">${S.swapIn === p.id ? 'Cancelar' : lu.bench.length >= 9 ? '⇄ banco' : '+ banco'}</button>${ovrBadge(p.ovr)}</div>`).join('')}</div>`;
   } else if (S.sub.tat === 'tat') {
     right += `<div class="card flat">${bar('Ataque', R.att)}${bar('Meio-campo', R.ctl)}${bar('Defesa', R.def)}</div>
     <div class="field"><label>Mentalidade</label><div class="seg" style="margin:0">${MENT.map((m, i) => `<button class="${tact.ment === i ? 'on' : ''}" data-a="tact" data-v="ment:${i}">${m}</button>`).join('')}</div></div>
@@ -219,22 +224,29 @@ VIEWS.tat = () => {
 };
 H.resetform = () => { const t = mySide().tact; t.form = '4-3-3'; render(); save(); };
 H.form = (v) => { mySide().tact.form = v; render(); save(); };
-H.autolu = () => { const { G, c, youth, tact } = mySide(); const lu = autoLineup(G, { ...c, tact }, youth); if (youth) G.me.u20lineup = lu; else c.lineup = lu; toast('Time escalado'); render(); save(); };
+function setMyLu(lu) { const { G, c, youth } = mySide(); const v = { xi: lu.xi.slice(), bench: lu.bench.slice() }; if (youth) G.me.u20lineup = v; else { c.lineup = v; c.luKeep = v; } return v; }
+H.autolu = () => { const { G, c, youth, tact } = mySide(); setMyLu(autoLineup(G, { ...c, tact }, youth)); S.sel = null; S.swapIn = null; toast('Time escalado'); render(); save(); };
 H.slot = (v) => { S.sel = { i: +v }; S.sub.tat = 'res'; render(); };
 H.pickp = (v) => {
   const { G, c, youth } = mySide(); const p = G.players[+v];
   if (!S.sel) { H.player(v); return; }
   if (!available(p)) { toast('Jogador indisponível'); return; }
-  const lu = youth ? G.me.u20lineup : c.lineup;
+  const lu = myLineup();
   const i = S.sel.i; const out = lu.xi[i];
   lu.xi[i] = p.id; lu.bench = lu.bench.filter((x) => x !== p.id);
   if (out >= 0 && !lu.bench.includes(out)) { lu.bench.unshift(out); if (lu.bench.length > 9) lu.bench.pop(); }
   S.sel = null; render(); save();
 };
-H.tobench = (v) => { const { G, c, youth } = mySide(); const lu = (youth ? (G.me.u20lineup ||= myLineup()) : (c.lineup ||= myLineup())); if (lu.bench.length >= 9) { toast('Banco cheio (9). Toque num reserva para trocar.'); return; } lu.bench.push(+v); render(); save(); };
-H.savetac = () => { const { G, c, youth } = mySide(); const lu = myLineup(); if (youth) G.me.u20lineup = { xi: lu.xi.slice(), bench: lu.bench.slice() }; else c.lineup = { xi: lu.xi.slice(), bench: lu.bench.slice() }; save(true); toast('💾 Escalação e tática salvas!'); };
+H.tobench = (v) => { const lu = myLineup(); S.sel = null; if (lu.bench.includes(+v)) return; if (lu.bench.length >= 9) { S.swapIn = S.swapIn === +v ? null : +v; render(); return; } lu.bench.push(+v); S.swapIn = null; toast(`${shortName(S.G.players[+v].n)} foi para o banco`); render(); save(); };
+H.unbench = (v) => { const lu = myLineup(); lu.bench = lu.bench.filter((x) => x !== +v); S.swapIn = null; toast(`${shortName(S.G.players[+v].n)} saiu da lista`); render(); save(); };
+H.benchtap = (v) => {
+  const G = S.G, lu = myLineup(), id = +v;
+  if (S.swapIn != null) { const i = lu.bench.indexOf(id); const inP = G.players[S.swapIn]; if (i >= 0) { lu.bench[i] = S.swapIn; toast(`🔄 ${shortName(inP.n)} no banco, ${shortName(G.players[id].n)} fora da lista`); } S.swapIn = null; render(); save(); return; }
+  H.pickp(v);
+};
+H.savetac = () => { setMyLu(myLineup()); save(true); toast('💾 Escalação salva! Ela só muda quando você mudar.'); };
 H.presave = (i) => { const { c, tact } = mySide(); const lu = myLineup(); const n = `${tact.form} ${MENT[tact.ment].toLowerCase()}`; (c.presets ||= [])[+i] = { n, t: JSON.parse(JSON.stringify(tact)), lu: { xi: lu.xi.slice(), bench: lu.bench.slice() } }; save(true); toast('💾 Tática salva'); render(); };
-H.preload = (i) => { const { G, c, youth } = mySide(); const P = c.presets?.[+i]; if (!P) return; const t = mySide().tact; Object.assign(t, JSON.parse(JSON.stringify(P.t))); const ok = P.lu.xi.every((id) => G.players[id]?.club === c.id); if (ok) { if (youth) G.me.u20lineup = { xi: P.lu.xi.slice(), bench: P.lu.bench.slice() }; else c.lineup = { xi: P.lu.xi.slice(), bench: P.lu.bench.slice() }; } toast(ok ? `Tática "${P.n}" carregada` : `Tática carregada (escalação refeita: alguns jogadores saíram)`); render(); save(); };
+H.preload = (i) => { const { G, c, youth } = mySide(); const P = c.presets?.[+i]; if (!P) return; const t = mySide().tact; Object.assign(t, JSON.parse(JSON.stringify(P.t))); const ok = P.lu.xi.every((id) => G.players[id]?.club === c.id); if (ok) setMyLu(P.lu); toast(ok ? `Tática "${P.n}" carregada` : `Tática carregada (escalação refeita: alguns jogadores saíram)`); render(); save(); };
 H.tact = (v) => { const [k, n] = v.split(':'); mySide().tact[k] = +n; render(); save(); };
 function trainView(G, c, youth) {
   const tr = youth ? (G.me.u20train ||= { foco: 'equilibrado', int: 1 }) : c.train;
@@ -394,6 +406,7 @@ function scorersView() {
 H.msg = (v) => {
   const G = S.G; const m = G.inbox.find((x) => x.id === +v); if (!m) return;
   m.read = true;
+  if (m.press && m.kind === 'dec') { import('./press.js').then((P) => P.openPress(m, () => render())); render(); return; }
   let act = '';
   if (!m.done && !m.expired) {
     if (m.kind === 'job') act = `<div class="row" style="margin-top:14px"><button class="btn red grow" data-a="msgact" data-v="${m.id}:no">Recusar</button><button class="btn pri grow" data-a="msgact" data-v="${m.id}:yes">Aceitar</button></div>`;
@@ -439,7 +452,7 @@ document.addEventListener('pointerdown', (e) => {
   if (gr) startDrag(e);
 });
 function startDrag(e) {
-  const { G, c, youth } = mySide(); const lu = youth ? G.me.u20lineup : c.lineup;
+  const { G, c, youth } = mySide(); const lu = myLineup();
   const p = G.players[drag.pid ?? lu.xi[drag.slot]]; if (!p) { drag = null; return; }
   drag.on = true;
   const g = document.createElement('div'); g.className = 'drag-ghost';
@@ -452,7 +465,7 @@ function moveGhost(e) {
   document.querySelectorAll('.pslot.droptgt').forEach((x) => x.classList.remove('droptgt'));
   drag.g.style.display = 'none'; const el = document.elementFromPoint(e.clientX, e.clientY); drag.g.style.display = '';
   const t = el?.closest('.pslot[data-slot]'); if (t && +t.dataset.slot !== drag.slot) t.classList.add('droptgt');
-  document.querySelectorAll('.bcard.droptgt').forEach((x) => x.classList.remove('droptgt')); const bt = drag.slot != null ? el?.closest('.bcard[data-v]') : null; if (bt) bt.classList.add('droptgt');
+  document.querySelectorAll('.bcard.droptgt').forEach((x) => x.classList.remove('droptgt')); const bt = el?.closest('.bcard[data-v]'); if (bt) bt.classList.add('droptgt');
   const pitch = document.getElementById('tpitch'); if (pitch) pitch.classList.toggle('dropzone', !!el?.closest('#tpitch') && !t && drag.slot != null);
 }
 document.addEventListener('pointermove', (e) => {
@@ -469,9 +482,10 @@ function endDrag(e, cancel) {
   if (cancel) { render(); return; }
   const el = document.elementFromPoint(e.clientX, e.clientY);
   const t = el?.closest('.pslot[data-slot]');
-  const { G, c, youth, tact } = mySide(); const lu = youth ? G.me.u20lineup : c.lineup;
+  const { G, c, youth, tact } = mySide(); const lu = myLineup();
   const bt = el?.closest('.bcard[data-v], .li[data-a="pickp"]');
   if (!t && bt && d.slot != null) { const p = G.players[+bt.dataset.v]; if (!p || !available(p)) { toast('Jogador indisponível'); render(); return; } const out = lu.xi[d.slot]; lu.xi[d.slot] = p.id; const bi = lu.bench.indexOf(p.id); if (bi >= 0) lu.bench[bi] = out; else if (out >= 0 && !lu.bench.includes(out)) { lu.bench.unshift(out); if (lu.bench.length > 9) lu.bench.pop(); } S.sel = null; toast(`🔄 ${shortName(p.n)} entra, ${shortName(G.players[out]?.n || '')} vai para o banco`); render(); save(); return; }
+  if (!t && bt && d.pid != null && bt.classList.contains('bcard')) { const bid = +bt.dataset.v; if (bid !== d.pid) { const bi = lu.bench.indexOf(bid); const oi = lu.bench.indexOf(d.pid); if (oi >= 0) { [lu.bench[bi], lu.bench[oi]] = [lu.bench[oi], lu.bench[bi]]; } else if (bi >= 0) { lu.bench[bi] = d.pid; toast(`🔄 ${shortName(G.players[d.pid].n)} no banco`); } } render(); save(); return; }
   if (t) {
     const j = +t.dataset.slot;
     if (d.slot != null) { if (j !== d.slot) { [lu.xi[d.slot], lu.xi[j]] = [lu.xi[j], lu.xi[d.slot]]; toast('Posições trocadas'); } }

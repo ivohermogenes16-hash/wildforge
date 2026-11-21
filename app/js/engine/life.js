@@ -8,6 +8,7 @@ import { clamp, ri, rf, rnd, pick, money, hash, seeded, shuffle } from '../util.
 import { genName, makePlayer, BOARD_TYPES, initClubLife, initPlayerLife, clubLevel, expandWorld } from './world.js';
 import { playerWage, playerValue, WAGE_SCALE } from './econ.js';
 import { standings } from './season.js';
+import { pressPre, pressPost, pressHeadline } from './press.js';
 
 export const STYLES = ['Ofensivo', 'Defensivo', 'Posse de bola', 'Contra-ataque', 'Equilibrado', 'Pressão alta'];
 export const STAFF = {
@@ -540,6 +541,7 @@ export function resolveDecision(G, m, i, auto) {
   if (fx.rep) me.rep = clamp(me.rep + fx.rep, 1, 99);
   if (P) { if (fx.pmor) P.mor = clamp(P.mor + fx.pmor, 0, 100); if (fx.prel) P.rel = clamp(P.rel + fx.prel, 0, 100); if (fx.psat) P.sat = clamp(P.sat + fx.psat, 0, 100); if (fx.pfit) P.fit = clamp(P.fit + fx.pfit, 0, 100); }
   if (m.fixId != null && o.boast) { const f = G.fix[m.fixId]; if (f) f._boast = true; }
+  if (m.press && o.tone) { m.head = pressHeadline(G, m, i); news(G, `🎤 ${m.head}`); }
   const t = c?.board.type;
   switch (o.act) {
     case 'metaDown': { const p = 0.35 + (me.rep - c.rep) / 100 + (t === 'conservadora' ? 0.1 : t === 'impaciente' || t === 'ambiciosa' ? -0.15 : 0); if (Math.random() < p) { me.obj.pos = Math.min(me.obj.n || 20, me.obj.pos + 3); me.obj.text = me.obj.pos <= 1 ? me.obj.text : `Terminar entre os ${me.obj.pos} primeiros`; c.board.conf = clamp(c.board.conf - 3, 0, 100); out = `✅ Meta revisada: ${me.obj.text}.`; } else { c.board.conf = clamp(c.board.conf - 6, 0, 100); out = '❌ A diretoria manteve a meta e não gostou do pedido.'; } break; }
@@ -578,30 +580,19 @@ const A = (l, fx, extra = {}) => ({ l, fx, ...extra });
 export function pressBefore(G, f) {
   if (!isSenior(G) || G.me.pressOn === false) return null;
   const c = myJobClub(G); const opp = G.clubs[f.h === c.id ? f.a : f.h]; const comp = G.comps[f.c];
-  if (isDerby(G, f.h, f.a)) return { q: `É clássico contra o ${opp.name}. O que a torcida pode esperar?`, a: [A('Clássico não tem favorito. Vamos com respeito e intensidade.', { fans: 1, pp: -2 }), A('Vamos vencer. Pode escrever.', { fans: 4, pop: 2, mor: 2 }, { boast: true }), A('É só mais um jogo, valendo os mesmos três pontos.', { fans: -3, pp: -1 })] };
-  if (f.ko >= 0 && f.ko >= comp.koWeeks.length - 2) return { q: `Jogo decisivo de ${comp.name}. A pressão pesa?`, a: [A('Pressão é privilégio. Estamos prontos.', { mor: 3, pop: 1 }), A('Sabemos que o adversário é forte, mas confiamos no trabalho.', { pp: -2 }), A('Se não passarmos, a temporada perde sentido.', { mor: -3, pp: 4, fans: 2 })] };
-  const tab = comp.table[c.id], to = comp.table[opp.id];
-  if (tab && to && comp.kind === 'league') { const st = standings(G, comp, 0); if (st.indexOf(c.id) < 3 && st.indexOf(opp.id) < 3) return { q: `Confronto direto pela liderança contra o ${opp.name}. É uma final?`, a: [A('Ainda falta muito, mas é um jogo grande.', { pp: -2 }), A('Quem ganhar dá um passo enorme rumo ao título.', { mor: 3, fans: 2, pp: 2 }), A('Somos melhores que eles.', { fans: 3, pop: 2 }, { boast: true })] }; }
-  if (c.board.conf < 35) return { q: 'Há rumores de que este jogo pode decidir o seu futuro. Você se sente ameaçado?', a: [A('Estou focado no trabalho, não em rumores.', { pp: -3 }), A('Se a diretoria quiser mudar, é direito dela.', { conf: -3, pp: 4 }), A('Confio que vamos virar essa situação.', { mor: 3, conf: 2 })] };
-  return null;
+  const L = G.comps[c.league]; const form = L?.table?.[c.id]?.form || '';
+  let st = null; if (comp.kind === 'league' && comp.table?.[c.id]) { try { st = standings(G, comp, 0); } catch { st = null; } }
+  return pressPre(G, { c, opp, comp, f, derby: isDerby(G, f.h, f.a), form, st });
 }
 export function pressAfter(G, f) {
   if (!isSenior(G) || G.me.pressOn === false) return null;
   const c = myJobClub(G); const side = f.h === c.id ? 0 : 1; const opp = G.clubs[side ? f.h : f.a];
   const gf = side ? f.ag : f.hg, ga = side ? f.hg : f.ag; const comp = G.comps[c.league];
   const form = comp?.table[c.id]?.form || '';
-  const derby = isDerby(G, f.h, f.a);
-  if (derby && gf > ga) return { q: `Vitória no clássico contra o ${opp.name}! Uma mensagem para a torcida?`, a: [A('Essa é para vocês, torcida! Clássico se ganha!', { fans: 4, pop: 3 }), A('Mérito dos jogadores, que entenderam a importância.', { mor: 4, prel: 0 }), A('Foi só mais uma vitória, temos muito pela frente.', { pp: -2 })] };
-  if (derby && gf < ga) return { q: `Derrota no clássico. Como explicar para a torcida?`, a: [A('A responsabilidade é toda minha.', { pp: -2, conf: 1, mor: 2 }), A('Faltou entrega de alguns jogadores.', { mor: -6, conf: 2, chem: -3 }), A('O resultado não reflete o que jogamos.', { fans: -3, pp: 3 })] };
-  if (gf - ga >= 3) return { q: `Goleada de ${gf}x${ga}! O time encontrou o caminho?`, a: [A('O grupo está de parabéns, mas os pés no chão.', { mor: 2, pp: -2 }), A('Esse é o padrão que quero ver sempre.', { mor: 4, fans: 2, pop: 2 }), A('Ainda temos muito a melhorar.', { pp: -3, mor: -1 })] };
-  if (ga - gf >= 3) return { q: `Goleada sofrida por ${gf}x${ga}. O que aconteceu?`, a: [A('Dia ruim. Vamos corrigir e seguir.', { pp: 2 }), A('Precisamos de reforços, o elenco está curto.', { conf: -4, mor: -3, pp: -1 }), A('Eu errei na estratégia. Assumo.', { pp: -3, conf: -1, mor: 2 })] };
-  if (form.endsWith('DDD')) return { q: 'Três derrotas seguidas. O trabalho está em risco?', a: [A('Confio no grupo e no processo.', { mor: 3, pp: 2 }), A('Vamos mudar algumas coisas já no próximo jogo.', { conf: 2, pp: -2 }), A('Não estou preocupado com meu cargo.', { conf: -3, pp: 4 })] };
-  if (form.endsWith('VVVV')) return { q: 'Quatro vitórias seguidas. Dá para sonhar com o título?', a: [A('Sonhar é de graça, mas o foco é jogo a jogo.', { pp: -2, mor: 2 }), A('Sim! Esse time pode ser campeão.', { fans: 4, pop: 3, mor: 3, pp: 3 }), A('Ainda é cedo, não somos favoritos.', { pp: -3 })] };
-  if (gf > ga && opp.rep >= c.rep + 12) return { q: `Zebra! Vitória sobre o ${opp.name}. Qual foi o segredo?`, a: [A('Estudamos muito o adversário.', { rep: 0.5, pop: 2 }), A('Coração e entrega dos jogadores.', { mor: 4 }), A('Não é zebra, somos um grande time.', { fans: 3, pp: 2 })] };
-  return null;
+  return pressPost(G, { c, opp, f, side, gf, ga, derby: isDerby(G, f.h, f.a), form });
 }
 export function pressDecision(G, f, P, when) {
-  decision(G, 'Imprensa', when === 'pre' ? '🎤 Coletiva pré-jogo' : '🎤 Coletiva pós-jogo', P.q, P.a, { def: 0, fixId: f.i, press: true, weeks: 1 });
+  decision(G, 'Imprensa', when === 'pre' ? '🎤 Coletiva pré-jogo' : '🎤 Coletiva pós-jogo', P.q, P.a, { def: 0, fixId: f.i, press: true, weeks: 1, rep: P.rep, ctx: P.ctx, when });
   return G.inbox[0];
 }
 

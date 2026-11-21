@@ -601,6 +601,11 @@ function mkPlayer(o) {
 mkKits();
 for (const t of [0, 1]) F433.forEach(([role, fx, fz], j) => { const num = NUMS[j]; mkPlayer({ team: t, dir: t ? -1 : 1, role, fx, fz, num, gk: role === 'GOL', cell: role === 'GOL' ? 50 + t : t * 25 + num - 1 }); });
 const REF = mkPlayer({ ref: true, team: -1, dir: 1, role: 'ARB', fx: 0, fz: 0, cell: 63 });
+const ASTS = [1, -1].map((sd) => mkPlayer({ ref: true, ast: sd, team: -1, dir: 1, role: 'AST', fx: 0, fz: 0, cell: 63 }));
+function addFlag(a) { const g = new THREE.Group(); const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.55, 5), new THREE.MeshLambertMaterial({ color: '#222' })); stick.position.y = -0.2; g.add(stick);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 32; const x = cv.getContext('2d'); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.fillStyle = (i + j) % 2 ? '#e53935' : '#ffd600'; x.fillRect(i * 8, j * 8, 8, 8); }
+  const cl = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.22), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(cv), side: THREE.DoubleSide })); cl.position.set(0.15, -0.38, 0); g.add(cl); g.position.set(0, -0.3, 0.04); a.rig.elR.add(g); a.flag = cl; }
+ASTS.forEach(addFlag);
 for (const p of players) p.k = resolveKit(p);
 function relook() { mkKits(); for (const p of players) p.k = resolveKit(p); buildInstances(); hudColors(); }
 buildInstances();
@@ -754,6 +759,17 @@ function nearest(tm, pt, excl) { let b = null, bd = 1e9; for (const p of players
 function distSeg(p, a, b) { const abx = b.x - a.x, abz = b.z - a.z; const l2 = abx * abx + abz * abz || 1; const k = clamp(((p.x - a.x) * abx + (p.z - a.z) * abz) / l2, 0, 1); return Math.hypot(a.x + abx * k - p.x, a.z + abz * k - p.z); }
 function koPos(p) { const d = p.dir, k = (p.fx + 1) / 2; return V(-d * (L / 2) * (0.04 + (1 - k) * 0.9), 0, d * p.fz * W / 2 * 0.8); }
 function lineA(p) { let m = -1e9; for (const q of players) if (q.team === 1 - p.team && !q.gk) m = Math.max(m, q.pos.x * p.dir); return m; }
+// ---------- impedimento ----------
+function offLine(tm) { // linha do penúltimo adversário (contando o goleiro) para o time tm atacando
+  const d = tm === 0 ? 1 : -1; const xs = []; for (const q of players) if (q.team === 1 - tm && !q.off && !q.ref) xs.push(q.pos.x * d); xs.sort((a, b) => b - a); return xs.length > 1 ? xs[1] : 0; }
+function isOffside(q, from) { if (!q || q.gk) return false; const d = q.dir; const a = q.pos.x * d; return a > 0.2 && a > ball.pos.x * d + 0.2 && a > offLine(q.team) + 0.35; }
+function callOffside(p) {
+  const tm = 1 - p.team; G.pass = null; G.owner = null; ball.held = null; G.shot = null;
+  const pos = V(clamp(p.pos.x, -L / 2 + 2, L / 2 - 2), ball.r, clamp(p.pos.z, -W / 2 + 1, W / 2 - 1));
+  G.phase = 'out'; G.timer = 2.2; G.restart = { tm, pos, gk: false, fk: true }; ball.vel.set(0, 0, 0);
+  const a = ASTS.find((x) => Math.sign(p.pos.x) === x.ast) || ASTS[0]; startAct(a, 'alta', { dur: 2.2, lock: true, move: (q) => q.vel.set(0, 0, 0) });
+  banner('IMPEDIMENTO!', null); if (G.st) G.st.off++; for (const x of players) x.cool = Math.max(x.cool, 0.4);
+}
 function homePos(p) {
   const d = p.dir; const att = G.poss === p.team; const bA = ball.pos.x * d, bz = ball.pos.z; const side = Math.sign(d * p.fz) || 0;
   if (p.gk) { const gx = -d * (L / 2 - 1.4); const near = Math.abs(ball.pos.x - gx) < 25 ? 1 : 0; return V(gx + d * near * 2, 0, clamp(bz * 0.18, -2.6, 2.6)); }
@@ -780,20 +796,20 @@ function homePos(p) {
       default: a = Math.max(back + 28, bA - 2); z = bz * 0.3;
     }
     // marcação: aproxima do atacante mais perto, ficando entre ele e o gol
-    if (p.role !== 'ATA') { let m = null, md = 9; for (const q of players) { if (q.team !== 1 - p.team || q.gk) continue; const dd = Math.hypot(q.pos.x - a * d, q.pos.z - z); if (dd < md) { md = dd; m = q; } }
-      if (m) { a = lerp(a, m.pos.x * d - 1.6, 0.65); z = lerp(z, m.pos.z * 0.92, 0.65); } }
+    const m = G.mark && G.mark.get(p);
+    if (m) { a = lerp(a, m.pos.x * d - 2.2, 0.55); z = lerp(z, m.pos.z * 0.9, 0.55); }
   }
   return V(clamp(a, -L / 2 + 2, L / 2 - 2) * d, 0, clamp(z, -W / 2 + 2, W / 2 - 2));
 }
 function kickoff(tm) {
   G.phase = 'ko'; G.timer = 1.8; G.poss = tm; G.shot = null; G.intended = null; G.scorer = null; G.restart = null; G.taker = null; ball.held = null; G.pass = null;
-  for (const p of players) { p.act = null; p.mood = null; p.pend = null; p.ready = false; p.vel.set(0, 0, 0); p.snap = true; if (p.ref) { p.pos.set(-4, 0, 12); continue; } p.pos.copy(koPos(p)); p.target.copy(p.pos); p.head = p.headT = p.dir > 0 ? Math.PI / 2 : -Math.PI / 2; }
+  for (const p of players) { p.act = null; p.mood = null; p.pend = null; p.ready = false; p.vel.set(0, 0, 0); p.snap = true; if (p.ast) { p.pos.set(0, 0, p.ast * (W / 2 + 1.4)); p.target.copy(p.pos); continue; } if (p.ref) { p.pos.set(-4, 0, 12); continue; } p.pos.copy(koPos(p)); p.target.copy(p.pos); p.head = p.headT = p.dir > 0 ? Math.PI / 2 : -Math.PI / 2; }
   const tp = players.filter((p) => p.team === tm && !p.gk && !p.off).sort((x, y) => y.fx - x.fx);
   const st = tp.find((p) => p.role === 'ATA') || tp[0]; st.pos.set(-st.dir * 0.5, 0, 0); st.target.copy(st.pos);
   const mc = tp.find((p) => p !== st && (p.role === 'MEI' || p.role === 'MC')) || tp.find((p) => p !== st); mc.pos.set(-mc.dir * 4, 0, 3.5); mc.target.copy(mc.pos);
   ball.pos.set(0, ball.r, 0); ball.vel.set(0, 0, 0); G.owner = st; G.ko = [st, mc];
 }
-function take(p) { G.pass = null; G.owner = p; G.last = p; G.intended = null; G.shot = null; G.taker = null; G.poss = p.team; p.decide = p.gk ? 1.4 : rnd(0.7, 2.0); ball.vel.set(0, 0, 0); }
+function take(p) { if (G.rsTaker && G.rsTaker !== p) G.rsTaker = null; G.pass = null; G.owner = p; G.last = p; G.intended = null; G.shot = null; G.taker = null; G.poss = p.team; p.decide = p.gk ? 1.4 : rnd(0.7, 2.0); ball.vel.set(0, 0, 0); }
 function faceTo(p, x, z) { p.headT = Math.atan2(x - p.pos.x, z - p.pos.z); }
 const fwd = (p, s) => ({ x: Math.sin(p.head) * s, z: Math.cos(p.head) * s });
 function kickAct(p, type, dur, hitK, onHit) {
@@ -808,10 +824,13 @@ function doPass(p, o) {
     const dx = tx - ball.pos.x, dz = tz - ball.pos.z; const dist = Math.hypot(dx, dz) || 1;
     if (lob) { const hs = clamp(dist * 0.5 + 8, 13, 21); const tt = dist / hs; const hEnd = type === 'cruz' ? 1.85 : 0.6; const vy = (hEnd - ball.pos.y + 4.9 * tt * tt) / tt; ball.vel.set(dx / dist * hs, vy, dz / dist * hs); }
     else { const sp = clamp(dist * 0.75 + 6, 9, 22); ball.vel.set(dx / dist * sp, 0.25, dz / dist * sp); }
-    G.owner = null; G.intended = q; G.last = p; p.cool = 0.45; G.pass = { q, type, t: V(tx, 0, tz), tried: new Set(), from: p.team };
+    G.owner = null; G.intended = q; G.last = p; p.cool = 0.45; (G.st ||= { pass: 0, ok: 0, int: 0, cut: 0, off: 0 }).pass++; const noOff = G.rsTaker === p || (EMBED && G.force); G.rsTaker = null; G.pass = { q, type, t: V(tx, 0, tz), tried: new Set(), from: p.team, off: !noOff && isOffside(q) };
     if (type === 'enfiada') banner('Passe em profundidade', null, true); else if (type === 'cruz') banner('Cruzamento!', null, true);
   });
 }
+function laneRisk(e, a, b, sp) { // distância "efetiva" do defensor à linha do passe, descontando o quanto ele corre enquanto a bola viaja
+  const abx = b.x - a.x, abz = b.z - a.z; const l2 = abx * abx + abz * abz || 1; const k = clamp(((e.pos.x - a.x) * abx + (e.pos.z - a.z) * abz) / l2, 0, 1);
+  if (k <= 0.02) return 99; const px = a.x + abx * k, pz = a.z + abz * k; const lat = Math.hypot(px - e.pos.x, pz - e.pos.z); const tb = Math.sqrt(l2) * k / sp; return lat - Math.min(3.2, tb * 4.2); }
 function choosePass(p) {
   const opts = []; const d = p.dir;
   for (const q of players) { if (q.team !== p.team || q === p || q.off) continue; const dist = q.pos.distanceTo(p.pos); if (dist < 5 || dist > 42) continue;
@@ -821,8 +840,10 @@ function choosePass(p) {
   let best = null, bs = -1e9;
   for (const o of opts) { const t = o.t; const dist = Math.hypot(t.x - p.pos.x, t.z - p.pos.z); if (dist < 4) continue;
     let s = (t.x - p.pos.x) * d * 0.45 - Math.max(0, dist - 25) * 0.3 + rnd(0, 3); let lane = 99, open = 99;
-    for (const e of players) { if (e.team === p.team || e.ref) continue; if (o.type !== 'cruz') lane = Math.min(lane, distSeg(e.pos, p.pos, t)); open = Math.min(open, Math.hypot(e.pos.x - t.x, e.pos.z - t.z)); }
-    if (o.type !== 'cruz') s += lane < 1.6 ? -14 : Math.min(lane, 5) * 1.2;
+    const sp = clamp(dist * 0.75 + 6, 9, 22);
+    for (const e of players) { if (e.team === p.team || e.ref || e.off) continue; if (o.type !== 'cruz') lane = Math.min(lane, laneRisk(e, p.pos, t, sp)); open = Math.min(open, Math.hypot(e.pos.x - t.x, e.pos.z - t.z)); }
+    if (o.type !== 'cruz') s += lane < 0.6 ? -30 : lane < 1.8 ? -14 : Math.min(lane, 5) * 1.2;
+    if (isOffside(o.q) && o.type !== 'enfiada') s -= Math.random() < 0.9 ? 40 : 0; else if (o.type === 'enfiada' && isOffside(o.q)) s -= Math.random() < 0.85 ? 40 : 0;
     s += open < 2 ? -9 : Math.min(open, 7) * 0.9;
     if (o.q.gk) s -= 20; if (o.type === 'enfiada') s += 2; if (o.type === 'cruz') s += 9;
     if (p.pos.x * d < -L / 2 + 25 && (t.x - p.pos.x) * d < 0) s -= 6;
@@ -907,19 +928,38 @@ function gkDistribute(o) {
   if (d < 26) startAct(o, 'arremesso', { dur: 0.95, hitK: 0.55, lock: true, onHit: () => rel(clamp(d * 0.7 + 6, 10, 18), 3) });
   else startAct(o, 'tiro', { dur: 1.1, hitK: 0.56, lock: true, mirror: o.foot === 'L', onHit: () => rel(21, 11), move: (q2, dt, k) => { if (k > 0.36 && !o.act.dropped) { o.act.dropped = true; ball.held = 'drop'; } q2.vel.set(0, 0, 0); } });
 }
+function astMove(p) { const sd = p.ast; const atk = sd > 0 ? 0 : 1; const d = atk === 0 ? 1 : -1; let x = Math.max(offLine(atk), ball.pos.x * d) * d; if (x * sd < 0) x = 0; p.target.set(clamp(x, -L / 2 + 1, L / 2 - 1), 0, sd * (W / 2 + 1.4)); p.spd = 6.5; if (!(p.act && p.act.lock)) p.headT = 0; }
+function assignMarks() { // cada atacante adversário é marcado por no máximo um defensor
+  G.mark = new Map(); const tmDef = G.poss === 0 ? 1 : G.poss === 1 ? 0 : -1; if (tmDef < 0) return;
+  const defs = players.filter((p) => p.team === tmDef && !p.gk && !p.off && p.role !== 'ATA'); const atks = players.filter((q) => q.team === 1 - tmDef && !q.gk && !q.off && q !== G.owner);
+  const pairs = []; for (const p of defs) { const hp = p._home || p.pos; for (const q of atks) { const dd = Math.hypot(q.pos.x - hp.x, q.pos.z - hp.z); if (dd < 11) pairs.push([dd, p, q]); } }
+  pairs.sort((x, y) => x[0] - y[0]); const used = new Set();
+  for (const [, p, q] of pairs) { if (G.mark.has(p) || used.has(q)) continue; G.mark.set(p, q); used.add(q); }
+}
+function spreadTargets(o) { // companheiros não se amontoam: afasta alvos muito próximos
+  const keep = new Set([o, G.pass && G.pass.q, G.taker].filter(Boolean));
+  for (let it = 0; it < 2; it++) for (const tm of [0, 1]) { const ps = players.filter((p) => p.team === tm && !p.gk && !p.off && !p.ref);
+    const min = G.poss === tm ? 7.5 : 5;
+    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) { const a = ps[i], b = ps[j]; const dx = b.target.x - a.target.x, dz = b.target.z - a.target.z; const dd = Math.hypot(dx, dz);
+      if (dd >= min) continue; const ux = dd > 0.01 ? dx / dd : Math.cos(i + j), uz = dd > 0.01 ? dz / dd : Math.sin(i + j); const push = (min - dd) / 2;
+      const ka = keep.has(a) ? 0 : keep.has(b) ? 2 : 1, kb = keep.has(b) ? 0 : keep.has(a) ? 2 : 1;
+      a.target.x -= ux * push * ka; a.target.z -= uz * push * ka; b.target.x += ux * push * kb; b.target.z += uz * push * kb; }
+    for (const p of ps) { p.target.x = clamp(p.target.x, -L / 2 + 1, L / 2 - 1); p.target.z = clamp(p.target.z, -W / 2 + 1, W / 2 - 1); } }
+}
 function playLogic(dt) {
   if (EMBED && G.force && !G.force.shot) { const F = G.force; F.t += dt; const sh = forceShooter(); const ow = G.owner;
     if (ow && ow.team !== F.side && !ow.gk && !(ow.act && ow.act.lock)) { const [n] = nearest(F.side, ow.pos); if (n) { take(n); ow.cool = 0.9; } }
     else if (ow && ow.gk && ow.team !== F.side && ow.decide > 0.3) ow.decide = 0.3;
     if (sh && G.owner !== sh && !sh.gk) { sh.run = 1; } }
   const o = G.owner;
-  for (const p of players) { if (p.off) { p.target.set(clamp(p.pos.x, -40, 40), 0, W / 2 + 7); p.spd = 3; continue; } if (p.ref) { p.target.set(clamp(ball.pos.x + (ball.pos.x > 0 ? -9 : 9), -L / 2 + 6, L / 2 - 6), 0, clamp(ball.pos.z + (ball.pos.z > 0 ? -9 : 9), -W / 2 + 3, W / 2 - 3)); p.spd = 5.5; continue; }
+  for (const p of players) { if (p.off) { p.target.set(clamp(p.pos.x, -40, 40), 0, W / 2 + 7); p.spd = 3; continue; } if (p.ast) { astMove(p); continue; } if (p.ref) { p.target.set(clamp(ball.pos.x + (ball.pos.x > 0 ? -9 : 9), -L / 2 + 6, L / 2 - 6), 0, clamp(ball.pos.z + (ball.pos.z > 0 ? -9 : 9), -W / 2 + 3, W / 2 - 3)); p.spd = 5.5; continue; }
     if (p.gk) p.ready = (!o || o.team !== p.team) && Math.abs(ball.pos.x + p.dir * L / 2) < 35;
     // infiltrações dos atacantes
     p.run = (p.run || 0) - dt;
     if (G.poss === p.team && ['ATA', 'PD', 'PE'].includes(p.role) && p.run < -rnd(2, 5) && ball.pos.x * p.dir > -15 && Math.random() < dt * 0.8) { p.run = rnd(2, 3); p.runZ = rnd(-7, 7); }
-    if (p === o) continue; p.target.copy(homePos(p)); p.spd = p.gk ? 3.2 : p.run > 0 ? 7.6 : 5.4;
+    if (p === o) continue; p.target.copy(homePos(p)); p._home = p.target.clone(); p.spd = p.gk ? 3.2 : p.run > 0 ? 7.6 : 5.4;
     if (EMBED && G.force && !G.force.shot && p === forceShooter() && !p.gk) { p.target.set(p.dir * (L / 2 - 17), 0, clamp(p.pos.z, -10, 10)); p.spd = 7.4; } }
+  assignMarks(); spreadTargets(o);
   if (G.pass && Math.hypot(ball.vel.x, ball.vel.z) < 1.2 && ball.pos.y < 0.3) G.pass = null;
   if (o) {
     G.poss = o.team; o.decide -= dt; const d = o.dir, goalX = d * L / 2; const [opp, od] = nearest(1 - o.team, o.pos);
@@ -946,7 +986,12 @@ function playLogic(dt) {
     if (G.taker) { G.taker.target.copy(predictLand()); G.taker.spd = 7; }
     else if (G.pass) { const q = G.pass.q; const mp = meetPoint(q); q.target.copy(mp); q.spd = 7.6; q.run = 0;
       const tq = Math.hypot(mp.x - q.pos.x, mp.z - q.pos.z) / 7.6; const [e] = nearest(1 - q.team, mp);
-      if (e && !e.gk && Math.hypot(mp.x - e.pos.x, mp.z - e.pos.z) / 7.6 < tq + 0.15) { e.target.copy(mp); e.spd = 7.6; } }
+      if (e && !e.gk && Math.hypot(mp.x - e.pos.x, mp.z - e.pos.z) / 7.6 < tq + 0.15) { e.target.copy(mp); e.spd = 7.6; }
+      if (ball.pos.y < 1.6) { const sp = Math.hypot(ball.vel.x, ball.vel.z) || 1; const ux = ball.vel.x / sp, uz = ball.vel.z / sp;
+        for (const x of players) { if (x.team === G.pass.from || x.ref || x.off || x.gk || (x.act && x.act.lock)) continue;
+          const along = (x.pos.x - ball.pos.x) * ux + (x.pos.z - ball.pos.z) * uz; if (along < 0.5 || along > mp.distanceTo(ball.pos) + 1) continue;
+          const lat = Math.abs((x.pos.x - ball.pos.x) * uz - (x.pos.z - ball.pos.z) * ux); const tb = along / sp;
+          if (lat < tb * 6.8 + 0.9) { x.target.set(ball.pos.x + ux * along, 0, ball.pos.z + uz * along); x.spd = 7.8; } } } }
     else { const land = predictLand(); for (const tm of [0, 1]) { let [c] = nearest(tm, land); if (!c) continue; if (c.gk && Math.abs(land.x + c.dir * L / 2) > 16) [c] = nearest(tm, land, c); c.target.copy(land); c.spd = 7.6; } }
   }
   if (G.shot && G.shot.live) {
@@ -967,8 +1012,14 @@ function playLogic(dt) {
     const dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z, h2 = dx * dx + dz * dz; const isRec = G.pass && G.pass.q === p;
     if (isRec && G.pass.type === 'cruz' && h2 < 2.4 && ball.pos.y > 0.7 && ball.pos.y < 2.6 && ball.vel.y < 0) { finishCross(p); break; }
     if (h2 < (isRec ? 1.5 : 0.8) && ball.pos.y < 1.15) {
-      if (G.pass && p.team !== G.pass.from) { if (G.pass.tried.has(p)) continue; G.pass.tried.add(p); const sp = Math.hypot(ball.vel.x, ball.vel.z); if ((EMBED && G.force && G.force.side === G.pass.from) || Math.random() > (sp > 15 ? 0.22 : 0.38)) { p.cool = 0.35; continue; } banner('Interceptou!', p.team, true); }
-      take(p); if (p.gk && Math.abs(p.pos.x + p.dir * L / 2) < 16) { startAct(p, 'rasteira', { dur: 0.9, lock: true }); ball.held = 'hands'; } break; }
+      if (G.pass && p.team !== G.pass.from) { if (G.pass.tried.has(p)) continue; G.pass.tried.add(p); const sp = Math.hypot(ball.vel.x, ball.vel.z);
+        if (EMBED && G.force && G.force.side === G.pass.from) { p.cool = 0.35; continue; }
+        const chance = (h2 < 0.35 ? 0.93 : sp > 17 ? 0.62 : 0.8) * (ball.pos.y > 0.7 ? 0.75 : 1);
+        if (Math.random() > chance) { p.cool = 0.35; if (Math.random() < 0.5) { ball.vel.x *= 0.75; ball.vel.z = ball.vel.z * 0.6 + rnd(-3, 3); G.last = p; } continue; }
+        if (Math.random() < 0.28) { startAct(p, 'chapa', { dur: 0.5, mirror: p.foot === 'L' }); ball.vel.set(ball.vel.x * -0.25 + rnd(-4, 4), rnd(0.3, 2), ball.vel.z * 0.3 + rnd(-5, 5)); G.pass = null; G.last = p; p.cool = 0.5; banner('Cortou!', p.team, true); if (G.st) G.st.cut++; break; }
+        banner('Interceptou!', p.team, true); if (G.st) G.st.int++; }
+      else if (G.pass && G.pass.off && p === G.pass.q) { callOffside(p); break; }
+      if (G.pass && G.st && p === G.pass.q) G.st.ok++; take(p); if (p.gk && Math.abs(p.pos.x + p.dir * L / 2) < 16) { startAct(p, 'rasteira', { dur: 0.9, lock: true }); ball.held = 'hands'; } break; }
   }
   const b = ball.pos;
   if (Math.abs(b.x) > L / 2 + ball.r) { if (Math.abs(b.z) < 3.66 && b.y < 2.44) scoreGoal(b.x > 0 ? 0 : 1); else outBall('fundo'); }
@@ -978,7 +1029,7 @@ function goalLogic() {
   const sc = G.scorer; const el = 6.5 - G.timer;
   for (const p of players) {
     p.ready = false;
-    if (p.ref) { p.target.set(0, 0, 10); p.spd = 3; continue; }
+    if (p.ast) { p.target.set(0, 0, p.ast * (W / 2 + 1.4)); p.spd = 3; continue; } if (p.ref) { p.target.set(0, 0, 10); p.spd = 3; continue; }
     if (p === sc) { if (el < 2.6) { p.target.copy(sc.cel.corner); p.spd = 8; if (sc.cel.style === 'aviao' && !p.act) startAct(p, 'aviao', { loop: true }); }
       else if (!sc.cel.done) { sc.cel.done = true; if (sc.cel.style === 'joelho') startAct(p, 'joelho', { loop: true, lock: true, move: (q, dt) => { q.vel.multiplyScalar(Math.exp(-1.5 * dt)); } }); else startAct(p, 'festa', { loop: true }); }
       if (sc.cel.done && sc.cel.style !== 'joelho') { p.target.copy(p.pos); p.spd = 0; } continue; }
@@ -1089,8 +1140,8 @@ function updateGame(dt, t) {
     if (G.phase === 'ko') { G.timer -= dt; for (const p of players) p.target.copy(p.pos); if (G.timer <= 0) { G.phase = 'play'; const [st, mc] = G.ko; doPass(st, { q: mc, t: mc.pos.clone(), type: 'pe' }); } }
     else if (G.phase === 'play') playLogic(dt);
     else if (G.phase === 'goal') { G.timer -= dt; goalLogic(); }
-    else if (G.phase === 'out') { G.timer -= dt; for (const p of players) if (!p.ref) { p.target.copy(homePos(p)); p.spd = 4; p.ready = false; }
-      if (G.timer <= 0) { const r = G.restart; ball.pos.copy(r.pos); ball.vel.set(0, 0, 0); G.taker = r.gk ? players.find((p) => p.team === r.tm && p.gk) : nearest(r.tm, r.pos)[0]; G.intended = G.taker; G.phase = 'play'; } }
+    else if (G.phase === 'out') { G.timer -= dt; for (const p of players) if (p.ast) astMove(p); else if (!p.ref) { p.target.copy(homePos(p)); p.spd = 4; p.ready = false; }
+      if (G.timer <= 0) { const r = G.restart; ball.pos.copy(r.pos); ball.vel.set(0, 0, 0); G.taker = r.gk ? players.find((p) => p.team === r.tm && p.gk) : nearest(r.tm, r.pos)[0]; G.rsTaker = r.fk ? null : G.taker; G.intended = G.taker; G.phase = 'play'; } }
   }
   for (const p of players) stepPlayer(p, dt, t);
   if (!VIT.on) separate();

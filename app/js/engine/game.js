@@ -3,7 +3,7 @@ import { clamp, ri, rf, rnd, gauss, pick, shuffle, money } from '../util.js';
 import { SEASON_WEEKS, TICKET, coachWage, playerWage, playerValue } from './econ.js';
 import { createWorld, makePlayer, genName, buildU20, clubLevel, START_YEAR, newFin, initFinances, QUOTA } from './world.js';
 import { setupSeason, progressComps, recordResult, standings, koWinner, CUPS, CONTS } from './season.js';
-import { autoLineup, quickSim, penalties, validLineup, FORMATIONS, FITPOS } from './match.js';
+import { autoLineup, quickSim, penalties, validLineup, FORMATIONS, FITPOS, effAt, available, formOf } from './match.js';
 import { aiTransferWeek, inWindow, anyWindow, windowInfo, expireContracts, playerInterest } from './market.js';
 import { weeklyPersonal, ownClubWeek, ownSeasonEnd } from './career.js';
 import { ensureBase, scoutWeek, baseBudget } from './youth.js';
@@ -77,7 +77,7 @@ export function takeJob(G, cid, youth, first, opts = {}) {
   G.me.job = { cid, youth, wage: opts.wage ?? coachWage(c.rep, c.country, youth), since: G.t, until: G.year + (opts.years ?? (first ? 2 : 2)), tbon: opts.tbon || 0, pbon: opts.pbon || 0, tb: opts.tb || 0, objAdj: opts.objAdj || 0 };
   if (!youth && c.coach && !c.coach.user) coachLeaves(G, c, 'replaced');
   ensureBase(G, cid); G.me.scout = null; G.me.u20lineup = null;
-  if (!youth) { c.coach = { n: G.me.name, rep: G.me.rep, user: true }; c.board.conf = 65; c.lineup = null; }
+  if (!youth) { c.coach = { n: G.me.name, rep: G.me.rep, user: true }; c.board.conf = 65; c.lineup = null; c.luKeep = null; }
   G.vac = G.vac.filter((v) => !(v.cid === cid && !!v.youth === !!youth));
   G.me.hist.push({ y: G.year, cid, name: c.name, youth, from: G.week, j: 0, v: 0, e: 0, d: 0, gf: 0, ga: 0 });
   if (G.me.car && !G.me.car.countries.includes(c.country)) G.me.car.countries.push(c.country);
@@ -114,11 +114,36 @@ function buildIndex(G) {
   G._idx = idx;
 }
 
+// Escalação do usuário: nunca é refeita sozinha. Só preenche vagas de quem não pode jogar
+// (lesionado, suspenso ou que saiu do clube) — e só para a partida, sem mexer na escalação salva.
+export function repairLineup(G, club, lu, youth, onlyGone = false) {
+  const form = formOf(club.tact); const n = form.length;
+  const inClub = (p) => p && p.club === club.id && (youth ? p.u20 && !p.u17 : true);
+  const ok = (id) => { const p = G.players[id]; return inClub(p) && (onlyGone || available(p)); };
+  const xi = (lu.xi || []).slice(0, n); while (xi.length < n) xi.push(-1);
+  const seen = new Set(); const changed = [];
+  for (let k = 0; k < n; k++) { if (!ok(xi[k]) || seen.has(xi[k])) { if (xi[k] >= 0) changed.push(k); xi[k] = -1; } else seen.add(xi[k]); }
+  const bench = []; for (const id of lu.bench || []) if (ok(id) && !seen.has(id) && !bench.includes(id)) bench.push(id);
+  const pool = G.players.filter((p) => inClub(p) && (youth || !p.u20 || (lu.xi || []).includes(p.id) || (lu.bench || []).includes(p.id)) && available(p) && !seen.has(p.id));
+  for (let k = 0; k < n; k++) {
+    if (xi[k] >= 0) continue;
+    const slot = form[k][0]; let best = null, bv = -1;
+    for (const p of pool) { if (seen.has(p.id)) continue; let v = effAt(p, slot) * (bench.includes(p.id) ? 1.04 : 1); if (p.fit < 65) v *= 0.9; if (v > bv) { bv = v; best = p; } }
+    if (best) { xi[k] = best.id; seen.add(best.id); const bi = bench.indexOf(best.id); if (bi >= 0) bench.splice(bi, 1); if (!changed.includes(k)) changed.push(k); }
+  }
+  const want = Math.min(9, (lu.bench || []).length);
+  if (bench.length < want) for (const p of pool.slice().sort((a, b) => b.ovr - a.ovr)) { if (bench.length >= want) break; if (!seen.has(p.id) && !bench.includes(p.id)) bench.push(p.id); }
+  return { xi, bench, changed };
+}
+export function isMyLineupClub(G, club, youth) { return !!(G.me.job && G.me.job.cid === club.id && !!G.me.job.youth === !!youth); }
 export function lineupFor(G, club, youth) {
-  if (!youth && club.lineup && G.me.job && !G.me.job.youth && G.me.job.cid === club.id && validLineup(G, club, club.lineup, false)) return club.lineup;
-  if (youth && G.me.job?.youth && G.me.job.cid === club.id && G.me.u20lineup && validLineup(G, { ...club, tact: G.me.u20tact || club.tact }, G.me.u20lineup, true)) return G.me.u20lineup;
-  const tact = youth && G.me.job?.youth && G.me.job.cid === club.id ? (G.me.u20tact || club.tact) : club.tact;
-  return autoLineup(G, { ...club, tact }, youth);
+  if (isMyLineupClub(G, club, youth)) {
+    const tact = youth ? (G.me.u20tact || club.tact) : club.tact;
+    const st = youth ? G.me.u20lineup : (club.lineup || club.luKeep);
+    if (st && st.xi) return repairLineup(G, { ...club, tact }, st, youth);
+    return autoLineup(G, { ...club, tact }, youth);
+  }
+  return autoLineup(G, club, youth);
 }
 
 export function u17Pool(G, cid) { return G.players.filter((p) => p && p.club === cid && p.u17); }

@@ -6,6 +6,7 @@ import { esc, money, clamp, POS, POS_NAME } from '../util.js';
 import { crest, face, ovrBadge, FLAG } from './art.js';
 import { S, H, PAGES, PAGES_T, PAGES_BACK, VIEWS, render, toast, openSheet, closeSheet, replaceSheet, save, playerRow, posTag, clubTag, stars, wk, potRange, myComps } from './app.js';
 import { preMatch } from './live.js';
+import { openBuy, openRenew } from './buy.js';
 import { natUserFixNow } from '../engine/nations.js';
 import { natPreMatch } from './nations.js';
 import { playerValue, clubValuation, coachWage, seasonIncome, SEASON_WEEKS } from '../engine/econ.js';
@@ -128,9 +129,7 @@ H.recommend = (v) => {
 };
 
 H.renew = (v) => {
-  const G = S.G, p = G.players[+v]; const d = renewDemand(G, p);
-  S.neg = { p: p.id, wage: d, years: 3 };
-  replaceSheet(negHtml(p, d, 'renew2', 'Renovar contrato'));
+  openRenew(S.G.players[+v]);
 };
 function negHtml(p, d, act, title, fee) {
   const n = S.neg; const G = S.G;
@@ -150,14 +149,7 @@ H.bid = (v) => {
   if (!G.me.job || G.me.job.youth) { toast('Só o técnico do profissional contrata'); return; }
   if (!inWindow(G) && p.club >= 0) { const wi = windowInfo(G); toast(`🔴 Mercado fechado — reabre em ${wi.next} (faltam ${wi.wait} sem.). Só jogadores livres agora.`, 3200); return; }
   const c = myClub(G);
-  const wj = willJoin(G, p, c.id); if (!wj.ok) { toast(wj.why, 3000); return; }
-  if (p.club < 0) { S.neg = { p: p.id, wage: wageDemand(G, p, c.id), years: 2, fee: 0 }; replaceSheet(negHtml(p, S.neg.wage, 'sign2', 'Contratar jogador livre', 0)); return; }
-  const ask = askPrice(G, p); S.swap = null; S.lastBidP = p.id;
-  S.bidv = Math.min(Math.round(playerValue(p) / 1000) * 1000, Math.max(0, c.money));
-  replaceSheet(`<h2>Proposta por ${esc(p.n)}</h2><div class="kv"><span class="mut">Valor de mercado</span><b>${money(playerValue(p))}</b></div><div class="kv"><span class="mut">Caixa do clube</span><b>${money(c.money)}</b></div>
-  <div class="field" style="margin-top:12px"><label>Sua oferta: <b id="bidv">${money(S.bidv)}</b></label><input type="range" min="0" max="${Math.max(1000, Math.round(ask * 1.6))}" step="${Math.max(1000, Math.round(ask / 200 / 1000) * 1000)}" value="${S.bidv}" data-in="bidv"></div>
-  <div class="field"><label>Incluir jogador na troca (opcional)</label><select data-ch="bidswap"><option value="">Nenhum</option>${G.players.filter((x) => x && x.club === c.id && !x.u20 && !x.loan).sort((a, b) => b.ovr - a.ovr).map((x) => `<option value="${x.id}" ${S.swap === x.id ? 'selected' : ''}>${esc(x.n)} (${x.pos}, ${x.ovr}) · ${money(playerValue(x))}</option>`).join('')}</select><div class="xs mut" id="swapv">${S.swap != null ? `O ${esc(G.clubs[p.club].name)} avalia ${esc(G.players[S.swap].n)} em ${money(swapValue(G, G.players[S.swap], p.club))}` : 'Oferecer um jogador reduz o dinheiro necessário.'}</div></div>
-  <button class="btn pri blk" data-a="bid2" data-v="${p.id}">Enviar proposta</button>`);
+  openBuy(p);
 };
 H.bidswap = (v) => { S.swap = v === '' ? null : +v; const el = document.getElementById('swapv'); const G = S.G; const p = G.players[S.neg?.p ?? S.lastBidP]; if (el && S.swap != null && p) el.textContent = `O ${G.clubs[p.club].name} avalia ${G.players[S.swap].n} em ${money(swapValue(G, G.players[S.swap], p.club))}`; };
 H.bidv = (v) => { S.bidv = +v; document.getElementById('bidv').textContent = money(+v); };
@@ -202,9 +194,15 @@ PAGES.market = () => {
   if (!j || j.youth) return `<div class="card"><h3>Mercado</h3><p>Só o técnico do time profissional negocia jogadores.</p><p class="mut sm">Mesmo assim você pode olhar os jogadores pelo mundo:</p><button class="btn blk" data-a="sub" data-v="mk:busca">Buscar jogadores</button></div>${S.sub.mk === 'busca' ? searchView(true) : ''}`;
   const c = myClub(G);
   const ww = weeklyWages(G, c.id), wb = wageBudget(G, c);
-  let h = `<div class="card"><div class="row"><div class="grow"><div class="xs mut">Caixa do clube</div><div class="xb" style="font-size:20px">${money(c.money)}</div></div><div style="text-align:right"><div class="xs mut">Folha / teto semanal</div><div class="b ${ww > wb ? 'bad' : ''}">${money(ww)} / ${money(wb)}</div></div></div>${windowCard(G)}</div>`;
+  const wi = windowInfo(G); const wpct = Math.min(100, Math.round(ww / Math.max(1, wb) * 100));
+  let h = `<div class="mk-head">
+    <div class="mk-stat"><small>Caixa</small><b class="${c.money < 0 ? 'bad' : ''}">${money(c.money)}</b></div>
+    <div class="mk-stat w"><small>Folha semanal</small><b class="${ww > wb ? 'bad' : ''}">${money(ww)} <span class="mut">/ ${money(wb)}</span></b><div class="mk-bar"><i style="width:${wpct}%;background:${wpct > 100 ? 'var(--red)' : wpct > 85 ? 'var(--gold)' : 'var(--ac)'}"></i></div></div>
+    <div class="mk-win ${wi.open ? 'open' : ''}" title="Janelas: ${esc(wi.all.join(' e '))}"><span class="mk-dot"></span><div><b>${wi.open ? 'Mercado aberto' : 'Mercado fechado'}</b><small>${wi.open ? `fecha ${wi.until}${wi.left <= 0 ? ' · última semana!' : ` · ${wi.left + 1} sem.`}` : `abre ${wi.next} · ${wi.wait} sem.`}</small></div>${wi.open && wi.left <= 1 ? '<span class="win-dead">⏰ Deadline</span>' : ''}</div>
+  </div>`;
   const bids = G.inbox.filter((m) => m.kind === 'bid' && !m.done && !m.expired);
-  h += `<div class="seg">${[['busca', 'Buscar'], ['obs', `Observados (${G.short.length})`], ['prop', `Propostas${bids.length ? ` (${bids.length})` : ''}`], ['venda', 'À venda'], ['olh', 'Olheiros'], ['emp', 'Empréstimos'], ['news', 'Notícias']].map(([k, l]) => `<button class="${S.sub.mk === k ? 'on' : ''}" data-a="sub" data-v="mk:${k}">${l}</button>`).join('')}</div>`;
+  const TABS = [['busca', '🔎', 'Buscar'], ['obs', '⭐', 'Observados', G.short.length], ['prop', '📨', 'Propostas', bids.length], ['venda', '💲', 'À venda'], ['olh', '🕵️', 'Olheiros'], ['emp', '🔁', 'Empréstimos'], ['news', '📰', 'Notícias']];
+  h += `<div class="mk-tabs">${TABS.map(([k, ic, l, n]) => `<button class="${S.sub.mk === k ? 'on' : ''}" data-a="sub" data-v="mk:${k}"><span class="ic">${ic}</span>${l}${n ? `<i>${n}</i>` : ''}</button>`).join('')}</div>`;
   if (S.sub.mk === 'busca') h += searchView();
   else if (S.sub.mk === 'olh') h += scoutNetView(G);
   else if (S.sub.mk === 'obs') h += `<div class="card flat" style="padding:4px 12px"><div class="list">${G.short.map((id) => playerRow(G.players[id], { club: true })).join('') || '<div class="empty">Toque em ☆ Observar no perfil de um jogador.</div>'}</div></div>`;
@@ -219,11 +217,17 @@ PAGES.market = () => {
 function searchView(ro) {
   const G = S.G, f = S.filt;
   const res = scoutSearch(G, { pos: f.pos, min: +f.min || 0, age: +f.age || 0, league: f.league, free: f.free, q: f.q });
-  return `<div class="card flat"><div class="row" style="gap:8px;margin-bottom:8px"><input placeholder="Buscar nome…" value="${esc(f.q)}" data-ch="fq"><select data-ch="fpos" style="width:110px"><option value="">Posição</option>${POS.map((p) => `<option ${f.pos === p ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
-  <div class="row" style="gap:8px"><select data-ch="fmin"><option value="">Geral mín.</option>${[50, 55, 60, 65, 70, 75, 80, 85].map((x) => `<option value="${x}" ${+f.min === x ? 'selected' : ''}>${x}+</option>`).join('')}</select><select data-ch="fage"><option value="">Idade máx.</option>${[19, 21, 23, 25, 28, 31].map((x) => `<option value="${x}" ${+f.age === x ? 'selected' : ''}>até ${x}</option>`).join('')}</select></div>
-  <div class="row" style="gap:8px;margin-top:8px"><select data-ch="flg"><option value="">Todas as ligas</option>${LEAGUES.map((l) => `<option value="${l.id}" ${f.league === l.id ? 'selected' : ''}>${esc(l.short)}</option>`).join('')}</select><span class="chip ${f.free ? 'on' : ''}" data-a="ffree">Livres</span></div></div>
-  <div class="card flat" style="padding:4px 12px"><div class="xs mut" style="padding-top:8px">${res.length} jogadores${res.length >= 80 ? ' (mostrando 80)' : ''}</div><div class="list">${res.map((p) => playerRow(p, { club: true })).join('')}</div></div>`;
+  const any = f.pos || f.min || f.age || f.league || f.free || f.q;
+  return `<div class="mk-filters"><label class="mk-q"><span>🔎</span><input placeholder="Nome do jogador" value="${esc(f.q)}" data-ch="fq"></label>
+    <select class="fsel" data-ch="fpos" data-title="Posição"><option value="">Posição</option>${POS.map((p) => `<option ${f.pos === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
+    <select class="fsel" data-ch="fmin" data-title="Geral mínimo"><option value="">Geral</option>${[50, 55, 60, 65, 70, 75, 80, 85].map((x) => `<option value="${x}" ${+f.min === x ? 'selected' : ''}>${x}+</option>`).join('')}</select>
+    <select class="fsel" data-ch="fage" data-title="Idade máxima"><option value="">Idade</option>${[19, 21, 23, 25, 28, 31].map((x) => `<option value="${x}" ${+f.age === x ? 'selected' : ''}>até ${x}</option>`).join('')}</select>
+    <select class="fsel" data-ch="flg" data-title="Liga"><option value="">Liga</option>${LEAGUES.map((l) => `<option value="${l.id}" ${f.league === l.id ? 'selected' : ''}>${esc(l.short)}</option>`).join('')}</select>
+    <span class="chip ${f.free ? 'on' : ''}" data-a="ffree">Livres</span>${any ? '<span class="chip clr" data-a="fclr">✕ Limpar</span>' : ''}</div>
+  <div class="mk-count">${res.length} jogador${res.length === 1 ? '' : 'es'}${res.length >= 80 ? ' · mostrando 80' : ''}</div>
+  <div class="list mk-res">${res.map((p) => playerRow(p, { club: true })).join('') || '<div class="empty">Ninguém com esses filtros.</div>'}</div>`;
 }
+H.fclr = () => { S.filt = { pos: '', min: '', age: '', league: '', free: false, q: '' }; render(); };
 H.fq = (v) => { S.filt.q = v; render(); }; H.fpos = (v) => { S.filt.pos = v; render(); }; H.fmin = (v) => { S.filt.min = v; render(); }; H.fage = (v) => { S.filt.age = v; render(); }; H.flg = (v) => { S.filt.league = v; render(); };
 H.ffree = () => { S.filt.free = !S.filt.free; render(); };
 
@@ -375,11 +379,11 @@ function safHtml() {
   ${c.own.assoc >= 10 ? `<div class="field"><label>Comprar: <b id="safp">${s.pct}%</b> · custo <b id="safc">${money(q.cost)}</b></label><input type="range" min="10" max="${Math.min(90, c.own.assoc)}" value="${s.pct}" data-in="safpct"></div>
   <div class="li tap" data-a="saffund"><div class="grow"><div class="b">Trazer fundo parceiro</div><div class="xs mut">O fundo compra até 30% junto com você (paga a parte dele). Você controla se tiver mais ações que ele e juntos passarem de 51%.</div></div><span class="chip ${s.fund ? 'on' : ''}">${s.fund ? 'Sim' : 'Não'}</span></div>
   <div class="hint" style="margin:10px 0" id="safctl">${q.control ? '✅ Você terá o controle do clube.' : 'ℹ️ Participação minoritária: você recebe dividendos, mas não manda no clube.'}</div>
-  <button class="btn pri blk" data-a="safbuy">Comprar por ${money(q.cost)}</button>` : '<p class="mut">Não há ações disponíveis da associação.</p>'}
+  <button class="btn pri blk" data-a="safbuy" id="safbtn">Comprar por ${money(q.cost)}</button>` : '<p class="mut">Não há ações disponíveis da associação.</p>'}
   ${mine > 0 ? `<button class="btn red blk" style="margin-top:8px" data-a="safsell">Vender minhas ações (${money(q.val * mine / 100 * 0.95)})</button>` : ''}
   <p class="xs mut" style="margin-top:8px">Seu dinheiro: ${money(G.me.money)}</p>`;
 }
-H.safpct = (v) => { S.saf.pct = +v; const q = safQuote(S.G, S.saf.cid, +v, S.saf.fund); document.getElementById('safp').textContent = v + '%'; document.getElementById('safc').textContent = money(q.cost); document.getElementById('safctl').textContent = q.control ? '✅ Você terá o controle do clube.' : 'ℹ️ Participação minoritária: você recebe dividendos, mas não manda no clube.'; };
+H.safpct = (v) => { S.saf.pct = +v; const q = safQuote(S.G, S.saf.cid, +v, S.saf.fund); document.getElementById('safp').textContent = v + '%'; document.getElementById('safc').textContent = money(q.cost); const b = document.getElementById('safbtn'); if (b) b.textContent = `Comprar ${v}% por ${money(q.cost)}`; document.getElementById('safctl').textContent = q.control ? '✅ Você terá o controle do clube.' : 'ℹ️ Participação minoritária: você recebe dividendos, mas não manda no clube.'; };
 H.saffund = () => { S.saf.fund = !S.saf.fund; replaceSheet(safHtml()); };
 H.safbuy = () => { const r = buySAF(S.G, S.saf.cid, S.saf.pct, S.saf.fund); if (!r.ok) { toast(r.why, 3000); return; } toast('🏦 Compra concluída!', 2500); closeSheet(); render(); save(); };
 H.safsell = () => { const p = sellStake(S.G, S.saf.cid, S.G.clubs[S.saf.cid].own.user); toast(`Vendido por ${money(p)}`); closeSheet(); render(); save(); };
@@ -431,7 +435,7 @@ function catBtn(p) {
   if (p.u20 && p.age <= 17 && S.G.comps.U17?.clubs.includes(p.club)) return `<button class="btn sm blk" style="margin-bottom:6px" data-a="cat" data-v="${p.id}:17">⬇️ Mandar para o Sub-17 (ganhar minutos)</button>`;
   return '';
 }
-H.cat = (v) => { const G = S.G; const [id, k] = v.split(':'); const p = G.players[+id]; p.u17 = k === '17'; if (G.me.u20lineup) G.me.u20lineup = null; toast(p.u17 ? `${p.n} vai jogar no Sub-17` : `${p.n} subiu para o Sub-20`); closeSheet(); render(); save(); };
+H.cat = (v) => { const G = S.G; const [id, k] = v.split(':'); const p = G.players[+id]; p.u17 = k === '17'; toast(p.u17 ? `${p.n} vai jogar no Sub-17` : `${p.n} subiu para o Sub-20`); closeSheet(); render(); save(); };
 function itrBtn(p) {
   const t = p.itr; const lab = !t ? 'Nenhum' : t.startsWith('pos:') ? `Nova posição: ${t.slice(4)} (${p.posL || 0}/10 sem.)` : ITR[t].n;
   return `<div class="li tap" style="margin-bottom:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px" data-a="itr" data-v="${p.id}"><span>🎯</span><div class="grow"><div class="xs mut">Treino individual</div><div class="b sm">${esc(lab)}</div></div><span class="mut">›</span></div>`;
