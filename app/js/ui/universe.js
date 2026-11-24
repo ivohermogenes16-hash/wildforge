@@ -19,7 +19,9 @@ const pct = (x) => `${Math.round(x)}%`;
 VIEWS.neg = () => {
   const G = S.G; B.initBiz(G);
   const sub = S.sub.neg || 'pat';
-  let h = seg('neg', [['pat', 'Patrimônio'], ['emp', `Minhas empresas (${B.myCos(G).length})`], ['mer', 'Mercado de marcas'], ['spo', 'Patrocínios'], ['grp', 'Grupo de clubes']]);
+  const ownC = G.clubs.filter((c) => c.own?.user > 0 && (c.own.user >= 51 || c.ctrl));
+  let h = `<div class="pr-strip"><button class="pr-sbtn" data-a="go" data-v="presidente"><span>👔</span><div><b>Painel do Presidente</b><small>${ownC.length ? ownC.map((c) => esc(c.name)).slice(0, 2).join(', ') : 'Administre um clube que é seu'}</small></div></button><button class="pr-sbtn gold" data-a="go" data-v="meuclube"><span>🏦</span><div><b>Comprar clube (SAF)</b><small>Ou fundar o seu do zero</small></div></button></div>`;
+  h += seg('neg', [['pat', 'Patrimônio'], ['emp', `Minhas empresas (${B.myCos(G).length})`], ['mer', 'Mercado de marcas'], ['spo', 'Patrocínios'], ['grp', 'Grupo de clubes']]);
   if (sub === 'pat') h += patView(G); else if (sub === 'emp') h += empView(G); else if (sub === 'mer') h += mktView(G); else if (sub === 'spo') h += spoView(G); else h += grpView(G);
   return h;
 };
@@ -118,11 +120,23 @@ function coSheet() {
 H.cotab = (v) => { S.coTab = v; const el = replaceSheet(coSheet()); el?.querySelector('.co-body')?.classList.add('swap'); };
 H.cqh = (v) => { S.cq.hire = Math.max(1, Math.min(500, S.cq.hire + +v)); replaceSheet(coSheet()); };
 const coAgain = (r) => { toast(r, 3000); replaceSheet(coSheet()); render(); save(); };
+const coCost = (c, a, arg) => ({ hire: () => (+arg || 0) * 2500, dept: () => 120000 * Math.pow(2.2, c.d[arg] - 1), ads: () => +arg, country: () => 400000 + c.cc.length * 350000, prod: () => 250000 * c.prods }[a]?.() ?? 0);
+function coRun(a, arg) { // se faltar caixa na empresa, oferece completar com o dinheiro pessoal
+  const G = S.G, c = B.coById(G, S.coId); const need = Math.ceil(coCost(c, a, arg) - c.cash);
+  if (need > 0 && a !== 'fire') {
+    S.coPend = { a, arg, need };
+    openSheet(`<h2>💼 Falta caixa na empresa</h2><p class="sm">A ${esc(c.n)} tem <b>${money(c.cash)}</b> em caixa e essa ação custa <b>${money(coCost(c, a, arg))}</b>.</p><p class="sm">O dinheiro da empresa é separado do seu. Você tem <b>${money(G.me.money)}</b> pessoal.</p>
+      ${G.me.money >= need ? `<button class="btn pri blk" data-a="copay">Colocar ${money(need)} do meu dinheiro e fazer</button>` : `<div class="mi-alert">Você também não tem ${money(need)} pessoal. Junte mais dinheiro ou escolha um valor menor.</div>`}<button class="btn blk" data-a="cs" style="margin-top:6px">Cancelar</button>`);
+    return;
+  }
+  coAgain(B.coAction(G, c, a, arg));
+}
+H.copay = () => { const G = S.G, c = B.coById(G, S.coId), P = S.coPend; if (!P) return; const r = B.moveCash(G, c, P.need); if (!/Aporte/.test(r)) { toast(r); return; } closeSheet(); S.coPend = null; coAgain(B.coAction(G, c, P.a, P.arg)); };
 for (const k of ['ap', 'wd', 'hire', 'ads', 'inf']) H['cq' + k] = (v) => { S.cq[k] = +v; const e = document.getElementById('cq' + k); if (e) e.textContent = k === 'hire' ? v : money(+v); };
 H.cqset = (v) => { const [k, x] = v.split(':'); S.cq[k] = +x; replaceSheet(coSheet()); };
 H.cqgo = (v) => { const G = S.G, c = B.coById(G, S.coId), q = S.cq;
   if (v === 'ap') coAgain(B.moveCash(G, c, q.ap)); else if (v === 'wd') { if (!q.wd) { toast('Escolha um valor'); return; } coAgain(B.moveCash(G, c, -q.wd)); }
-  else if (v === 'hire') coAgain(B.coAction(G, c, 'hire', q.hire)); else if (v === 'ads') coAgain(B.coAction(G, c, 'ads', Math.min(q.ads, c.cash)));
+  else if (v === 'hire') coRun('hire', q.hire); else if (v === 'ads') coRun('ads', q.ads);
   else if (v === 'inf') coAgain(B.influencerCampaign(G, c, q.inf)); else if (v === 'cpost') coAgain(B.coachPost(G, c)); };
 // ===== redes sociais da empresa =====
 const POSTI = { launch: '🚀', ads: '📣', world: '🌍', prod: '🧪', deal: '🤝', viral: '🔥', misc: '📸', title: '🏆', coach: '🧑‍💼', infl: '🎥' };
@@ -141,8 +155,8 @@ function socialCard(G, c, mine) {
     <div class="field" style="margin:0 0 4px"><label>Campanha com influenciadores: <b id="cqinf">${money(S.cq?.inf || 50000)}</b></label><input type="range" min="10000" max="${Math.max(20000, Math.floor(c.cash / 10000) * 10000)}" step="10000" value="${Math.min(S.cq?.inf || 50000, Math.max(20000, c.cash))}" data-in="cqinf"></div><button class="btn sm blk" data-a="cqgo" data-v="inf">🎥 Contratar influenciadores</button>` : ''}
     <div class="so-feed">${(c.posts || []).slice(0, 6).map((p) => `<div class="so-post ${p.kind}"><span class="so-pi">${POSTI[p.kind] || '📸'}</span><div class="grow"><div class="sm">${esc(p.txt)}</div><div class="xs mut">❤️ ${B.fmtK(p.likes)} · 💬 ${B.fmtK(p.com)} · ${wk(p.w)} ${p.y}</div></div></div>`).join('') || '<div class="xs mut">Nenhum post ainda.</div>'}</div></div>`;
 }
-H.coact = (v) => { const [a, ...x] = v.split(':'); coAgain(B.coAction(S.G, B.coById(S.G, S.coId), a, x.join(':'))); };
-H.coexp = (v) => { if (v) coAgain(B.coAction(S.G, B.coById(S.G, S.coId), 'country', v)); };
+H.coact = (v) => { const [a, ...x] = v.split(':'); coRun(a, x.join(':')); };
+H.coexp = (v) => { if (v) coRun('country', v); };
 H.cocash = (v) => { const c = B.coById(S.G, S.coId); coAgain(B.moveCash(S.G, c, v === '-div' ? -Math.floor(Math.max(0, c.cash * 0.5) / 1000) * 1000 : +v)); };
 H.cobuy = (v) => coAgain(B.buyStake(S.G, B.coById(S.G, S.coId), +v));
 H.cosell = (v) => coAgain(B.sellStake(S.G, B.coById(S.G, S.coId), +v));

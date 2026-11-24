@@ -93,7 +93,7 @@ export function weeklyWages(G, cid) { return G.players.reduce((s, p) => (p && p.
 export function wageBudget(G, c) {
   const L = G.comps[c.league];
   const tv = L ? L.tv * (0.55 + 0.9 * c.rep / 100) : 50000;
-  return Math.round(((tv + (c.spon || 0)) * 0.85 + Math.max(0, c.money) * 0.08) / 52);
+  return Math.round(((tv + (c.spon || 0)) * 0.85 + Math.max(0, c.money) * 0.08) / 52 + (c.extraWB || 0));
 }
 
 export function doTransfer(G, p, toCid, fee, wage, years) {
@@ -181,7 +181,7 @@ export function aiTransferWeek(G, light) {
     const lvl = sq.map((p) => p.ovr).sort((a, b) => b - a).slice(0, 11);
     const avg = lvl.reduce((s, x) => s + x, 0) / (lvl.length || 1);
     let pos = Object.keys(QUOTA).find((k) => (cnt[k] || 0) < QUOTA[k] - 1) || pick(Object.keys(QUOTA));
-    const budget = Math.max(0, c.money * 0.45 * aiBudgetMul(G, c));
+    const budget = Math.max(0, c.money * (c.budPct ?? 0.45) * aiBudgetMul(G, c));
     // procura alvos
     let best = null, bs = -1;
     const pool = rnd() < 0.3 ? free : G.players;

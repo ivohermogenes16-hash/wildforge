@@ -18,11 +18,32 @@ import android.util.Base64;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import android.speech.tts.TextToSpeech;
+import java.util.Locale;
 
 /* Ponte chamada pelo jogo (window.PranchetaNative) para agendar lembretes no Android. */
 public class NativeBridge {
     private final Activity act;
     NativeBridge(Activity a) { act = a; }
+
+    /* voz do narrador: usa o motor de voz do próprio celular (a WebView não tem speechSynthesis) */
+    private TextToSpeech tts; private boolean ttsOk = false;
+    private void ttsInit() {
+        if (tts != null) return;
+        tts = new TextToSpeech(act.getApplicationContext(), st -> {
+            if (st == TextToSpeech.SUCCESS) { int r = tts.setLanguage(new Locale("pt", "BR")); ttsOk = r != TextToSpeech.LANG_MISSING_DATA && r != TextToSpeech.LANG_NOT_SUPPORTED; if (!ttsOk) { tts.setLanguage(new Locale("pt")); ttsOk = true; } }
+        });
+    }
+    @JavascriptInterface
+    public boolean ttsReady() { ttsInit(); return ttsOk; }
+    @JavascriptInterface
+    public void speak(String text, float rate, float pitch, boolean flush) {
+        try { ttsInit(); if (!ttsOk) return; tts.setSpeechRate(rate); tts.setPitch(pitch); tts.speak(text, flush ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD, null, "p" + System.nanoTime()); } catch (Throwable ignored) {}
+    }
+    @JavascriptInterface
+    public boolean speaking() { try { return tts != null && tts.isSpeaking(); } catch (Throwable t) { return false; } }
+    @JavascriptInterface
+    public void stopSpeak() { try { if (tts != null) tts.stop(); } catch (Throwable ignored) {} }
 
     static PendingIntent pi(Context c, int id, String title, String body) {
         Intent i = new Intent(c, NotifReceiver.class);

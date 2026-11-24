@@ -23,17 +23,17 @@ export const FED_OLD = { BR: ['CBF', 'CONMEBOL'], AR: ['AFA', 'CONMEBOL'], EN: [
 
 // po: 16º da divisão de cima joga repescagem contra o 3º da divisão de baixo (Alemanha e França)
 export const LEAGUES2 = [
-  { id: 'GER1', country: 'DE', name: 'Bundesliga', short: 'Bundesliga', tier: 1, format: 'double', up: 0, down: 2, po: true, tv: 200e6, org: 'DFL' },
+  { id: 'GER1', country: 'DE', name: 'Bundesliga', short: 'Bundesliga', tier: 1, format: 'double', up: 0, down: 2, po: true, tv: 380e6, org: 'DFL' },
   { id: 'GER2', country: 'DE', name: '2. Bundesliga', short: '2. Bundesliga', tier: 2, format: 'double', up: 2, down: 2, po: true, tv: 30e6, org: 'DFL' },
   { id: 'GER3', country: 'DE', name: '3. Liga', short: '3. Liga', tier: 3, format: 'double', up: 2, down: 0, tv: 5e6, org: 'DFB' },
-  { id: 'FRA1', country: 'FR', name: 'Ligue 1', short: 'Ligue 1', tier: 1, format: 'double', up: 0, down: 2, po: true, tv: 110e6, org: 'LFP' },
+  { id: 'FRA1', country: 'FR', name: 'Ligue 1', short: 'Ligue 1', tier: 1, format: 'double', up: 0, down: 2, po: true, tv: 180e6, org: 'LFP' },
   { id: 'FRA2', country: 'FR', name: 'Ligue 2', short: 'Ligue 2', tier: 2, format: 'double', up: 2, down: 0, tv: 15e6, org: 'LFP' },
-  { id: 'POR1', country: 'PT', name: 'Liga Portugal', short: 'Liga Portugal', tier: 1, format: 'double', up: 0, down: 0, tv: 30e6, org: 'Liga Portugal' },
-  { id: 'NED1', country: 'NL', name: 'Eredivisie', short: 'Eredivisie', tier: 1, format: 'double', up: 0, down: 0, tv: 30e6, org: 'KNVB' },
+  { id: 'POR1', country: 'PT', name: 'Liga Portugal', short: 'Liga Portugal', tier: 1, format: 'double', up: 0, down: 0, tv: 60e6, org: 'Liga Portugal' },
+  { id: 'NED1', country: 'NL', name: 'Eredivisie', short: 'Eredivisie', tier: 1, format: 'double', up: 0, down: 0, tv: 55e6, org: 'KNVB' },
   { id: 'MEX1', country: 'MX', name: 'Liga MX', short: 'Liga MX', tier: 1, format: 'double', up: 0, down: 0, tv: 40e6, org: 'Liga MX' },
   { id: 'USA1', country: 'US', name: 'Major League Soccer', short: 'MLS', tier: 1, format: 'single', up: 0, down: 0, tv: 60e6, org: 'MLS' },
   { id: 'JPN1', country: 'JP', name: 'J1 League', short: 'J1 League', tier: 1, format: 'double', up: 0, down: 0, tv: 25e6, org: 'J.League' },
-  { id: 'KSA1', country: 'SA', name: 'Saudi Pro League', short: 'Saudi Pro', tier: 1, format: 'double', up: 0, down: 0, tv: 60e6, org: 'SPL' },
+  { id: 'KSA1', country: 'SA', name: 'Saudi Pro League', short: 'Saudi Pro', tier: 1, format: 'double', up: 0, down: 0, tv: 120e6, org: 'SPL' },
   { id: 'AUS1', country: 'AU', name: 'A-League Men', short: 'A-League', tier: 1, format: 'double', up: 0, down: 0, tv: 8e6, org: 'APL' },
   { id: 'URU1', country: 'UY', name: 'Liga AUF Uruguaya', short: 'Liga AUF', tier: 1, format: 'double', up: 0, down: 0, tv: 3e6, org: 'AUF' },
   { id: 'COL1', country: 'CO', name: 'Liga BetPlay DIMAYOR', short: 'Liga DIMAYOR', tier: 1, format: 'double', up: 0, down: 0, tv: 5e6, org: 'DIMAYOR' },
@@ -241,10 +241,10 @@ export const CUPS2 = [
 
 // Continentais: vagas por liga (adaptado a 16 clubes) e ordem de prioridade (principal antes da secundária)
 export const CONTS_ALL = [
-  { id: 'LIB', name: 'Copa Libertadores', short: 'Libertadores', country: 'SA', org: 'CONMEBOL', prize: 120e6, slots: [['BRA', 6], ['ARG1', 5], ['URU1', 2], ['COL1', 3]], cups: ['CDB', 'CAR'] },
-  { id: 'UCL', name: 'Liga dos Campeões', short: 'Champions', country: 'EU', org: 'UEFA', prize: 500e6, slots: [['ENG1', 4], ['ESP1', 4], ['ITA1', 3], ['GER1', 3], ['FRA1', 1], ['POR1', 1]], cups: [] },
-  { id: 'SUD', name: 'Copa Sul-Americana', short: 'Sul-Americana', country: 'SA', org: 'CONMEBOL', prize: 30e6, slots: [['BRA', 5], ['ARG1', 5], ['URU1', 3], ['COL1', 3]], cups: [] },
-  { id: 'UEL', name: 'Liga Europa', short: 'Liga Europa', country: 'EU', org: 'UEFA', prize: 120e6, slots: [['ENG1', 2], ['ESP1', 2], ['ITA1', 2], ['GER1', 2], ['FRA1', 3], ['POR1', 2], ['NED1', 3]], cups: ['FAC', 'CDR', 'CIT', 'DFB', 'CDF'] },
+  { id: 'LIB', name: 'Copa Libertadores', short: 'Libertadores', country: 'SA', org: 'CONMEBOL', prize: 125e6, slots: [['BRA', 6], ['ARG1', 5], ['URU1', 2], ['COL1', 3]], cups: ['CDB', 'CAR'] },
+  { id: 'UCL', name: 'Liga dos Campeões', short: 'Champions', country: 'EU', org: 'UEFA', prize: 150e6, slots: [['ENG1', 4], ['ESP1', 4], ['ITA1', 3], ['GER1', 3], ['FRA1', 1], ['POR1', 1]], cups: [] },
+  { id: 'SUD', name: 'Copa Sul-Americana', short: 'Sul-Americana', country: 'SA', org: 'CONMEBOL', prize: 35e6, slots: [['BRA', 5], ['ARG1', 5], ['URU1', 3], ['COL1', 3]], cups: [] },
+  { id: 'UEL', name: 'Liga Europa', short: 'Liga Europa', country: 'EU', org: 'UEFA', prize: 55e6, slots: [['ENG1', 2], ['ESP1', 2], ['ITA1', 2], ['GER1', 2], ['FRA1', 3], ['POR1', 2], ['NED1', 3]], cups: ['FAC', 'CDR', 'CIT', 'DFB', 'CDF'] },
   { id: 'CCC', name: 'Copa dos Campeões da Concacaf', short: 'Concacaf', country: 'NA', org: 'CONCACAF', prize: 15e6, slots: [['MEX1', 8], ['USA1', 8]], cups: ['USO'] },
   { id: 'ACL', name: 'Liga dos Campeões da AFC Elite', short: 'AFC Elite', country: 'AS', org: 'AFC', prize: 20e6, slots: [['KSA1', 6], ['JPN1', 6], ['AUS1', 4]], cups: ['KGC', 'EMP'] },
   { id: 'CAF', name: 'Liga dos Campeões da CAF', short: 'CAF Champions', country: 'AF', org: 'CAF', prize: 8e6, slots: [['MAR1', 8], ['RSA1', 8]], cups: ['TRO', 'NBC'] },

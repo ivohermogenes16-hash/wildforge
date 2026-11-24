@@ -192,7 +192,7 @@ export function initFinances(G, c) {
   const wages = G.players.reduce((s, p) => (p && p.club === c.id ? s + p.wage : s), 0) * 52;
   const tv = L ? L.tv * (0.55 + 0.9 * c.rep / 100) : 100000;
   const tick = c.cap * 1000 * clamp(0.35 + c.rep / 180, 0.2, 0.97) * (L ? 19 : 9) * (c.country === 'BR' ? 45 : c.country === 'AR' ? 14 : ({ EN: 200, ES: 200, IT: 200 })[c.country] ?? TICKET[c.country] ?? 60);
-  c.spon = Math.round(Math.max(c.rep * c.rep * 1500, wages * rf(1.05, 1.25) - tv - tick) / 1000) * 1000;
+  c.spon = Math.round(Math.max(c.rep * c.rep * 1500, wages * rf(0.98, 1.14) - tv - tick) / 1000) * 1000;
   c.money = Math.round((wages * rf(0.15, 0.45) + c.rep * c.rep * 3000) / 1000) * 1000;
 }
 

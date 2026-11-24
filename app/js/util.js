@@ -15,12 +15,16 @@ export function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++)
 export function seeded(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 export function weighted(items, w) { const tot = sum(items, w); let r = rnd() * tot; for (const it of items) { r -= w(it); if (r <= 0) return it; } return items[items.length - 1]; }
 
+// moeda de exibição: os valores do jogo são guardados em reais e convertidos só na tela
+export const CUR = { k: 'BRL' };
+export const CURS = { BRL: ['R$', 1, 'Real'], USD: ['US$', 5.3, 'Dólar'], EUR: ['€', 5.8, 'Euro'] };
 export function money(v) {
+  const [sym, rate] = CURS[CUR.k] || CURS.BRL; v = v / rate;
   const s = v < 0 ? '-' : ''; v = Math.abs(v);
-  if (v >= 1e9) return `${s}R$ ${(v / 1e9).toFixed(2).replace('.', ',')} bi`;
-  if (v >= 1e6) return `${s}R$ ${(v / 1e6).toFixed(v >= 1e8 ? 0 : 1).replace('.', ',')} mi`;
-  if (v >= 1e3) return `${s}R$ ${Math.round(v / 1e3)} mil`;
-  return `${s}R$ ${Math.round(v)}`;
+  if (v >= 1e9) return `${s}${sym} ${(v / 1e9).toFixed(2).replace('.', ',')} bi`;
+  if (v >= 1e6) return `${s}${sym} ${(v / 1e6).toFixed(v >= 1e8 ? 0 : 1).replace('.', ',')} mi`;
+  if (v >= 1e3) return `${s}${sym} ${Math.round(v / 1e3)} mil`;
+  return `${s}${sym} ${Math.round(v)}`;
 }
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const POS = ['GOL', 'LD', 'ZAG', 'LE', 'VOL', 'MC', 'MEI', 'PE', 'PD', 'ATA'];

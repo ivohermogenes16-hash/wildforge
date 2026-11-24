@@ -11,7 +11,26 @@ export const H = {};
 const app = document.getElementById('app');
 
 // ---------- utilidades ----------
-export function toast(t, ms = 2200) { document.querySelectorAll('.toast').forEach((x) => x.remove()); const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 260); }, ms); }
+// 5.0: sem "toast" embaixo — avisos simples descem do topo; eventos importantes aparecem no centro
+const BIG_RE = /contratad|assinou|assinad|bem-vindo|campe[aã]|t[ií]tulo|promovid|acesso|vendid|comprou|compra conclu|demitid|novo clube|fundad|sa[fF]\b|recorde|🏆|🎉|✅/i;
+const BAD_RE = /^erro|não |nao |sem |falt|insuficiente|bloquead|negad|recus|precisa|cancelad|❌|⚠/i;
+export function toast(t, ms = 2200, kind) {
+  t = String(t ?? ''); kind ||= BIG_RE.test(t) ? 'big' : BAD_RE.test(t) ? 'bad' : 'ok';
+  if (kind === 'big') return centerNote(t, Math.max(ms, 1900));
+  document.querySelectorAll('.pbanner').forEach((x) => x.remove());
+  const d = document.createElement('div'); d.className = 'pbanner ' + kind; d.innerHTML = `<span class="pb-ic">${kind === 'bad' ? '!' : '✓'}</span><span class="pb-t"></span>`; d.querySelector('.pb-t').textContent = t;
+  d.onclick = () => d.classList.add('out'); document.body.appendChild(d);
+  try { window.PSFX?.(kind === 'bad' ? 'bad' : 'pop'); } catch {}
+  setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 320); }, ms);
+}
+export function centerNote(t, ms = 2000) {
+  document.querySelectorAll('.pcenter').forEach((x) => x.remove());
+  const d = document.createElement('div'); d.className = 'pcenter'; d.innerHTML = `<div class="pc-card"><div class="pc-ring"><span>✓</span></div><div class="pc-t"></div></div>`; d.querySelector('.pc-t').textContent = t.replace(/^[^\p{L}\p{N}]+/u, '');
+  d.onclick = () => { d.classList.add('out'); setTimeout(() => d.remove(), 300); }; document.body.appendChild(d);
+  try { window.PSFX?.('ok'); } catch {}
+  setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 300); }, ms);
+}
+window.PBANNER = (t, k) => toast(t, 2200, k === 'ok' ? 'ok' : k);
 const sheetStack = [];
 export function openSheet(html, onClose) {
   const bg = document.createElement('div'); bg.className = 'modal-bg';
@@ -35,6 +54,9 @@ export const posTag = (pos) => `<span class="pos ${POS_LINE[pos]}">${pos}</span>
 export const clubOf = (p) => (p && p.club >= 0 ? S.G.clubs[p.club] : null);
 export function clubTag(c, size = 22) { if (!c) return '<span class="mut">Sem clube</span>'; return `<span class="row" style="gap:6px;display:inline-flex" data-a="club" data-v="${c.id}">${crest(c, size)}<span class="ell">${esc(c.name)}</span></span>`; }
 export function stars(rep) { const n = clamp(Math.round(rep / 20), 1, 5); return '<span class="gold">' + '★'.repeat(n) + '</span><span class="dim">' + '★'.repeat(5 - n) + '</span>'; }
+// estrelas estilo EA FC (meia estrela): v de 0.5 a 5
+export function starsH(v, cls = '') { v = Math.max(0.5, Math.min(5, Math.round(v * 2) / 2)); return `<span class="srt ${cls}" title="${String(v).replace('.', ',')} estrelas"><i>★★★★★</i><b style="width:${v * 20}%">★★★★★</b></span>`; }
+export function clubStars(rep) { return Math.max(0.5, Math.min(5, Math.round(((rep - 18) / 15) * 2) / 2)); }
 export function compName(id) { return S.G.comps[id]?.short || id; }
 export function wk(w) { return dateStr(w); }
 export function shortName(n) { const s = n.split(' '); return s.length > 1 && n.length > 12 ? s[s.length - 1] : n; }
@@ -69,13 +91,22 @@ export function render() {
   <div class="right"><header class="top">${S.page ? `<button class="btn sm" data-a="back">‹ Voltar</button>` : c ? crest(c, 32) : '<span class="logo" style="font-size:20px">P<span>.</span></span>'}
     <div class="grow"><div class="t1 ell">${esc(S.page ? (PAGES_T[S.page] || '') : title)}</div><div class="t2">${dateStr(Math.min(G.week, SEASON_WEEKS - 1), true)} de ${G.year} ${G.me.job && !G.me.job.youth ? (inWindow(G) ? '<span class="mk-pill open">Mercado aberto</span>' : '<span class="mk-pill">Mercado fechado</span>') : `· sem. ${Math.min(G.week, SEASON_WEEKS - 1) + 1}/${SEASON_WEEKS}`}${c && G.me.obj ? ` · 🎯 ${esc(G.me.obj.text)}` : ''}</div></div>
     <button class="icon-btn" data-a="search" title="Buscar">🔎</button><button class="icon-btn" data-a="go" data-v="inbox">📩${unread ? `<span class="badge">${unread}</span>` : ''}</button>
-    <span class="money-pill" data-a="go" data-v="financas">${money(G.me.money)}</span>
-    <button class="btn pri cont" data-a="continue">${now ? '▶ Jogo' : 'Continuar'} ›</button></header>
+    <span class="money-pill dual" data-a="moneyinfo">${c && G.me.job && !G.me.job.youth ? `<span title="Caixa do clube"><i>🏟️</i>${money(c.money)}</span>` : ''}<span title="Seu dinheiro pessoal"><i>👤</i>${money(G.me.money)}</span></span>
+    <button class="btn sim-hd" data-a="simper" title="Simular período">⏩</button><button class="btn pri cont" data-a="continue">${now ? '▶ Jogo' : 'Continuar'} ›</button></header>
   <main class="${same ? '' : 'enter'}">${body}</main></div>`;
   app.dataset.view = vk;
   if (same) app.querySelector('main').scrollTop = sc;
   try { S.afterRender?.(); } catch (e) { console.warn(e); }
 }
+H.moneyinfo = () => {
+  const G = S.G, c = myClub(G); const fr = G.me.freeze && G.me.freeze >= G.t; const ffp = G.uv?.regs?.ffp && c && c.money < 0;
+  openSheet(`<h2>💰 Seu dinheiro x dinheiro do clube</h2>
+  <div class="mi-grid"><div class="mi-card"><i>👤</i><small>Seu dinheiro pessoal</small><b>${money(G.me.money)}</b><p>Salário de técnico, dividendos e investimentos. Serve para <b>empresas, investimentos, comprar SAF e fundar clube</b>.</p><button class="btn sm" data-a="go" data-v="financas">Ver patrimônio</button></div>
+  ${c ? `<div class="mi-card"><i>🏟️</i><small>Caixa do ${esc(c.name)}</small><b class="${c.money < 0 ? 'bad' : ''}">${money(c.money)}</b><p>Dinheiro do clube. É com ele que o clube <b>contrata jogadores, paga salários e faz obras</b>. O técnico não pode usar o próprio dinheiro aqui — só o dono do clube pode fazer aporte.</p><button class="btn sm" data-a="tab" data-v="clube">Finanças do clube</button></div>` : ''}</div>
+  ${fr ? `<div class="mi-alert">🧊 <b>Contratações congeladas</b> pela diretoria por mais ${G.me.freeze - G.t + 1} semana(s). Libera sozinho; até lá só jogadores sem custo (livres).</div>` : ''}
+  ${ffp ? `<div class="mi-alert">⚖️ <b>Fair play financeiro:</b> com o caixa negativo o clube não pode pagar transferências. Venda jogadores ou aguarde receitas.</div>` : ''}
+  <p class="xs mut">Empresas usam o caixa de cada empresa: se faltar, o jogo oferece colocar dinheiro seu na hora.</p>`);
+};
 H.tab = (v) => { try { window.LumbraAnalytics?.event('tela', { aba: v }); } catch {} S.tab = v; S.page = null; S.sel = null; app.dataset.view = ''; render(); };
 H.go = (v) => { try { window.LumbraAnalytics?.event('tela', { pagina: v }); } catch {} S.page = v; app.dataset.view = ''; render(); };
 H.back = () => { S.page = PAGES_BACK[S.page] || null; render(); };
@@ -111,7 +142,7 @@ VIEWS.home = () => {
       const hc = G.clubs[nf.h], ac = G.clubs[nf.a]; const now = nf.w === G.week && nf.s === G.slot;
       col1 += `<div class="card hero-card" style="--c1:${hc.c1};--c2:${ac.c1}"><h3><span>Próximo jogo · ${esc(compName(nf.c))} · ${esc(fixPhase(nf))}</span><span class="pill ${now ? 'g' : ''}">${now ? 'Hoje' : wk(nf.w)}</span></h3>
       <div class="match-hero"><div data-a="club" data-v="${hc.id}">${crest(hc, 54)}<div class="nm">${esc(hc.name)}</div><div class="xs mut">${Math.round(strength(G, hc.id, me.job.youth))} força</div></div><div class="vs">VS</div><div data-a="club" data-v="${ac.id}">${crest(ac, 54)}<div class="nm">${esc(ac.name)}</div><div class="xs mut">${Math.round(strength(G, ac.id, me.job.youth))} força</div></div></div>
-      <button class="btn pri blk" style="margin-top:10px" data-a="continue">${now ? '▶ Ir para o jogo' : 'Continuar ›'}</button></div>`;
+      <div class="row" style="gap:8px;margin-top:10px"><button class="btn pri grow" data-a="continue">${now ? '▶ Ir para o jogo' : 'Continuar ›'}</button><button class="btn" data-a="simper">⏩ Simular período</button></div></div>`;
     }
     if (!me.job.youth) col1 += `<div class="card"><div class="row sm"><span class="grow mut">Confiança da diretoria</span><b>${Math.round(c.board.conf)}%</b></div><div class="bar"><i style="width:${c.board.conf}%;background:${c.board.conf < 30 ? 'var(--red)' : c.board.conf < 55 ? 'var(--gold)' : 'var(--ac)'}"></i></div><div class="xs mut" style="margin-top:6px">🎯 ${esc(me.obj?.text || '')}</div></div>`;
     else col1 += `<div class="card"><div class="row sm"><span class="grow mut">Sua reputação</span><b>${Math.round(me.rep)}/100</b></div><div class="bar"><i style="width:${me.rep}%;background:linear-gradient(90deg,var(--ac2),var(--gold))"></i></div><div class="xs mut" style="margin-top:6px">Técnico do sub-20: vença e revele talentos para ser notado.</div></div>`;
@@ -137,7 +168,7 @@ VIEWS.home = () => {
 };
 
 // ---------- ELENCO (tabela estilo FM) ----------
-function mySide() {
+export function mySide() {
   const G = S.G, c = myClub(G); const youth = G.me.job?.youth;
   const tact = youth ? (G.me.u20tact ||= { ...c.tact }) : c.tact;
   return { G, c, youth, tact };
@@ -226,7 +257,7 @@ H.resetform = () => { const t = mySide().tact; t.form = '4-3-3'; render(); save(
 H.form = (v) => { mySide().tact.form = v; render(); save(); };
 function setMyLu(lu) { const { G, c, youth } = mySide(); const v = { xi: lu.xi.slice(), bench: lu.bench.slice() }; if (youth) G.me.u20lineup = v; else { c.lineup = v; c.luKeep = v; } return v; }
 H.autolu = () => { const { G, c, youth, tact } = mySide(); setMyLu(autoLineup(G, { ...c, tact }, youth)); S.sel = null; S.swapIn = null; toast('Time escalado'); render(); save(); };
-H.slot = (v) => { S.sel = { i: +v }; S.sub.tat = 'res'; render(); };
+H.slot = (v) => { S.sel = S.sel && S.sel.i === +v ? null : { i: +v }; S.infoP = null; S.sub.tat = 'res'; render(); };
 H.pickp = (v) => {
   const { G, c, youth } = mySide(); const p = G.players[+v];
   if (!S.sel) { H.player(v); return; }
@@ -248,6 +279,7 @@ H.savetac = () => { setMyLu(myLineup()); save(true); toast('💾 Escalação sal
 H.presave = (i) => { const { c, tact } = mySide(); const lu = myLineup(); const n = `${tact.form} ${MENT[tact.ment].toLowerCase()}`; (c.presets ||= [])[+i] = { n, t: JSON.parse(JSON.stringify(tact)), lu: { xi: lu.xi.slice(), bench: lu.bench.slice() } }; save(true); toast('💾 Tática salva'); render(); };
 H.preload = (i) => { const { G, c, youth } = mySide(); const P = c.presets?.[+i]; if (!P) return; const t = mySide().tact; Object.assign(t, JSON.parse(JSON.stringify(P.t))); const ok = P.lu.xi.every((id) => G.players[id]?.club === c.id); if (ok) setMyLu(P.lu); toast(ok ? `Tática "${P.n}" carregada` : `Tática carregada (escalação refeita: alguns jogadores saíram)`); render(); save(); };
 H.tact = (v) => { const [k, n] = v.split(':'); mySide().tact[k] = +n; render(); save(); };
+VIEWS._train = (G, c, youth) => trainView(G, c, youth);
 function trainView(G, c, youth) {
   const tr = youth ? (G.me.u20train ||= { foco: 'equilibrado', int: 1 }) : c.train;
   const sq = G.players.filter((p) => p && p.club === c.id && (youth ? p.u20 && !p.u17 : !p.u20));
@@ -497,7 +529,8 @@ function endDrag(e, cancel) {
     }
   } else if (d.slot != null && el?.closest('#tpitch')) {
     const r = pitch.getBoundingClientRect();
-    const depth = clamp(((e.clientX - r.left) / r.width * 100 - 7) / 86, 0.1, 0.92), width = clamp(((e.clientY - r.top) / r.height * 100 - 8) / 84, 0.03, 0.97);
+    const X = (e.clientX - r.left) / r.width * 100, Y = (e.clientY - r.top) / r.height * 100;
+    const inv = S.pitchInv ? S.pitchInv(X, Y) : { depth: (X - 7) / 86, width: (Y - 8) / 84 }; const depth = clamp(inv.depth, 0.1, 0.92), width = clamp(inv.width, 0.03, 0.97);
     const form = formOf(tact);
     if (form[d.slot][0] === 'GOL') { toast('O goleiro fica no gol 😉'); render(); return; }
     if (tact.form !== 'Personalizada') { tact.custom = form.map((f) => f.slice()); tact.form = 'Personalizada'; }

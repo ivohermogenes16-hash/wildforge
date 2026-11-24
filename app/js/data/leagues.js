@@ -9,17 +9,17 @@ export const COUNTRIES = {
 };
 
 export const LEAGUES = [
-  { id: 'BRA', country: 'BR', name: 'Brasileirão Série A', short: 'Série A', tier: 1, format: 'double', up: 0, down: 4, tv: 60e6 },
+  { id: 'BRA', country: 'BR', name: 'Brasileirão Série A', short: 'Série A', tier: 1, format: 'double', up: 0, down: 4, tv: 150e6 },
   { id: 'BRB', country: 'BR', name: 'Brasileirão Série B', short: 'Série B', tier: 2, format: 'double', up: 4, down: 4, tv: 15e6 },
   { id: 'BRC', country: 'BR', name: 'Brasileirão Série C', short: 'Série C', tier: 3, format: 'single', up: 4, down: 4, tv: 2.5e6 },
   { id: 'BRD', country: 'BR', name: 'Brasileirão Série D', short: 'Série D', tier: 4, format: 'groups6', up: 4, down: 0, tv: 0.5e6 },
-  { id: 'ENG1', country: 'EN', name: 'Premier League', short: 'Premier', tier: 1, format: 'double', up: 0, down: 3, tv: 450e6 },
+  { id: 'ENG1', country: 'EN', name: 'Premier League', short: 'Premier', tier: 1, format: 'double', up: 0, down: 3, tv: 750e6 },
   { id: 'ENG2', country: 'EN', name: 'Championship', short: 'Championship', tier: 2, format: 'double', up: 3, down: 3, tv: 45e6 },
-  { id: 'ESP1', country: 'ES', name: 'LaLiga', short: 'LaLiga', tier: 1, format: 'double', up: 0, down: 3, tv: 240e6 },
+  { id: 'ESP1', country: 'ES', name: 'LaLiga', short: 'LaLiga', tier: 1, format: 'double', up: 0, down: 3, tv: 400e6 },
   { id: 'ESP2', country: 'ES', name: 'LaLiga Hypermotion', short: 'LaLiga 2', tier: 2, format: 'double', up: 3, down: 4, tv: 25e6 },
-  { id: 'ITA1', country: 'IT', name: 'Serie A (Itália)', short: 'Serie A ITA', tier: 1, format: 'double', up: 0, down: 3, tv: 220e6 },
+  { id: 'ITA1', country: 'IT', name: 'Serie A (Itália)', short: 'Serie A ITA', tier: 1, format: 'double', up: 0, down: 3, tv: 350e6 },
   { id: 'ITA2', country: 'IT', name: 'Serie B (Itália)', short: 'Serie B ITA', tier: 2, format: 'double', up: 3, down: 3, tv: 20e6 },
-  { id: 'ARG1', country: 'AR', name: 'Liga Profesional', short: 'Liga AFA', tier: 1, format: 'single', up: 0, down: 2, tv: 14e6 },
+  { id: 'ARG1', country: 'AR', name: 'Liga Profesional', short: 'Liga AFA', tier: 1, format: 'single', up: 0, down: 2, tv: 25e6 },
   { id: 'ARG2', country: 'AR', name: 'Primera Nacional', short: 'Primera Nac.', tier: 2, format: 'zones2', up: 2, down: 2, tv: 2e6 },
 ];
 

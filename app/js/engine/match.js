@@ -1,3 +1,4 @@
+import { setPieceChance } from './coach.js';
 import { aiInMatch } from './universe.js';
 import { clamp, rnd, ri, poisson, weighted, posFit, avg, pick } from '../util.js';
 
@@ -110,18 +111,23 @@ export function ratings(G, club, xi, minute = 0, tact = club.tact, extra = 0, bo
   const missing = 11 - xi.filter((id) => G.players[id]).length;
   const g = avg(lines.G) || 30, d = avg(lines.D) || 30, m = avg(lines.M) || 30, a = avg(lines.A) || avg(lines.M) || 30;
   let att = 0.5 * a + 0.35 * m + 0.15 * d, def = 0.5 * d + 0.3 * m + 0.2 * g, ctl = m * 0.8 + 0.2 * (a + d) / 2;
-  if (bon) { att += bon.att || 0; def += bon.def || 0; }
+  if (bon) { att += bon.att || 0; def += bon.def || 0; ctl += bon.ctl || 0; }
   { const ix = instrFx(tact); att += ix.att; def += ix.def; ctl += ix.ctl; }
   const ment = tact.ment - 1; att += ment * 2.5; def -= ment * 2.5;
   ctl += (tact.press - 1) * 1.5;
+  // setas desenhadas na prancheta: subir um jogador ajuda o ataque e abre espaço atrás (e vice-versa)
+  if (tact.arrows) { let up = 0, dn = 0, wide = 0; for (const [i, a] of Object.entries(tact.arrows)) { if (!form[+i] || form[+i][0] === 'GOL') continue; if (a[1] > 0.04) up += Math.min(a[1], 0.3); else if (a[1] < -0.04) dn += Math.min(-a[1], 0.3); wide += Math.abs(a[0]); }
+    att += Math.min(2.2, up * 5) - Math.min(1.5, dn * 3); def += Math.min(2, dn * 5) - Math.min(1.6, up * 3); ctl += Math.min(0.8, wide * 1.5) - Math.min(0.6, up * 1.2); }
   const pen = missing * 4;
   return { att: att + extra - pen, def: def + extra - pen, ctl: ctl + extra - pen, gk: g };
 }
 
 export function lambdas(Rh, Ra, neutral) {
   const ctl = Math.exp((Rh.ctl - Ra.ctl) / 40);
-  const lh = clamp(1.16 * Math.exp((Rh.att - Ra.def) / 17) * Math.sqrt(ctl) * (neutral ? 0.92 : 1.08), 0.08, 5.5);
-  const la = clamp(1.16 * Math.exp((Ra.att - Rh.def) / 17) / Math.sqrt(ctl) * (neutral ? 0.92 : 0.86), 0.08, 5.5);
+  // diferenças muito grandes são amortecidas (gigante x pequeno dá 3, 4 a 0 — não 11)
+  const soft = (d) => (d > 10 ? 10 + (d - 10) * 0.35 : d < -10 ? -10 + (d + 10) * 0.6 : d);
+  const lh = clamp(1.16 * Math.exp(soft(Rh.att - Ra.def) / 17) * Math.sqrt(ctl) * (neutral ? 0.92 : 1.08), 0.08, 3.0);
+  const la = clamp(1.16 * Math.exp(soft(Ra.att - Rh.def) / 17) / Math.sqrt(ctl) * (neutral ? 0.92 : 0.86), 0.08, 3.0);
   return [lh, la];
 }
 
@@ -178,6 +184,19 @@ export class LiveMatch {
     return r; }
   name(id) { const p = this.G.players[id]; return p ? p.n : '—'; }
   push(e) { e.m = this.min; this.ev.push(e); return e; }
+  // jogadas ensaiadas: escanteio e falta perigosa usam a jogada escolhida e o cobrador definido
+  setPiece(own, kind, out) {
+    const sd = this.s[own], op = this.s[1 - own]; const xi = sd.xi.filter((id) => !this.sent[own].has(id)); if (!xi.length) return;
+    const tk0 = sd.tact?.takers?.[kind]; const taker = xi.includes(tk0) ? tk0 : xi.slice().sort((a, b) => (this.G.players[b]?.ovr || 0) - (this.G.players[a]?.ovr || 0)).find((id) => this.form(own)[sd.xi.indexOf(id)]?.[0] !== 'GOL');
+    const tp = this.G.players[taker]; const ch = setPieceChance(this.G, own, kind, sd.tact, op.club, tp ? tp.ovr : 65);
+    const play = sd.tact?.plays?.[kind] || (kind === 'ck' ? 'primeiro' : 'cruz');
+    if (rnd() >= ch * 1.9) return; // não virou nem finalização
+    this.st.sh[own]++; const xg = Math.round(ch * 100 * 1.6) / 100; this.st.xg[own] = Math.round((this.st.xg[own] + xg) * 100) / 100;
+    const form = this.form(own);
+    let sc = taker; if (!(kind === 'fk' && play === 'direto')) { const cand = xi.filter((id) => id !== taker && form[sd.xi.indexOf(id)]?.[0] !== 'GOL'); const w = (id) => { const p = this.G.players[id]; const pos = form[sd.xi.indexOf(id)]?.[0]; return (p?.ovr || 60) * (['ZAG', 'ATA'].includes(pos) ? (play === 'marca' || play === 'rolada' ? 0.7 : 1.6) : ['MC', 'MEI', 'VOL'].includes(pos) ? (play === 'marca' || play === 'rolada' ? 1.8 : 0.7) : 0.8); }; let t = cand.reduce((a, id) => a + w(id), 0) * rnd(); for (const id of cand) { t -= w(id); if (t <= 0) { sc = id; break; } } }
+    if (rnd() < 0.52) { this.score[own]++; this.st.ont[own]++; out.push(this.push({ t: 'gol', side: own, p: sc, as: sc === taker ? -1 : taker, xg, bp: kind, play })); }
+    else { this.st.ont[own]++; out.push(this.push({ t: 'def', side: own, p: sc, gk: op.xi.find((id, i) => this.form(1 - own)[i][0] === 'GOL'), xg, bp: kind })); }
+  }
   step() {
     if (this.done) return [];
     if (this.pend) { if (this.auto || (!this.s[0].user && !this.s[1].user)) return this.resolveLance(rnd() < (this.pend.q || 0.3)); return []; }
@@ -192,7 +211,7 @@ export class LiveMatch {
     this.ball.own = own; this.track(own, R0, R1);
     if (this.pend) return out;
     // pênalti em falta na área (com checagem do VAR às vezes)
-    if (this.min !== 45 && this.min < 89 && rnd() < 0.0055) { const sdp = this.s[own]; const xip = sdp.xi.filter((id) => !this.sent[own].has(id)); const tk = pickScorer(this.G, xip, this.form(own)); const gkp = this.s[1 - own].xi.find((id, k) => this.form(1 - own)[k][0] === 'GOL');
+    if (this.min !== 45 && this.min >= 6 && this.min < 89 && rnd() < 0.0055) { const sdp = this.s[own]; const xip = sdp.xi.filter((id) => !this.sent[own].has(id)); const tk = pickScorer(this.G, xip, this.form(own)); const gkp = this.s[1 - own].xi.find((id, k) => this.form(1 - own)[k][0] === 'GOL');
       if (this.s[own].user && !this.auto) { this.pend = { t: 'lance', kind: 'pen', side: own, p: tk, gk: gkp, q: 0.76, xg: 0.76, var: rnd() < 0.3 }; out.push(this.push({ ...this.pend })); return out; }
       if (this.s[1 - own].user && !this.auto) { this.pend = { t: 'lance', kind: 'defpen', side: own, p: tk, gk: gkp, q: 0.76, xg: 0.76, var: rnd() < 0.3 }; out.push(this.push({ ...this.pend })); return out; }
       this.st.sh[own]++; this.st.xg[own] += 0.76; out.push(this.push({ t: 'pen', side: own, p: tk }));
@@ -200,14 +219,14 @@ export class LiveMatch {
     }
     const lam = own === 0 ? l0 : l1, posS = own === 0 ? pos0 : 1 - pos0;
     const conv = 0.3;
-    const pChance = lam / (conv * 90 * posS);
+    const pChance = lam / (conv * 90 * posS) * 0.86;
     const sd = this.s[own], opp = this.s[1 - own];
     const xi = sd.xi.filter((id) => !this.sent[own].has(id));
     if (rnd() < pChance && xi.length) {
       const shooter = pickScorer(this.G, sd.xi.filter((id) => !this.sent[own].has(id)), this.form(own).filter((_, i) => !this.sent[own].has(sd.xi[i])));
       const gkId = opp.xi.find((id, i) => this.form(1 - own)[i][0] === 'GOL');
       const sp = this.G.players[shooter], gk = this.G.players[gkId];
-      const q = conv * Math.exp(((sp ? sp.ovr : 60) - (gk ? gk.ovr : 60)) / 40);
+      const q = conv * clamp(Math.exp(((sp ? sp.ovr : 60) - (gk ? gk.ovr : 60)) / 50), 0.75, 1.2);
       this.st.sh[own]++; const xg = Math.round(clamp(q * (0.6 + rnd() * 0.8), 0.02, 0.85) * 100) / 100; this.st.xg[own] = Math.round((this.st.xg[own] + xg) * 100) / 100;
       // lance decisivo jogável (só para o time do usuário, nos momentos que importam)
       const userSide = this.s[own].user && !this.auto; const close = Math.abs(this.score[0] - this.score[1]) <= 1;
@@ -223,9 +242,9 @@ export class LiveMatch {
         out.push(ge);
       } else if (r < q + 0.32) { this.st.ont[own]++; out.push(this.push({ t: 'def', side: own, p: shooter, gk: gkId, xg })); }
       else if (r < q + 0.38) out.push(this.push({ t: 'trave', side: own, p: shooter, xg }));
-      else { out.push(this.push({ t: 'fora', side: own, p: shooter, xg })); if (rnd() < 0.35) { this.st.cor[own]++; } }
+      else { out.push(this.push({ t: 'fora', side: own, p: shooter, xg })); if (rnd() < 0.35) { this.st.cor[own]++; this.setPiece(own, 'ck', out); } }
     } else if (rnd() < 0.035 * (opp.tact.press + 1) / 2) {
-      this.st.fal[1 - own]++;
+      this.st.fal[1 - own]++; if (rnd() < 0.28) this.setPiece(own, 'fk', out);
       if (rnd() < 0.16 * (this.ref?.k || 1)) {
         const oxi = opp.xi.filter((id) => !this.sent[1 - own].has(id));
         const p = pick(oxi);
@@ -234,6 +253,7 @@ export class LiveMatch {
         else out.push(this.push({ t: 'am', side: 1 - own, p }));
       }
     }
+    else if (rnd() < 0.075 && !this.pend) { this.st.cor[own]++; this.setPiece(own, 'ck', out); }
     if (rnd() < 0.0012) { const p = pick(xi); out.push(this.push({ t: 'les', side: own, p })); }
     // IA faz substituições
     for (let i = 0; i < 2; i++) if (!this.s[i].user) this.aiSubs(i, out);

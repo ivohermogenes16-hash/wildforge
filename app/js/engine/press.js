@@ -106,13 +106,11 @@ export function pressPre(G, ctx) {
   if (derby) key = 'classico';
   else if (f.ko >= 0 && f.ko >= comp.koWeeks.length - 2) { key = 'decisivo'; v.mult = 1.3; }
   else if (st && st.indexOf(c.id) < 3 && st.indexOf(opp.id) < 3 && st.indexOf(c.id) >= 0) key = 'lideranca';
-  else if (c.board.conf < 35) key = 'ameaca';
-  else if (/DD$/.test(form)) key = 'crise';
-  else if (/VVV$/.test(form)) key = 'embalado';
-  else if (G.week <= 2 && Math.random() < 0.7) key = 'estreia';
-  else if (opp.rep >= c.rep + 12) key = 'azarao';
-  else if (opp.rep <= c.rep - 12) key = 'favorito';
-  else if (Math.random() < 0.45) key = 'geral';
+  else if (c.board.conf < 30 && Math.random() < 0.5) key = 'ameaca';
+  else if (ctx.big && opp.rep >= c.rep + 12) key = 'azarao';
+  else if (ctx.big && /DDD$/.test(form)) key = 'crise';
+  else if (ctx.big) key = 'geral';
+  // 5.0: coletiva só em jogo importante (clássico, decisão, briga direta, jogo grande)
   return key ? build(PRE, key, v) : null;
 }
 
@@ -125,6 +123,9 @@ export function pressPost(G, ctx) {
   const red = ev.find((e) => e.t === 1 && e.s === mine);
   const P = (id) => G.players[id]?.n || '';
   let key;
+  // 5.0: coletiva pós-jogo só em jogo importante ou resultado marcante
+  const notable = derby || ctx.big || (top && top[1] >= 3) || Math.abs(gf - ga) >= 4 || (gf > ga && opp.rep >= c.rep + 15) || (gf < ga && opp.rep <= c.rep - 18);
+  if (!notable) return null;
   if (derby) key = gf > ga ? 'classicoV' : gf < ga ? 'classicoD' : 'classicoE';
   else if (top && top[1] >= 3 && Math.random() < 0.8) { key = 'hat'; v.pl = P(+top[0]); v.n = top[1]; }
   else if (red && Math.random() < 0.6) { key = 'expulso'; v.pl = P(red.p); }
@@ -139,7 +140,7 @@ export function pressPost(G, ctx) {
   else if (gf > ga) key = gf - ga === 1 && Math.random() < 0.5 ? 'apertada' : 'vitoria';
   else if (gf === ga) key = gf === 0 && Math.random() < 0.6 ? 'zeroZero' : 'empate';
   else key = 'derrota';
-  if (['vitoria', 'empate', 'derrota', 'apertada', 'zeroZero', 'semSofrer'].includes(key) && Math.random() < 0.35) return null; // nem todo jogo tem coletiva
+
   return build(POST, key, v);
 }
 

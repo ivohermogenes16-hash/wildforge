@@ -35,12 +35,14 @@ export class Match3D {
     return sd.xi.map((id, i) => { const p = this.G.players[id]; const [pos, fx, fy] = form[i] || ['MC', 0.5, 0.5]; let n = NUM[pos] || 8; while (used.has(n)) n += n < 12 ? 11 : 1; used.add(n);
       return { id: id ?? i, name: short(p?.n || '—'), num: n, pos, fx, fy: pos === 'GOL' ? 0 : fy }; });
   }
+  tactOf(i) { const t = this.m.s[i].tact || {}; return { ment: t.ment ?? 1, press: t.press ?? 1, linha: t.linha ?? 1, larg: t.larg ?? 1, arrows: t.arrows || {} }; }
+  setTact(side) { this.post({ t: 'tact', side, tact: this.tactOf(side) }); this.post({ t: 'lineup', side, team: this.team(side) }); }
   msg(d) {
     switch (d.t) {
       case 'loaded': {
         const hc = this.m.s[0].club; const f = this.m.f; const night = (f && f.s === 1) || Math.random() < 0.35;
         this.post({ t: 'setup', home: { name: hc.name, c1: hc.c1, c2: hc.c2 }, stadium: hc.stadium || `Estádio ${hc.city || hc.name}`, kits: this.kits(), teams: [this.team(0), this.team(1)],
-          time: this.opt.time || (night ? 'noite' : Math.random() < 0.5 ? 'dia' : 'tarde'), rain: !!this.opt.rain, replays: this._replays, names: this._names, ts: this.ts() });
+          time: this.opt.time || (night ? 'noite' : Math.random() < 0.5 ? 'dia' : 'tarde'), rain: !!this.opt.rain, replays: this._replays, names: this._names, ts: this.ts(), tact: [this.tactOf(0), this.tactOf(1)] });
         break; }
       case 'ready': this.ready = true; clearTimeout(this.loadT); this.h.onReady?.(); break;
       case 'shotDone': if (this.wait && this.wait.id === d.id) this.resolve(); break;

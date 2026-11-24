@@ -1,3 +1,4 @@
+import { TALKS, talkTo } from '../engine/coach.js';
 import { playerExtraHtml } from './extra.js';
 import { SET } from '../settings.js';
 import { playerExtra, scoutNetView } from './universe.js';
@@ -176,7 +177,7 @@ H.club = (v) => {
   const own = c.own;
   openSheet(`<div class="row" style="gap:14px">${crest(c, 72)}<div class="grow"><h2 style="margin:0">${esc(c.name)}</h2><div class="sm mut">${esc(c.city)} · ${esc(L?.short || (c.league === 'AMA' ? 'Várzea' : 'Fora das ligas'))}</div><div>${stars(c.rep)} <span class="xs mut">rep. ${c.rep}</span></div></div></div>
   <div class="card flat" style="margin-top:12px"><div class="kv"><span class="mut">Estádio</span><b>${esc(c.stad)} (${c.cap} mil)</b></div><div class="kv"><span class="mut">Técnico</span><b>${c.coach ? esc(c.coach.n) : '<span class="warn">vago</span>'}</b></div><div class="kv"><span class="mut">Força do elenco</span><b>${Math.round(strength(G, c.id))}</b></div><div class="kv"><span class="mut">Valor estimado (SAF)</span><b>${money(clubValuation(G, c))}</b></div>${own.user > 0 ? `<div class="kv"><span class="mut">Sua participação</span><b class="ok">${own.user}%</b></div>` : ''}${c.saf ? `<div class="kv"><span class="mut">Estrutura</span><b>SAF · assoc. ${own.assoc}% · fundo ${own.fund}%</b></div>` : ''}<div class="kv"><span class="mut">Títulos (no jogo)</span><b>${c.troph.length}</b></div></div>
-  <div class="row" style="gap:8px;margin-bottom:10px"><button class="btn sm grow" data-a="saf" data-v="${c.id}">🏦 ${own.user > 0 ? 'Ações' : 'Comprar SAF'}</button><button class="btn sm grow" data-a="edclub" data-v="${c.id}">✏️ Editar</button></div>
+  <div class="row" style="gap:8px;margin-bottom:10px">${controls(G, c) ? `<button class="btn sm pri grow" data-a="presgo" data-v="${c.id}">👔 Painel do Presidente</button>` : ''}<button class="btn sm grow ${own.user > 0 ? '' : 'saf-cta'}" data-a="saf" data-v="${c.id}">🏦 ${own.user > 0 ? 'Ações' : 'Comprar SAF deste clube'}</button><button class="btn sm grow" data-a="edclub" data-v="${c.id}">✏️ Editar</button></div>
   <div class="card flat" style="padding:4px 12px"><h3 style="margin:8px 0 2px">Elenco</h3><div class="list">${sq.map((p) => playerRow(p)).join('')}</div></div>`);
 };
 
@@ -234,12 +235,20 @@ H.ffree = () => { S.filt.free = !S.filt.free; render(); };
 // ---------- MAIS ----------
 PAGES.more = () => {
   const G = S.G; const unread = G.inbox.filter((m) => !m.read).length;
-  const T = [['inbox', '📩', 'Caixa de entrada', 'Propostas e avisos', unread], ['noticias', '📰', 'Notícias', 'O que rola no futebol'], ['financas', '💰', 'Patrimônio', 'Salário e investimentos'], ['meuclube', '🏗️', 'Meu clube & SAF', 'Fundar clube, comprar ações'], ['trofeus', '🏆', 'Sala de troféus', 'Títulos, prêmios e temporadas'], ['lendas', '🌟', 'Mural de lendas', 'Lendas e Bola de Ouro'], ['estadio', '🏟️', 'Estádio e torcida', 'Público, sócios e mosaicos'], ['uniformes', '👕', 'Uniformes', 'Cores e modelos'], ['pacotes', '📦', 'Pacotes e escudos', 'Instalar, exportar, assistente'], ['editor', '✏️', 'Editor', 'Nomes, escudos e fotos'], ['opcoes', '⚙️', 'Opções', 'Salvar, ajuda, nova carreira']];
-  return `<div class="tiles t3">${T.map(([k, ic, t, d, b]) => `<button class="tile" data-a="go" data-v="${k}"><span class="ic">${ic}</span><span class="tt">${t}</span><span class="ds">${d}</span>${b ? `<span class="badge">${b}</span>` : ''}</button>`).join('')}</div>`;
+  const T = [['inbox', '📩', 'Caixa de entrada', 'Propostas e avisos', unread], ['noticias', '📰', 'Notícias', 'O que rola no futebol'], ['redes', '📱', 'Redes sociais', 'O que a torcida está falando'], ['financas', '💰', 'Patrimônio', 'Salário e investimentos'], ['presidente', '👔', 'Painel do Presidente', 'Administre o clube que é seu'], ['meuclube', '🏦', 'Comprar clube (SAF)', 'Fundar clube, comprar ações'], ['trofeus', '🏆', 'Sala de troféus', 'Títulos, prêmios e temporadas'], ['lendas', '🌟', 'Mural de lendas', 'Lendas e Bola de Ouro'], ['estadio', '🏟️', 'Estádio e torcida', 'Público, sócios e mosaicos'], ['uniformes', '👕', 'Uniformes', 'Cores e modelos'], ['pacotes', '📦', 'Pacotes e escudos', 'Instalar, exportar, assistente'], ['editor', '✏️', 'Editor', 'Nomes, escudos e fotos'], ['opcoes', '⚙️', 'Opções', 'Salvar, ajuda, nova carreira']];
+  return `<div class="tiles t3">${T.map(([k, ic, t, d, b]) => `<button class="tile" data-a="go" data-v="${k}"><span class="ic">${ic}</span><span class="tt">${t}</span><span class="ds">${d}</span>${b ? `<span class="badge">${b}</span>` : ''}</button>`).join('')}<button class="tile comu" data-a="tcomu"><span class="ic">💬</span><span class="tt">Comunidade</span><span class="ds">Ideias, bugs e novidades no WhatsApp</span></button></div>`;
 };
 for (const k of ['inbox', 'noticias', 'clube', 'carreira', 'financas', 'meuclube', 'ligas', 'editor', 'opcoes']) PAGES_BACK[k] = null;
 Object.assign(PAGES_T, { clube: 'Clube', carreira: 'Carreira', financas: 'Patrimônio', meuclube: 'Meu clube & SAF', ligas: 'Ligas do mundo', editor: 'Editor', opcoes: 'Opções' });
 
+PAGES.redes = () => {
+  const G = S.G; const F = G.social || []; const mood = G.fanMood ?? 60; const fol = G.me.fol || 1200;
+  const ic = { clube: '🛡️', torcida: '📣', imprensa: '📰', jogador: '👕' };
+  const fmt = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' mi' : n >= 1e3 ? (n / 1e3).toFixed(1).replace('.', ',') + ' mil' : String(n));
+  return `<div class="soc-top"><div class="soc-stat"><small>Humor da torcida</small><div class="soc-bar"><i style="width:${mood}%;background:${mood >= 65 ? '#22c55e' : mood >= 40 ? '#facc15' : '#ef4444'}"></i></div><b>${mood >= 75 ? 'Em festa' : mood >= 60 ? 'Confiante' : mood >= 40 ? 'Desconfiada' : mood >= 25 ? 'Irritada' : 'Revoltada'}</b></div><div class="soc-stat"><small>Seus seguidores</small><b class="soc-big">${fmt(fol)}</b></div></div>
+  ${F.length ? `<div class="soc-feed">${F.map((p) => `<div class="soc-post ${p.who}${p.mood ? ' m' + p.mood : ''}"><div class="soc-av">${ic[p.who] || '💬'}</div><div class="grow"><div class="soc-h"><b>${esc(p.n)}</b><span>${esc(p.h)}</span><span>· ${wk(p.w)}</span></div><div class="soc-t">${esc(p.txt)}</div><div class="soc-l">❤️ ${fmt(p.l)}</div></div></div>`).join('')}</div>` : '<div class="empty">📱 Ainda não tem nada aqui. Depois do primeiro jogo a torcida começa a comentar.</div>'}`;
+};
+PAGES_T.redes = 'Redes sociais';
 PAGES.clube = () => {
   const G = S.G, c = myClub(G);
   if (!c) return '<div class="empty">Você está sem clube.</div>';
@@ -309,7 +318,7 @@ H.inv = (v) => {
 // ---------- Meu clube & SAF ----------
 PAGES.meuclube = () => {
   const G = S.G, me = G.me;
-  let h = '';
+  let h = G.clubs.some((c) => c.own?.user > 0 && controls(G, c)) ? `<button class="btn pri big blk" style="margin-bottom:10px" data-a="go" data-v="presidente">👔 Abrir Painel do Presidente</button>` : '';
   const owned = G.clubs.filter((c) => c.own.user > 0);
   if (me.own != null) {
     const c = G.clubs[me.own];
@@ -356,6 +365,7 @@ H.found2 = () => {
 H.aporte = (v) => { S.apc = +v; S.apv = 0; openSheet(`<h2>Aporte no clube</h2><p class="sm mut">Dinheiro sai da sua conta e vai para o caixa do clube.</p><div class="field"><label>Valor: <b id="apv">${money(0)}</b></label><input type="range" min="0" max="${Math.max(0, Math.floor(S.G.me.money))}" step="10000" value="0" data-in="apv"></div><button class="btn pri blk" data-a="aporte2">Confirmar aporte</button>`); };
 H.apv = (v) => { S.apv = +v; document.getElementById('apv').textContent = money(+v); };
 H.aporte2 = () => { toast(inject(S.G, S.apc, S.apv)); closeSheet(); render(); save(); };
+H.presgo = (v) => { closeSheet(true); S.presCid = +v; S.page = 'presidente'; render(); };
 H.selfcoach = (v) => {
   const G = S.G, c = G.clubs[+v];
   if (G.me.job && !confirm(`Deixar o ${G.clubs[G.me.job.cid].name} para treinar o ${c.name}?`)) return;
@@ -436,9 +446,21 @@ function catBtn(p) {
   return '';
 }
 H.cat = (v) => { const G = S.G; const [id, k] = v.split(':'); const p = G.players[+id]; p.u17 = k === '17'; toast(p.u17 ? `${p.n} vai jogar no Sub-17` : `${p.n} subiu para o Sub-20`); closeSheet(); render(); save(); };
+const moodEmo = (m) => (m >= 80 ? '😄' : m >= 62 ? '🙂' : m >= 45 ? '😐' : m >= 30 ? '😕' : '😠');
+H.ptalk = (v) => { const G = S.G; const p = G.players[+v]; if (!p) return; const cd = p.tk?.last != null && G.t - p.tk.last < 3;
+  const form = p.st?.j ? (p.st.ns / p.st.j).toFixed(1) : '—';
+  openSheet(`<div class="tk-head"><div class="tk-av">${face(p, 54)}</div><div class="grow"><h2 style="margin:0">${esc(p.n)}</h2><div class="xs mut">${esc(p.pos)} · ${p.age} anos · personalidade ${esc(p.per || 'Normal')}</div><div class="tk-stats"><span>${moodEmo(p.mor)} Moral <b>${Math.round(p.mor)}</b></span><span>📈 Nota média <b>${form}</b></span><span>👕 Jogos <b>${p.st?.j || 0}</b></span></div></div></div>
+  ${cd ? '<div class="hint warn">Vocês conversaram há pouco. Espere alguns dias para chamar de novo.</div>' : '<p class="xs mut" style="margin:6px 0 10px">Sobre o que você quer falar? Cada jogador reage de um jeito — depende da fase dele, da idade e da personalidade.</p>'}
+  <div class="tk-grid">${Object.entries(TALKS).map(([k, t]) => `<button class="tk-opt" ${cd ? 'disabled' : ''} data-a="ptalk2" data-v="${p.id}:${k}"><span>${t[0]}</span><b>${t[1]}</b><small>${t[2]}</small></button>`).join('')}</div>`);
+};
+H.ptalk2 = (v) => { const G = S.G; const [id, k] = v.split(':'); const p = G.players[+id]; const r = talkTo(G, p, k); save();
+  if (!r.ok) { replaceSheet(`<div class="hint warn">${esc(r.txt)}</div>`); return; }
+  try { window.PSFX?.(r.d >= 0 ? 'ok' : 'bad'); } catch {}
+  replaceSheet(`<div class="tk-res ${r.mood}"><div class="tk-av big">${face(p, 72)}</div><div class="tk-bubble">${esc(r.txt)}</div><div class="tk-delta ${r.d >= 0 ? 'up' : 'dn'}">${r.d >= 0 ? '▲' : '▼'} Moral ${r.d >= 0 ? '+' : ''}${r.d}</div><div class="xs mut">${moodEmo(p.mor)} Moral agora: <b>${Math.round(p.mor)}</b>${p.prom?.k === 'titular' && k === 'vaga' ? ' · ⚠️ Promessa feita: ele espera jogar nas próximas semanas.' : ''}</div><button class="btn pri blk" style="margin-top:14px" data-a="player" data-v="${p.id}">Voltar ao jogador</button></div>`);
+};
 function itrBtn(p) {
   const t = p.itr; const lab = !t ? 'Nenhum' : t.startsWith('pos:') ? `Nova posição: ${t.slice(4)} (${p.posL || 0}/10 sem.)` : ITR[t].n;
-  return `<div class="li tap" style="margin-bottom:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px" data-a="itr" data-v="${p.id}"><span>🎯</span><div class="grow"><div class="xs mut">Treino individual</div><div class="b sm">${esc(lab)}</div></div><span class="mut">›</span></div>`;
+  return `<div class="li tap" style="margin-bottom:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px" data-a="ptalk" data-v="${p.id}"><span>💬</span><div class="grow"><div class="xs mut">Conversa individual</div><div class="b sm">Chamar ${esc(p.n.split(' ')[0])} para conversar</div></div><span class="mor-pill">${moodEmo(p.mor)} ${Math.round(p.mor)}</span><span class="mut">›</span></div><div class="li tap" style="margin-bottom:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px" data-a="itr" data-v="${p.id}"><span>🎯</span><div class="grow"><div class="xs mut">Treino individual</div><div class="b sm">${esc(lab)}</div></div><span class="mut">›</span></div>`;
 }
 H.itr = (v) => {
   const p = S.G.players[+v];

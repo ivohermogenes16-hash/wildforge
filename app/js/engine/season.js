@@ -6,7 +6,7 @@ import { CUPS2, CONTS_ALL } from '../data/leagues2.js';
 import { ESTADUAIS } from '../data/estaduais.js';
 
 export const CUPS = [
-  { id: 'CDB', name: 'Copa do Brasil', short: 'Copa do Brasil', country: 'BR', from: ['BRA', 'BRB', 'BRC'], extra: ['BRD', 4], prize: 70e6 },
+  { id: 'CDB', name: 'Copa do Brasil', short: 'Copa do Brasil', country: 'BR', from: ['BRA', 'BRB', 'BRC'], extra: ['BRD', 4], prize: 77e6 },
   { id: 'FAC', name: 'FA Cup', short: 'FA Cup', country: 'EN', from: ['ENG1', 'ENG2'], prize: 25e6 },
   { id: 'CDR', name: 'Copa del Rey', short: 'Copa del Rey', country: 'ES', from: ['ESP1', 'ESP2'], prize: 20e6 },
   { id: 'CIT', name: 'Coppa Italia', short: 'Coppa Italia', country: 'IT', from: ['ITA1', 'ITA2'], prize: 20e6 },
@@ -187,6 +187,7 @@ export function progressComps(G) {
         } else {
           for (let i = 0; i < q.length; i += 2) { pairs.push([q[i][0], q[i + 1][1]]); pairs.push([q[i + 1][0], q[i][1]]); }
         }
+        if (comp.kind === 'cont') { G.events.push({ t: 'contgroups', c: comp.id, clubs: comp.groups.flat() }); G.events.push({ t: 'advance', c: comp.id, clubs: pairs.flat(), n: pairs.length * 2 }); }
         startKO(G, comp, pairs, 0);
       } else {
         comp.phase = 'done';
@@ -201,6 +202,7 @@ export function progressComps(G) {
       if (ties.some((f) => f.hg == null)) continue;
       let winners = ties.map(koWinner);
       if (r === 0 && comp.byes && comp.byes.length) { winners = comp.byes.concat(winners); comp.byes = []; }
+      if (winners.length > 1 && (comp.kind === 'cup' || comp.kind === 'cont')) G.events.push({ t: 'advance', c: comp.id, clubs: winners.slice(), n: winners.length });
       if (comp.kind === 'league' && r === comp.koWeeks.length - 3) comp.semis = winners.slice();
       if (winners.length === 1) {
         comp.champion = winners[0]; comp.phase = 'done';

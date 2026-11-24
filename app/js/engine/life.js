@@ -8,6 +8,7 @@ import { clamp, ri, rf, rnd, pick, money, hash, seeded, shuffle } from '../util.
 import { genName, makePlayer, BOARD_TYPES, initClubLife, initPlayerLife, clubLevel, expandWorld } from './world.js';
 import { playerWage, playerValue, WAGE_SCALE } from './econ.js';
 import { standings } from './season.js';
+import { LEAGUES } from '../data/leagues.js';
 import { pressPre, pressPost, pressHeadline } from './press.js';
 
 export const STYLES = ['Ofensivo', 'Defensivo', 'Posse de bola', 'Contra-ataque', 'Equilibrado', 'Pressão alta'];
@@ -44,6 +45,7 @@ const isSenior = (G) => G.me.job && !G.me.job.youth;
 // ===================== MIGRAÇÃO / COMPATIBILIDADE =====================
 export function migrate(G) {
   expandWorld(G);
+  econV2(G);
   G.coaches ||= []; G.hist ||= {}; G.timeline ||= []; G.builds ||= []; G.rec ||= {};
   const me = G.me;
   me.pop ??= 25; me.pp ??= 20; me.xp ??= (me.stats?.j || 0) * 3; me.spec ||= { of: 0, df: 0, jv: 0, ge: 0, mo: 0 };
@@ -577,23 +579,49 @@ export function resolveDecision(G, m, i, auto) {
 
 // ===================== IMPRENSA CONTEXTUAL =====================
 const A = (l, fx, extra = {}) => ({ l, fx, ...extra });
+// jogo grande: clássico, mata-mata decisivo, final, briga direta no topo/fundo na reta final, ou adversário muito mais forte
+export function bigGame(G, f) {
+  try {
+    const comp = G.comps[f.c]; if (!comp) return false; const c = G.clubs[G.me.job?.cid]; if (!c) return false; const opp = G.clubs[f.h === c.id ? f.a : f.h];
+    if (isDerby(G, f.h, f.a)) return 'classico';
+    if (f.ko >= 0 && comp.koWeeks) { const left = comp.koWeeks.length - 1 - f.ko; if (left === 0) return 'final'; if (left <= 1) return 'semi'; if (comp.kind === 'cont' && left <= 2) return 'mata'; }
+    if (comp.kind === 'league' && comp.table?.[c.id]) { const st = standings(G, comp, 0); const n = st.length; const a = st.indexOf(c.id), b = st.indexOf(opp.id); const tot = (n - 1) * 2; const pl = comp.table[c.id].j ?? comp.table[c.id].p ?? 0; const late = pl >= tot * 0.6;
+      if (late && a <= 2 && b <= 3) return 'topo'; if (late && a >= n - (comp.down || 4) - 1 && b >= n - (comp.down || 4) - 2) return 'fundo'; }
+    if (opp.rep >= c.rep + 18) return 'gigante';
+  } catch { return false; }
+  return false;
+}
 export function pressBefore(G, f) {
   if (!isSenior(G) || G.me.pressOn === false) return null;
   const c = myJobClub(G); const opp = G.clubs[f.h === c.id ? f.a : f.h]; const comp = G.comps[f.c];
   const L = G.comps[c.league]; const form = L?.table?.[c.id]?.form || '';
   let st = null; if (comp.kind === 'league' && comp.table?.[c.id]) { try { st = standings(G, comp, 0); } catch { st = null; } }
-  return pressPre(G, { c, opp, comp, f, derby: isDerby(G, f.h, f.a), form, st });
+  return pressPre(G, { c, opp, comp, f, derby: isDerby(G, f.h, f.a), form, st, big: bigGame(G, f) });
 }
 export function pressAfter(G, f) {
   if (!isSenior(G) || G.me.pressOn === false) return null;
   const c = myJobClub(G); const side = f.h === c.id ? 0 : 1; const opp = G.clubs[side ? f.h : f.a];
   const gf = side ? f.ag : f.hg, ga = side ? f.hg : f.ag; const comp = G.comps[c.league];
   const form = comp?.table[c.id]?.form || '';
-  return pressPost(G, { c, opp, f, side, gf, ga, derby: isDerby(G, f.h, f.a), form });
+  return pressPost(G, { c, opp, f, side, gf, ga, derby: isDerby(G, f.h, f.a), form, big: bigGame(G, f) });
 }
 export function pressDecision(G, f, P, when) {
   decision(G, 'Imprensa', when === 'pre' ? '🎤 Coletiva pré-jogo' : '🎤 Coletiva pós-jogo', P.q, P.a, { def: 0, fixId: f.i, press: true, weeks: 1, rep: P.rep, ctx: P.ctx, when });
   return G.inbox[0];
+}
+
+// ===================== economia realista (versão 5) =====================
+function econV2(G) {
+  if (G.econ >= 2) return; G.econ = 2;
+  for (const L of LEAGUES) { const comp = G.comps[L.id]; if (comp) comp.tv = L.tv; }
+  for (const c of G.clubs) {
+    const sq = G.players.filter((p) => p && p.club === c.id);
+    const old = sq.reduce((t, p) => t + (p.wage || 0), 0) || 1;
+    for (const p of sq) { if (p.u20 && p.wage <= 1200) continue; const nw = playerWage(p, c.country); p.wage = Math.max(p.wage, Math.round(nw * (0.9 + Math.random() * 0.2) / 50) * 50); }
+    const k = Math.min(6, Math.max(1, sq.reduce((t, p) => t + (p.wage || 0), 0) / old));
+    c.spon = Math.round((c.spon || 0) * k / 1000) * 1000; c.money = Math.round(c.money * (c.money > 0 ? k : 1) / 1000) * 1000;
+    if (G.me.job && G.me.job.cid === c.id) G.me.job.wage = Math.round(G.me.job.wage * Math.min(2, k) / 100) * 100;
+  }
 }
 
 // ===================== ESPECIALIZAÇÕES =====================

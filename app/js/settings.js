@@ -1,10 +1,12 @@
+import { CUR } from './util.js';
 // Configurações do jogo (ficam salvas no aparelho) e notificações
-const DEF = { narrador: 'empolgado', view3d: '3d', q3d: 1, theme: 'escuro', clubTheme: true, simple: false, speed: 2, replays: true, narr: true, vib: true, notif: true, accent: 'verde', size: 'normal', fast: false, autosave: true };
+export const DEF = { cur: 'BRL', matchday: true, social: true, sfx: true, music: true, crowd: true, voice: 'celular', narrador: 'empolgado', view3d: '3d', q3d: 1, theme: 'escuro', clubTheme: true, simple: false, speed: 2, replays: true, narr: true, vib: true, notif: true, accent: 'verde', size: 'normal', fast: false, autosave: true };
 export const SET = { ...DEF };
 try { Object.assign(SET, JSON.parse(localStorage.getItem('prancheta.set') || '{}')); } catch {}
 export const ACCENTS = { verde: ['#2fe08a', '#19b46b'], azul: ['#4aa8ff', '#1f7fe0'], ouro: ['#f4c542', '#d39e16'], rubro: ['#ff5a5f', '#d63339'], roxo: ['#a77bff', '#7b4fe0'] };
 export function saveSet() { try { localStorage.setItem('prancheta.set', JSON.stringify(SET)); } catch {} applySet(); }
 export function applySet() {
+  CUR.k = SET.cur || 'BRL';
   const r = document.documentElement.style; const [a, b] = ACCENTS[SET.accent] || ACCENTS.verde;
   r.setProperty('--ac', a); r.setProperty('--ac2', b);
   document.documentElement.style.fontSize = { pequeno: '12px', normal: '13px', grande: '14.5px' }[SET.size] || '13px';

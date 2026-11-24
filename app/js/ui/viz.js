@@ -322,13 +322,14 @@ export class MatchViz {
     const b = this.ball, ps = this.posSide();
     const out = [[], []];
     for (let s = 0; s < 2; s++) {
-      const form = this.form(s); const [bx, by] = this.T(s, b.x, b.y); const poss = ps === s;
+      const form = this.form(s); const [bx, by] = this.T(s, b.x, b.y); const poss = ps === s; const t0 = this.m.s[s].tact || {}; const T = { ment: t0.ment ?? 1, press: t0.press ?? 1, linha: t0.linha ?? 1, larg: t0.larg ?? 1, arrows: t0.arrows };
       for (let i = 0; i < 11; i++) {
         const [pos, fx, fy] = form[i];
         let tx, ty, spd = 0.75;
         if (pos === 'GOL') { tx = 2.5 + clamp(bx - 25, 0, 50) * 0.12; ty = 34 + (by - 34) * 0.25; }
-        else if (poss) { const line = clamp(bx * 0.6 + 8, 14, 56); tx = line + (fy - 0.2) * 64; ty = 34 + (fx - 0.5) * PH * 0.9 + (by - 34) * 0.12; tx = Math.min(tx, Math.max(bx + 16, 62)); }
-        else { const line = clamp(bx * 0.55 + 4, 6, 40); tx = line + (fy - 0.2) * 44; ty = 34 + (fx - 0.5) * PH * 0.62 + (by - 34) * 0.4; }
+        else if (poss) { const line = clamp(bx * 0.6 + 8 + (T.ment - 1) * 5, 14, 60); tx = line + (fy - 0.2) * 64; ty = 34 + (fx - 0.5) * PH * 0.9 * (1 + (T.larg - 1) * 0.12) + (by - 34) * 0.12; tx = Math.min(tx, Math.max(bx + 16, 62)); }
+        else { const line = clamp(bx * 0.55 + 4 + (T.linha - 1) * 6 + (T.ment - 1) * 3, 6, 46); tx = line + (fy - 0.2) * 44 * (T.press === 0 ? 0.85 : 1); ty = 34 + (fx - 0.5) * PH * (T.press === 0 ? 0.55 : 0.62) + (by - 34) * 0.4; }
+        const ar = T.arrows && T.arrows[i]; if (ar && pos !== 'GOL') { tx += ar[1] * 70; ty += ar[0] * 60; }
         // variação natural
         const wob = Math.sin(performance.now() / 1300 + i * 2.1 + s * 5) * 1.2;
         ty += wob; tx = clamp(tx, 1, 100);

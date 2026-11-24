@@ -6,6 +6,7 @@ import { playerValue } from '../engine/econ.js';
 import { myClub } from '../engine/game.js';
 import { userBid, userSign, wageDemand, renew, renewDemand, askPrice, doTransfer, weeklyWages, wageBudget, willJoin } from '../engine/market.js';
 import { rivalFor, swapValue } from '../engine/market2.js';
+import { controls, inject } from '../engine/career.js';
 
 let B = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -69,6 +70,8 @@ export function openBuy(p) {
   shell(G, p, { c: c.c1, html: crest(c, 64), n: c.name, t: 'comprador' }, seller ? { c: seller.c1, html: crest(seller, 64), n: seller.name, t: 'vendedor' } : { c: '#8ba39a', html: agentHtml(p), n: 'Empresário', t: `de ${shortName(p.n)}` });
   steps();
   const wj = willJoin(G, p, c.id);
+  const fr = G.me.freeze && G.me.freeze >= G.t; const ffp = G.uv?.regs?.ffp && c.money < 0;
+  if (seller && (fr || ffp)) { (async () => { await typing('c', 500); bubble('c', fr ? `🧊 <b>Contratações congeladas</b> pela diretoria por mais ${G.me.freeze - G.t + 1} semana(s). Até lá só dá para trazer jogadores livres (sem custo).` : '⚖️ <b>Fair play financeiro:</b> o caixa do clube está negativo, então ele não pode pagar transferências agora.', 'bad'); stamp('BLOQUEADO', 'bad'); endBad(fr ? 'Contratações congeladas pela diretoria.' : 'Caixa negativo: venda jogadores ou espere receitas.'); })(); return; }
   if (!wj.ok) { (async () => { await typing('r', 900); bubble('r', esc(wj.why), 'bad'); stamp('SEM ACORDO', 'bad'); endBad('O jogador não quer conversar com o seu clube agora.'); })(); return; }
   if (seller) introFee(G, p, seller); else introWage(G, p, c);
 }
@@ -92,13 +95,14 @@ function ctlFee() {
   const st = Math.max(1000, r1k(B.ask / 50));
   const sw = B.swap != null ? G.players[B.swap] : null; const swv = sw ? swapValue(G, sw, p.club) : 0;
   const broke = B.offer > c.money;
-  el.innerHTML = `<div class="by-row"><div class="grow"><div class="xs mut">Sua oferta ${pat()}</div><div class="by-big ${broke ? 'bad' : ''}" id="byoffer">${money(B.offer)}</div><div class="xs ${broke ? 'bad' : 'mut'}">${broke ? '⚠️ Caixa insuficiente' : `Caixa: ${money(c.money)}`}${swv ? ` · + ${esc(shortName(sw.n))} (vale ${money(swv)} p/ eles)` : ''}</div></div>
+  el.innerHTML = `<div class="by-row"><div class="grow"><div class="xs mut">Sua oferta ${pat()}</div><div class="by-big ${broke ? 'bad' : ''}" id="byoffer">${money(B.offer)}</div><div class="xs ${broke ? 'bad' : 'mut'}">${broke ? `⚠️ Caixa do clube: ${money(c.money)} (seu dinheiro pessoal não entra aqui)${controls(G, c) ? ` · <a class="lnk" data-a="byinject" data-v="${B.offer - c.money}">Aportar ${money(B.offer - c.money)} do seu bolso</a>` : ''}` : `Caixa do clube: ${money(c.money)}`}${swv ? ` · + ${esc(shortName(sw.n))} (vale ${money(swv)} p/ eles)` : ''}</div></div>
     <div class="by-step"><button class="btn sm" data-a="byst" data-v="${-st}">−</button><button class="btn sm" data-a="byst" data-v="${st}">+</button></div></div>
   <input type="range" min="0" max="${max}" step="${st}" value="${B.offer}" data-in="byoff">
   <div class="chips" style="margin:6px 0">${[['Valor de mercado', r1k(playerValue(p))], ['+10%', r1k(B.offer * 1.1)], ...(B.counter ? [['O que pedem', B.counter]] : [])].map(([l, v]) => `<span class="chip" data-a="byset" data-v="${v}">${l}</span>`).join('')}
   <select data-ch="byswap" data-title="Incluir jogador na troca"><option value="">🔁 Sem troca</option>${G.players.filter((x) => x && x.club === c.id && !x.u20 && !x.loan).sort((a, b) => b.ovr - a.ovr).map((x) => `<option value="${x.id}" data-pos="${x.pos}" data-ovr="${x.ovr}" data-n="${esc(x.n)}" data-sub="${x.age} anos · ${money(playerValue(x))}" ${B.swap === x.id ? 'selected' : ''}>${esc(x.n)}</option>`).join('')}</select></div>
   <div class="row" style="gap:6px"><button class="btn red" data-a="byclose">Desistir</button><button class="btn pri grow" data-a="bysend" ${broke ? 'disabled' : ''}>📨 Enviar proposta</button></div>`;
 }
+H.byinject = (v) => { const G = S.G, c = myClub(G); const amt = Math.ceil(+v / 1000) * 1000; const r = inject(G, c.id, amt); bubble('c', `<span class="xs">💼 ${esc(r)}</span>`); save(); ctlFee(); };
 H.byoff = (v) => { if (!B) return; B.offer = +v; const e = document.getElementById('byoffer'); if (e) e.textContent = money(B.offer); };
 H.byst = (v) => { if (!B || B.busy) return; B.offer = Math.max(0, B.offer + +v); B.stage === 'fee' ? ctlFee() : null; };
 H.byset = (v) => { if (!B || B.busy) return; B.offer = +v; ctlFee(); };

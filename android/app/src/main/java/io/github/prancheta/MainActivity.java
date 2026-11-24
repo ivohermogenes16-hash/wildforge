@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        PushWorker.schedule(this);
 
         // serve os arquivos do jogo num endereço https próprio, para o salvamento funcionar como num site
         final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()

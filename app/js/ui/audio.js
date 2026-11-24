@@ -1,0 +1,102 @@
+// 5.0: áudio do jogo todo — efeitos de menu, torcida, apito, gol, música do menu e voz do narrador.
+// Tudo sintetizado (WebAudio) para não pesar o APK. A voz usa a voz do celular; no futuro, frases
+// gravadas pelo dono do jogo entram em CLIPS (ex.: CLIPS.gol = ['audio/gol1.mp3']) e têm prioridade.
+import { SET } from '../settings.js';
+
+let AC = null, MASTER = null, NOISE = null, GEST = false;
+document.addEventListener('pointerdown', () => { GEST = true; }, { capture: true, once: true });
+function ac() {
+  if (!GEST) return null;
+  if (AC) { if (AC.state === 'suspended') AC.resume().catch(() => {}); return AC; }
+  try { AC = new (window.AudioContext || window.webkitAudioContext)(); MASTER = AC.createGain(); MASTER.gain.value = 0.9; MASTER.connect(AC.destination);
+    const len = AC.sampleRate * 2; NOISE = AC.createBuffer(1, len, AC.sampleRate); const d = NOISE.getChannelData(0); let b = 0; for (let i = 0; i < len; i++) { b = 0.97 * b + 0.03 * (Math.random() * 2 - 1); d[i] = b * 6 + (Math.random() * 2 - 1) * 0.15; } } catch { AC = null; }
+  return AC;
+}
+function tone(f, t0, dur, type = 'sine', vol = 0.15, f2 = null) {
+  const a = ac(); if (!a) return; const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.setValueAtTime(f, a.currentTime + t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, a.currentTime + t0 + dur);
+  g.gain.setValueAtTime(0.0001, a.currentTime + t0); g.gain.exponentialRampToValueAtTime(vol, a.currentTime + t0 + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + t0 + dur);
+  o.connect(g); g.connect(MASTER); o.start(a.currentTime + t0); o.stop(a.currentTime + t0 + dur + 0.05);
+}
+function noise(t0, dur, vol, fq = 800, q = 0.7, attack = 0.3) {
+  const a = ac(); if (!a || !NOISE) return null; const s = a.createBufferSource(); s.buffer = NOISE; s.loop = true; const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = fq; f.Q.value = q; const g = a.createGain();
+  const T = a.currentTime + t0; g.gain.setValueAtTime(0.0001, T); g.gain.linearRampToValueAtTime(vol, T + attack); if (dur) { g.gain.setValueAtTime(vol, T + Math.max(attack, dur - 0.6)); g.gain.linearRampToValueAtTime(0.0001, T + dur); }
+  s.connect(f); f.connect(g); g.connect(MASTER); s.start(T); if (dur) s.stop(T + dur + 0.1); return { s, g, f };
+}
+
+// ---------- efeitos de interface ----------
+const SFX = {
+  tick: () => tone(1400, 0, 0.04, 'triangle', 0.05),
+  click: () => tone(620, 0, 0.05, 'triangle', 0.06, 420),
+  pop: () => { tone(520, 0, 0.08, 'sine', 0.08, 880); },
+  ok: () => { tone(660, 0, 0.1, 'triangle', 0.09); tone(990, 0.08, 0.16, 'triangle', 0.09); },
+  bad: () => { tone(300, 0, 0.12, 'square', 0.04, 220); tone(220, 0.1, 0.18, 'square', 0.04, 160); },
+  horn: () => { tone(233, 0, 0.9, 'sawtooth', 0.05); tone(311, 0, 0.9, 'sawtooth', 0.04); },
+  whistle: (n = 1) => { for (let i = 0; i < n; i++) { const t = i * 0.45; tone(2900, t, n > 1 && i === n - 1 ? 0.7 : 0.28, 'sine', 0.12, 2750); tone(3150, t, n > 1 && i === n - 1 ? 0.7 : 0.28, 'sine', 0.05); } },
+  coin: () => { tone(988, 0, 0.08, 'square', 0.04); tone(1319, 0.07, 0.2, 'square', 0.04); },
+};
+export function sfx(k, ...a) { if (k === 'whistle' ? SET.crowd === false : SET.sfx === false) return; try { SFX[k]?.(...a); } catch {} }
+window.PSFX = sfx;
+// clique em qualquer botão/ação
+document.addEventListener('pointerdown', (e) => { const b = e.target.closest?.('[data-a], button, .tile, .li.tap'); if (!b || b.disabled) return; if (b.closest('#live, .lboard') && !b.matches('button')) return; sfx('click'); }, { capture: true, passive: true });
+
+// ---------- torcida e jogo ----------
+let CROWD = null, crowdT = 0;
+function crowdOn(level = 0.35) {
+  if (SET.crowd === false || !ac()) return;
+  if (!CROWD) { CROWD = { a: noise(0, 0, level * 0.5, 520, 0.5, 1.5), b: noise(0, 0, level * 0.25, 1400, 0.8, 1.5) }; }
+  else { const t = AC.currentTime; CROWD.a.g.gain.linearRampToValueAtTime(level * 0.5, t + 0.8); CROWD.b.g.gain.linearRampToValueAtTime(level * 0.25, t + 0.8); }
+  clearInterval(crowdT); crowdT = setInterval(() => { if (!document.getElementById('live') && !document.querySelector('.mday')) crowdOff(); }, 1500);
+}
+function crowdOff() { clearInterval(crowdT); if (!CROWD || !AC) return; const t = AC.currentTime; for (const k of ['a', 'b']) { try { CROWD[k].g.gain.linearRampToValueAtTime(0.0001, t + 1); CROWD[k].s.stop(t + 1.2); } catch {} } CROWD = null; }
+function roar(mine = true) { if (SET.crowd === false) return; noise(0, mine ? 5 : 2.2, mine ? 0.9 : 0.35, 700, 0.4, 0.25); noise(0.1, mine ? 4.5 : 2, mine ? 0.4 : 0.15, 1800, 0.6, 0.3); if (mine) { tone(392, 0.2, 0.35, 'sawtooth', 0.03); tone(523, 0.55, 0.6, 'sawtooth', 0.03); } }
+function ooh() { if (SET.crowd === false) return; const n = noise(0, 1.6, 0.5, 420, 1.2, 0.2); if (n) n.f.frequency.linearRampToValueAtTime(300, AC.currentTime + 1.5); }
+export const PAUDIO = {
+  crowd: (lvl, secs) => { crowdOn(lvl); if (secs) setTimeout(() => { if (!document.getElementById('live')) crowdOff(); }, secs * 1000); },
+  crowdOff, roar, ooh,
+  whistle: (n) => sfx('whistle', n),
+  ev(e, mine) {
+    if (e.t === 'gol') { roar(mine); if (mine) setTimeout(() => sfx('horn'), 300); }
+    else if (e.t === 'trave' || e.t === 'def') ooh();
+    else if (e.t === 'int') sfx('whistle', 2);
+    else if (e.t === 'fim') sfx('whistle', 3);
+    else if (e.t === 'ver' || e.t === 'am' || e.t === 'pen') sfx('whistle', 1);
+  },
+};
+window.PAUDIO = PAUDIO;
+
+// ---------- narrador ----------
+export const CLIPS = {}; // frases gravadas (futuro): { gol: ['audio/narr/gol1.mp3', ...], trave: [...], ... }
+let voice = null; let lastSay = 0;
+function pickVoice() { try { const vs = speechSynthesis.getVoices(); voice = vs.find((v) => /pt[-_]BR/i.test(v.lang) && /male|masc|daniel|ricardo/i.test(v.name)) || vs.find((v) => /pt[-_]BR/i.test(v.lang)) || vs.find((v) => /^pt/i.test(v.lang)) || null; } catch {} }
+try { speechSynthesis.onvoiceschanged = pickVoice; pickVoice(); } catch {}
+export function say(text, key, prio = false) {
+  if (SET.voice === 'off' || !text) return;
+  const now = Date.now(); if (!prio && now - lastSay < 2500) return; lastSay = now;
+  const clip = key && CLIPS[key]?.length ? CLIPS[key][Math.floor(Math.random() * CLIPS[key].length)] : null;
+  if (clip) { try { new Audio(clip).play(); return; } catch {} }
+  const clean = String(text).replace(/<[^>]+>/g, '').replace(/[\p{Extended_Pictographic}\u{FE0F}]/gu, '').replace(/\s+/g, ' ').trim();
+  const N = window.PranchetaNative; if (N?.speak) { try { if (!prio && N.speaking?.()) return; N.speak(clean, key === 'gol' ? 1.15 : 1.05, key === 'gol' ? 1.12 : 1, !!prio); } catch {} return; }
+  try {
+    if (!('speechSynthesis' in window)) return; if (prio) speechSynthesis.cancel(); else if (speechSynthesis.speaking) return;
+    const u = new SpeechSynthesisUtterance(String(text).replace(/<[^>]+>/g, '').replace(/[\p{Extended_Pictographic}\u{FE0F}]/gu, '').replace(/\s+/g, ' ').trim());
+    u.lang = 'pt-BR'; if (voice) u.voice = voice; u.rate = key === 'gol' ? 1.15 : 1.05; u.pitch = key === 'gol' ? 1.15 : 1; u.volume = 1; speechSynthesis.speak(u);
+  } catch {}
+}
+export function sayStop() { try { window.PranchetaNative?.stopSpeak?.(); speechSynthesis.cancel(); } catch {} }
+try { window.PranchetaNative?.ttsReady?.(); } catch {}
+window.PSAY = say;
+
+// ---------- música do menu (pad suave gerado) ----------
+let MUS = null;
+const CH = [[220, 277.2, 329.6], [196, 246.9, 293.7], [174.6, 220, 261.6], [196, 246.9, 329.6]];
+export function musicOn() {
+  if (SET.music === false || MUS || !ac()) return; const a = AC; const g = a.createGain(); g.gain.value = 0.0001; g.connect(MASTER); g.gain.linearRampToValueAtTime(0.05, a.currentTime + 3);
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.connect(g);
+  let i = 0; const play = () => { if (!MUS) return; const t = a.currentTime; for (const f of CH[i % CH.length]) for (const det of [-4, 4]) { const o = a.createOscillator(), og = a.createGain(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det; og.gain.setValueAtTime(0.0001, t); og.gain.linearRampToValueAtTime(0.12, t + 1.2); og.gain.linearRampToValueAtTime(0.0001, t + 4.2); o.connect(og); og.connect(lp); o.start(t); o.stop(t + 4.3); }
+    const bo = a.createOscillator(), bg = a.createGain(); bo.type = 'sine'; bo.frequency.value = CH[i % CH.length][0] / 2; bg.gain.setValueAtTime(0.0001, t); bg.gain.linearRampToValueAtTime(0.25, t + 0.4); bg.gain.linearRampToValueAtTime(0.0001, t + 3.8); bo.connect(bg); bg.connect(lp); bo.start(t); bo.stop(t + 4);
+    i++; MUS.t = setTimeout(play, 3800); };
+  MUS = { g, t: 0 }; play();
+}
+export function musicOff() { if (!MUS) return; clearTimeout(MUS.t); try { MUS.g.gain.linearRampToValueAtTime(0.0001, AC.currentTime + 1); } catch {} MUS = null; }
+// o navegador só libera áudio depois de um toque
+document.addEventListener('pointerdown', () => { ac(); if (document.querySelector('.rc-title')) musicOn(); }, { once: true, capture: true });

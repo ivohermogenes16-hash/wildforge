@@ -10,11 +10,41 @@ import { MatchViz } from './viz.js';
 import { Match3D } from './m3d.js';
 import { playLance } from './lance.js';
 import { openPress } from './press.js';
+import { openLiveBoard } from './livetat.js';
 import { ratings } from '../engine/match.js';
+import { assistReport, assistBonus, PLAYS } from '../engine/coach.js';
 const ratingsOf = (G, club, lu) => { try { return ratings(G, club, lu.xi, 0, club.tact); } catch { return null; } };
+import { bigGame } from '../engine/life.js';
+import { PAUDIO, say } from './audio.js';
+import { socialAfterMatch } from '../engine/social.js';
 import { userMatchBonus, isDerby, pressBefore, pressAfter, pressDecision, staffQ, resolveDecision } from '../engine/life.js';
 
 let L = null;
+
+// ---------- auxiliar técnico: analisa o adversário de verdade e sugere ajustes ----------
+function getReport(G, f, c, opp, lu, youth) {
+  const key = G.t + ':' + f.i; if (f._ar && f._ark === key) return f._ar;
+  const q = Math.max(staffQ(G, c, 'aux'), staffQ(G, c, 'ana'));
+  const me = youth ? { ...c, tact: G.me.u20tact || c.tact } : c;
+  f._ar = assistReport(G, me, opp, lu.xi, youth, q); f._ark = key; return f._ar;
+}
+function assistCard(G, f, c, opp, lu, youth) {
+  let rep; try { rep = getReport(G, f, c, opp, lu, youth); } catch (e) { console.warn(e); return ''; }
+  const tact = youth ? G.me.u20tact : c.tact; const b = assistBonus(rep, tact);
+  const aux = c.staff?.aux?.n || 'Auxiliar técnico';
+  const T = rep.oppT || {};
+  const pl = rep.plays || {};
+  if (!rep.items.length) return `<div class="card flat ast"><div class="ast-h"><span class="ast-av">🧑‍💼</span><div class="grow"><b>${esc(aux)}</b><div class="xs mut">Auxiliar técnico</div></div></div><div class="xs">Analisei o ${esc(opp.name)} (${esc(T.form || '')}) e não achei um ponto fraco claro. Mantenha o que vem dando certo.</div></div>`;
+  return `<div class="card flat ast"><div class="ast-h"><span class="ast-av">🧑‍💼</span><div class="grow"><b>${esc(aux)}</b><div class="xs mut">Auxiliar técnico · analisou o ${esc(opp.name)}</div></div>${b.hit.length ? `<span class="ast-ok">✓ ${b.hit.length}/${rep.items.length}</span>` : ''}</div>
+  <div class="xs mut" style="margin:2px 0 8px">Eles jogam no <b>${esc(T.form || '?')}</b>, mentalidade ${['defensiva', 'equilibrada', 'ofensiva'][T.ment ?? 1]}, pressão ${['baixa', 'média', 'alta'][T.press ?? 1]}. Defendem pior: escanteio <b>${esc(PLAYS.ck[pl.ck]?.[1] || '')}</b> e falta <b>${esc(PLAYS.fk[pl.fk]?.[1] || '')}</b>.</div>
+  ${rep.items.map((it, i) => { const on = b.hit.includes(it.id); return `<div class="ast-it${on ? ' on' : ''}"><span class="ast-ic">${it.ic}</span><div class="grow"><b class="sm">${esc(it.t)}</b><div class="xs mut">${esc(it.why)}</div></div>${on ? '<span class="ast-done">Aplicado</span>' : `<button class="btn sm" data-a="aapply" data-v="${f.i}:${i}">Aplicar</button>`}</div>`; }).join('')}
+  <div class="row" style="gap:6px;margin-top:8px">${b.hit.length < rep.items.length ? `<button class="btn sm pri grow" data-a="aapply" data-v="${f.i}:all">✨ Aplicar tudo</button>` : '<div class="xs ok grow">Plano de jogo montado. O time entra com vantagem tática.</div>'}${rep.plays ? `<button class="btn sm" data-a="aplays" data-v="${f.i}">🚩 Bolas paradas</button>` : ''}</div></div>`;
+}
+H.aapply = (v) => { const G = S.G; const [fi, w] = v.split(':'); const f = G.fix[+fi]; const rep = f._ar; if (!rep) return; const c = myClub(G); const youth = G.me.job.youth; const tact = youth ? G.me.u20tact : c.tact;
+  const its = w === 'all' ? rep.items : [rep.items[+w]]; for (const it of its) { Object.assign(tact, it.apply); if (it.plays) tact.plays = { ...(tact.plays || {}), ...it.plays }; }
+  save(); window.PSFX?.('ok'); notify(w === 'all' ? 'Plano do auxiliar aplicado' : 'Ajuste aplicado', 'ok'); closeSheet(true); preMatch(f); };
+H.aplays = (v) => { const G = S.G; const f = G.fix[+v]; const rep = f._ar; if (!rep?.plays) return; const c = myClub(G); const youth = G.me.job.youth; const tact = youth ? G.me.u20tact : c.tact; tact.plays = { ...(tact.plays || {}), ...rep.plays }; save(); window.PSFX?.('ok'); notify('Jogadas ensaiadas ajustadas', 'ok'); closeSheet(true); preMatch(f); };
+const notify = (t, k) => (window.PBANNER ? window.PBANNER(t, k) : toast(t));
 
 export function preMatch(f) {
   const G = S.G; const c = myClub(G); const youth = G.me.job.youth;
@@ -37,7 +67,7 @@ export function preMatch(f) {
   ${probs.length ? `<div class="hint bad row" style="margin-bottom:8px;gap:8px;align-items:center"><span class="grow">⚠️ Fora deste jogo: ${probs.map((p) => esc(shortName(p.n)) + (p.inj > 0 ? ' 🩹' : ' 🟥')).join(', ')}. Se você não trocar, o melhor reserva entra só nesta partida — sua escalação salva continua igual.</span><button class="btn sm" data-a="prelu">Trocar</button></div>` : ''}
   ${tired.length ? `<div class="hint warn row" style="margin-bottom:8px;gap:8px;align-items:center"><span class="grow">😮‍💨 Cansados: ${tired.map((p) => esc(shortName(p.n)) + ' ' + Math.round(p.fit) + '%').join(', ')}</span><button class="btn sm" data-a="poupar" data-v="${f.i}">🔁 Poupar</button></div>` : ''}
   ${pm ? `<div class="press-cta" data-a="opress" data-v="${pm.id}:pre:${f.i}"><span class="pc-mic">🎤</span><div class="grow"><b>Coletiva pré-jogo</b><div class="xs mut ell">${esc(pm.rep?.n || 'Repórter')} (${esc(pm.rep?.o || 'Imprensa')}) quer uma palavra</div></div><span class="btn sm pri">Ir à coletiva</span></div>` : ''}
-  ${!youth && ana >= 9 ? `<div class="hint" style="margin-bottom:8px">🔎 Analista (${ana}/20): o ${esc(opp.name)} joga no ${esc(opp.tact.form)} com mentalidade ${['defensiva', 'equilibrada', 'ofensiva'][opp.tact.ment]}. Ponto fraco: <b>${weak}</b>.</div>` : ''}
+  ${assistCard(G, f, c, opp, lu, youth)}
   ${!youth ? (() => { const st = oppStudy(G, opp); const rv = rivalOfClub(G, opp); const lines = R ? scoutReport(G, opp, R) : []; return `<div class="card flat"><h3>📋 Relatório do adversário</h3>${lines.map((l) => `<div class="xs" style="margin-bottom:3px">• ${esc(l)}</div>`).join('')}${st.extra > 0 ? `<div class="hint warn" style="margin-top:6px">🧠 Eles estudaram você: seu ${esc(st.form)} apareceu em ${Math.round(st.share * 100)}% dos últimos jogos. Vão neutralizá-lo (+${st.extra} de força para eles). Varie a formação!</div>` : st.n >= 5 ? '<div class="xs ok" style="margin-top:4px">✅ Você tem variado a tática: o rival não conseguiu te estudar.</div>' : ''}${rv ? `<div class="hint" style="margin-top:6px">⚔️ ${rv === 2 ? 'Grande rival' : 'Rival'}: ${esc(coachOf(G, opp)?.n || '')}. Jogo com mais repercussão na torcida e na imprensa.</div>` : ''}</div>`; })() : ''}
   <div class="card flat"><h3>Destaques do adversário · ${esc(opp.tact.form)}</h3><div class="list">${best.map((p) => `<div class="li">${face(p, 28, opp)}<span class="grow b ell">${esc(p.n)}</span>${posTag(p.pos)}<b>${p.ovr}</b></div>`).join('')}</div></div>
   <div class="col"><button class="btn pri big blk" data-a="golive" data-v="${f.i}">▶ Jogar ao vivo</button>
@@ -45,7 +75,7 @@ export function preMatch(f) {
 }
 H.prelu = () => { closeSheet(true); S.tab = 'tat'; S.page = null; render(); };
 
-function setup(f) {
+export function setup(f) {
   const G = S.G; const c = myClub(G); const youth = G.me.job.youth;
   const side = f.h === c.id ? 0 : 1;
   myLineup(); const lu = lineupFor(G, youth ? { ...c, tact: G.me.u20tact || c.tact } : c, youth);
@@ -54,7 +84,8 @@ function setup(f) {
   const opp = G.clubs[side ? f.h : f.a];
   const ol = lineupFor(G, opp, youth);
   const ub = userMatchBonus(G, c);
-  const mine = { club: c, xi: lu.xi.slice(), bench: lu.bench.slice(), tact: { ...tact }, user: true, extra: (train?.foco === 'tatico' ? 1 : 0) + ub.all, bon: { att: ub.att, def: ub.def } };
+  let ab = { att: 0, def: 0, ctl: 0 }; try { const rep = getReport(G, f, c, opp, lu, youth); ab = assistBonus(rep, tact); } catch (e) { console.warn(e); }
+  const mine = { club: c, xi: lu.xi.slice(), bench: lu.bench.slice(), tact: { ...tact }, user: true, extra: (train?.foco === 'tatico' ? 1 : 0) + ub.all + ([1.5, 0, -1, -2][G.me.diff ?? 1] || 0), bon: { att: ub.att + ab.att, def: ub.def + ab.def, ctl: ab.ctl } };
   const st = youth ? { extra: 0 } : oppStudy(G, opp);
   const theirs = { club: opp, xi: ol.xi.slice(), bench: ol.bench.slice(), tact: { ...opp.tact }, extra: st.extra + (rivalOfClub(G, opp) ? 0.4 : 0) };
   if (st.counter != null && st.extra > 0) theirs.tact.ment = st.counter;
@@ -74,10 +105,28 @@ H.poupar = (v) => {
   save(); toast(n ? `${n} titular${n > 1 ? 'es' : ''} poupado${n > 1 ? 's' : ''}` : 'Sem reservas descansados à altura'); closeSheet(true); preMatch(G.fix[+v]);
 };
 H.goquick = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m } = setup(f); finishMatch(f, m.finish(true)); };
-H.golive = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m, side } = setup(f); launchLive(f, m, side, S.G.clubs[f.h], S.G.clubs[f.a], null); };
+H.golive = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m, side } = setup(f); const go = () => launchLive(f, m, side, S.G.clubs[f.h], S.G.clubs[f.a], null);
+  const big = S.G.me.job?.youth ? false : bigGame(S.G, f); if (big && SET.matchday !== false) matchDay(f, m, big, go); else go(); };
+// ---------- dia de jogo (só em jogo grande) ----------
+function matchDay(f, m, big, go) {
+  const G = S.G; const hc = G.clubs[f.h], ac = G.clubs[f.a]; const comp = G.comps[f.c];
+  const T = { classico: 'DIA DE CLÁSSICO', final: 'É DIA DE FINAL', semi: 'JOGO DECISIVO', mata: 'MATA-MATA', topo: 'BRIGA PELO TOPO', fundo: 'JOGO DE SEIS PONTOS', gigante: 'NOITE DE GIGANTE' }[big] || 'JOGO GRANDE';
+  const sub = { classico: 'A cidade parou. Só se fala disso.', final: 'Noventa minutos separam o time da glória.', semi: 'Um passo da final.', mata: 'Perdeu, tá fora.', topo: 'Quem vencer dorme mais perto do título.', fundo: 'Perder aqui pode custar a divisão.', gigante: 'Ninguém aposta em vocês. Hora de calar o estádio.' }[big] || '';
+  const stad = hc.stad || 'Estádio'; const cap = (hc.cap || 20) * 1000; const pub = Math.round(cap * (0.86 + Math.random() * 0.14));
+  const wx = { sol: '☀️ Sol', nublado: '☁️ Nublado', chuva: '🌧️ Chuva', frio: '🧊 Frio', calor: '🔥 Calor' }[m.weather] || '';
+  const el = document.createElement('div'); el.className = 'mday'; el.innerHTML = `<div class="md-bg"><i></i><i></i><i></i><i></i></div><div class="md-in">
+   <div class="md-tag">${esc(comp.name)} · ${esc(fixPhase(f))}</div><div class="md-t">${T}</div><div class="md-sub">${esc(sub)}</div>
+   <div class="md-vs"><div class="md-c">${crest(hc, 74)}<b>${esc(hc.name)}</b></div><span>×</span><div class="md-c">${crest(ac, 74)}<b>${esc(ac.name)}</b></div></div>
+   <div class="md-info"><span>🏟️ ${esc(stad)}</span><span>👥 ${pub.toLocaleString('pt-BR')} torcedores</span>${wx ? `<span>${wx}</span>` : ''}<span>🧑‍⚖️ ${esc(m.ref?.nome || '')}</span></div>
+   <button class="btn pri big md-go">▶ Entrar em campo</button></div>`;
+  document.body.appendChild(el); try { window.PAUDIO?.crowd?.(0.6, 4); window.PSFX?.('horn'); } catch {}
+  el.querySelector('.md-go').onclick = () => { el.classList.add('out'); setTimeout(() => { el.remove(); go(); }, 380); };
+}
+
 export function launchLive(f, m, side, hc, ac, done) {
   const G = S.G;
   try { window.LumbraAnalytics?.event('partida_inicio', { modo: m || '', base: G.me.job?.youth ? 1 : 0 }); } catch {}
+  try { PAUDIO.crowd(0.35); setTimeout(() => PAUDIO.whistle(1), 900); } catch {}
   const wrap = document.createElement('div'); wrap.className = 'live-wrap'; wrap.id = 'live';
   wrap.innerHTML = `<div class="lv">
    <div class="lv-top">
@@ -163,7 +212,7 @@ function evText(e) {
   const sc = () => `${L.viz.score[0]} a ${L.viz.score[1]}`;
   switch (e.t) {
     case 'ini': return pk(['🟢 Bola rolando! Começa o jogo.', '🟢 Apita o árbitro, está valendo!', '🟢 Rola a bola para mais um capítulo dessa história.']);
-    case 'gol': return `⚽ ${e.lance ? '🎯 ' : ''}${pk(NARR()[0])} do ${team(e.side)}!${e.pen ? ' De pênalti!' : ''}${e.var ? ' (VAR confirma)' : ''} ${pk([`${nm(e.p)} não perdoa`, `${nm(e.p)} manda para o fundo da rede`, `${nm(e.p)} bate com categoria`, `${nm(e.p)} aparece livre e marca`])}${e.as >= 0 ? ` <span class="mut">(assist. ${nm(e.as)})</span>` : ''}. ${sc()}!`;
+    case 'gol': return `⚽ ${e.lance ? '🎯 ' : ''}${pk(NARR()[0])} do ${team(e.side)}!${e.pen ? ' De pênalti!' : ''}${e.bp === 'ck' ? ' Jogada ensaiada de escanteio!' : e.bp === 'fk' ? (e.play === 'direto' ? ' Golaço de falta!' : ' Em cobrança de falta!') : ''}${e.var ? ' (VAR confirma)' : ''} ${pk([`${nm(e.p)} não perdoa`, `${nm(e.p)} manda para o fundo da rede`, `${nm(e.p)} bate com categoria`, `${nm(e.p)} aparece livre e marca`])}${e.as >= 0 ? ` <span class="mut">(assist. ${nm(e.as)})</span>` : ''}. ${sc()}!`;
     case 'def': if (e.pen || e.lance) return `🧤 ${nm(e.gk)} defende a cobrança de ${nm(e.p)}!`; return pk([`🧤 Que defesa de ${nm(e.gk)}! ${nm(e.p)} parou no goleiro`, `🧤 ${nm(e.p)} chuta e ${nm(e.gk)} espalma`, `🧤 ${nm(e.gk)} voa e segura o chute de ${nm(e.p)}`]);
     case 'trave': return pk([`😱 NA TRAVE! ${nm(e.p)} acerta o poste`, `😱 Explode no travessão! ${nm(e.p)} quase marca`, `😱 Que azar, ${nm(e.p)}! A bola bate na trave`]);
     case 'fora': return pk([`${nm(e.p)} finaliza para fora`, `${nm(e.p)} arrisca de longe… por cima`, `${nm(e.p)} pega mal na bola e manda à linha de fundo`, `Perigo! ${nm(e.p)} tira tinta da trave`]);
@@ -211,6 +260,7 @@ function onEv(e, quiet) {
   stats();
   if (quiet) return;
   if (e.t === 'gol') vibrate(e.side === L.side ? [80, 60, 80] : 40);
+  try { PAUDIO.ev(e, e.side === L.side); if (e.t === 'gol') say(evText(e), 'gol', true); else if (['trave', 'ver', 'pen', 'int', 'fim'].includes(e.t)) say(evText(e), e.t); else if (e.t === 'nar' && Math.random() < 0.5) say(e.txt, 'nar'); } catch {}
   if (e.t === 'les' && e.side === L.side) { L.viz.paused = true; updPause(); toast('Seu jogador se machucou! Faça uma substituição.'); }
   if (e.t === 'ver' && e.side === L.side) toast('Expulsão! Considere ajustar o time.');
 }
@@ -242,7 +292,8 @@ H.lpause = () => { L.viz.paused = !L.viz.paused; updPause(); };
 H.lspeed = () => { const v = L.viz; v.speed = v.speed === 1 ? 2 : v.speed === 2 ? 4 : v.speed === 4 ? 8 : 1; document.getElementById('lsp').textContent = v.speed + 'x'; };
 H.lskip = () => { for (const sd of L.m.s) sd.user = false; L.viz.skipToEnd(); document.getElementById('lsc').textContent = `${L.m.score[0]} – ${L.m.score[1]}`; };
 
-H.ltact = () => {
+H.ltact = () => { if (!L) return; openLiveBoard(L, { updPause, addFeed, notice: (t) => toast(t) }); };
+H.ltactOld = () => {
   if (!L) return;
   L.viz.paused = true; updPause();
   const G = S.G, m = L.m, s = L.side, sd = m.s[s];
@@ -326,6 +377,7 @@ export function finishMatch(f, res) {
   if (f.ko >= 0 && res.hg === res.ag) res.pen = penalties();
   const w = f.w, sl = f.s, c = myClub(G);
   playSlot(G, res);
+  try { if (!G.me.job?.youth && SET.social !== false) socialAfterMatch(G, f, c); } catch (e) { console.warn(e); }
   save(); render();
   const hc = G.clubs[f.h], ac = G.clubs[f.a];
   const ev = f.ev || [];

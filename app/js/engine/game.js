@@ -1,6 +1,7 @@
+import { checkPromises } from './coach.js';
 import { LEAGUES, RESERVE } from '../data/leagues.js';
 import { clamp, ri, rf, rnd, gauss, pick, shuffle, money } from '../util.js';
-import { SEASON_WEEKS, TICKET, coachWage, playerWage, playerValue } from './econ.js';
+import { prizeOf, LEAGUE_PRIZE, PROMO_BONUS, SEASON_WEEKS, TICKET, coachWage, playerWage, playerValue } from './econ.js';
 import { createWorld, makePlayer, genName, buildU20, clubLevel, START_YEAR, newFin, initFinances, QUOTA } from './world.js';
 import { setupSeason, progressComps, recordResult, standings, koWinner, CUPS, CONTS } from './season.js';
 import { autoLineup, quickSim, penalties, validLineup, FORMATIONS, FITPOS, effAt, available, formOf } from './match.js';
@@ -19,7 +20,7 @@ import { coachOf, isDerby as derbyOf } from './life.js';
 
 export function newGame(opts) {
   try { window.LumbraAnalytics?.event('carreira_nova', { base: opts?.youth ? 1 : 0 }); } catch {}
-  const G = { v: 1, year: START_YEAR, week: 0, slot: 0, t: 0, inbox: [], news: [], events: [], vac: [], short: [], seen: {}, qual: null };
+  const G = { v: 1, econ: 2, year: START_YEAR, week: 0, slot: 0, t: 0, inbox: [], news: [], events: [], vac: [], short: [], seen: {}, qual: null };
   createWorld(G);
   G.me = {
     name: opts.name || 'Técnico', age: opts.age || 32, rep: opts.mode === 'livre' ? 45 : opts.mode === 'baixo' ? 18 : 12, money: opts.mode === 'livre' ? 150000 : opts.mode === 'baixo' ? 40000 : 25000,
@@ -294,14 +295,29 @@ function aiCoachAfter(G, f) {
   }
 }
 
+const STAGE_N = { 32: 'r32', 16: 'r16', 8: 'r8', 4: 'r4' };
+const STAGE_T = { r32: 'a 3ª fase', r16: 'as oitavas de final', r8: 'as quartas de final', r4: 'a semifinal' };
+// paga premiação e, se for o clube do usuário, a diretoria libera parte para reforços
+export function payPrize(G, c, v, why) {
+  if (!c || !v) return; v = Math.round(v); c.money += v; c.fin.prize += v;
+  const j = G.me.job;
+  if (j && !j.youth && j.cid === c.id && v >= 200000) {
+    const k = { conservadora: 0.35, ambiciosa: 0.7, formadora: 0.45 }[c.board?.type] ?? 0.5; const rel = Math.round(v * k / 1000) * 1000;
+    c.extraWB = (c.extraWB || 0) + Math.round(rel * 0.12 / 52);
+    G.me.verba = (G.me.verba || 0) + rel;
+    msg(G, 'Diretoria', `💰 ${why}`, `O clube recebeu ${money(v)} de premiação. A diretoria liberou ${money(rel)} para contratações e aumentou o teto salarial em ${money(Math.round(rel * 0.12 / 52))}/sem. até o fim da temporada.`, { prize: v, rel });
+  }
+}
 function onEvent(G, e) {
+  if (e.t === 'advance') { const comp = G.comps[e.c]; const st = STAGE_N[e.n]; if (!comp || !st) return; for (const cid of e.clubs) payPrize(G, G.clubs[cid], prizeOf(comp, st), `${comp.short || comp.name}: classificado para ${STAGE_T[st]}`); return; }
+  if (e.t === 'contgroups') { const comp = G.comps[e.c]; if (!comp) return; for (const cid of e.clubs) payPrize(G, G.clubs[cid], prizeOf(comp, 'part'), `${comp.short || comp.name}: cota da fase de grupos`); return; }
   if (e.t !== 'champion') return;
   const comp = G.comps[e.c]; const c = G.clubs[e.club];
   c.troph.push({ y: G.year, c: comp.name });
   news(G, `🏆 ${c.name} é campeão: ${comp.name} ${G.year}!`);
-  const prize = comp.prize || (comp.kind === 'league' ? (comp.tv || 1e6) * 0.25 : comp.kind === 'youth' ? 300000 : 100000);
-  c.money += prize; c.fin.prize += prize;
-  if (comp.runnerUp != null) { const r = G.clubs[comp.runnerUp]; r.money += prize * 0.45; r.fin.prize += prize * 0.45; }
+  const prize = comp.kind === 'cup' || comp.kind === 'cont' ? prizeOf(comp, 'champ') : comp.kind === 'league' ? 0 : comp.kind === 'youth' ? 300000 : comp.kind === 'state' ? Math.max(500000, (comp.prize || 0)) : 100000;
+  if (prize) payPrize(G, c, prize, `🏆 Título: ${comp.name}`);
+  if (comp.runnerUp != null && (comp.kind === 'cup' || comp.kind === 'cont')) payPrize(G, G.clubs[comp.runnerUp], prizeOf(comp, 'runner'), `🥈 Vice: ${comp.name}`);
   const j = G.me.job;
   const userWon = j && j.cid === e.club && (j.youth ? comp.id === 'U20' : comp.kind !== 'youth');
   if (comp.kind !== 'youth') sponsorTitleBonus(G, c);
@@ -320,6 +336,7 @@ function onEvent(G, e) {
 
 // ---------------- Semana ----------------
 function endWeek(G) {
+  try { checkPromises(G); } catch (e) { console.warn(e); }
   const wages = new Map();
   for (const p of G.players) { if (!p || p.club < 0) continue; if (p.loan) { const sh = p.loan.share ?? 1; wages.set(p.club, (wages.get(p.club) || 0) + p.wage * sh); wages.set(p.loan.from, (wages.get(p.loan.from) || 0) + p.wage * (1 - sh)); } else wages.set(p.club, (wages.get(p.club) || 0) + p.wage); }
   for (const c of G.clubs) {
@@ -419,10 +436,14 @@ function coachMarket(G) {
     if (v.youth && me.job && !me.job.youth) continue;
     if (blockedOffer(G, c)) continue;
     const effRep = me.rep + (me.pop || 0) / 12;
-    if (c.rep > effRep + lim || c.rep < effRep - 40) continue;
-    const pr = mineSenior ? 0.6 : v.youth ? 0.12 : 0.22;
+    if (c.rep > effRep + lim || c.rep < effRep - (me.job ? 15 : 22)) continue;
+    // 5.0: propostas raras e coerentes — empregado só recebe de clube maior que o atual, no máx. 1 a cada ~8 semanas
+    const cur = me.job ? G.clubs[me.job.cid] : null;
+    if (cur && !mineSenior && !me.job.youth && c.rep < cur.rep + 4) continue;
+    if (!mineSenior && me.lastOffer != null && G.t - me.lastOffer < (me.job ? 8 : 3)) continue;
+    const pr = mineSenior ? 0.6 : v.youth ? 0.1 : me.job ? 0.08 : 0.25;
     if (rnd() < pr) {
-      v.offered = true; sent++;
+      v.offered = true; sent++; me.lastOffer = G.t;
       const wage = coachWage(c.rep, c.country, v.youth);
       const J = jobInfo(G, c.id); const st = ['', 'muito fácil', 'fácil', 'equilibrado', 'difícil', 'muito difícil'][J.diff];
       msg(G, c.name, `Proposta de emprego: ${c.name}${v.youth ? ' (Sub-20)' : ''}`, `O ${c.name} (${G.comps[c.league]?.short || 'sem liga'}) quer você como técnico${v.youth ? ' do sub-20' : ''}.\nSalário: ${money(wage)}/semana · contrato de ${J.project ? 3 : 2} anos.\n\n🎯 Expectativa: ${J.idt.expect}\n📊 Elenco: ${J.rank}º mais forte de ${J.n}${J.pos ? ` · posição atual: ${J.pos}º` : ''}\n💰 Finanças: ${J.idt.fin} · verba para contratações ~${money(J.budget)}\n🏟️ Estrutura: CT ${J.infra.ct || 2}, base ${J.infra.base || 2}, médico ${J.infra.med || 2}\n📣 Torcida: ${Math.round(J.fans ?? 50)}% satisfeita · diretoria ${c.board.type}\n⚖️ Dificuldade do projeto: ${st}${J.project ? `\n🌱 ${J.project}` : ''}\n\nNa negociação você pode pedir salário, anos, bônus por título e por meta, verba e ajustar a meta.\nA proposta vale por 2 semanas.`, { kind: 'job', cid: v.cid, youth: !!v.youth, exp: G.t + 2 });
@@ -503,7 +524,7 @@ function endSeason(G) {
   // premiação por posição
   for (const L of LEAGUES) {
     const comp = G.comps[L.id]; if (!comp) continue;
-    comp.groups.forEach((g, gi) => standings(G, comp, gi).forEach((cid, i) => { const c = G.clubs[cid]; const pr = L.tv * 0.2 * Math.max(0, 1 - i / g.length); c.money += pr; c.fin.prize += pr; c.hist.push({ y, lg: L.short, pos: i + 1 }); if (c.hist.length > 15) c.hist.shift(); }));
+    comp.groups.forEach((g, gi) => standings(G, comp, gi).forEach((cid, i) => { const c = G.clubs[cid]; const P = LEAGUE_PRIZE[L.id] ?? L.tv * 0.25; const pr = Math.round(P * Math.pow(Math.max(0, 1 - i / g.length), 1.4) / (comp.groups.length)); if (pr) { if (G.me.job && G.me.job.cid === cid && !G.me.job.youth) payPrize(G, c, pr, `Premiação: ${i + 1}º lugar na ${L.short}`); else { c.money += pr; c.fin.prize += pr; } } c.hist.push({ y, lg: L.short, pos: i + 1 }); if (c.hist.length > 15) c.hist.shift(); }));
   }
   seasonAwards(G); try { bigAwards(G); seasonRecap(G); } catch (e) { console.warn(e); } secondaryEnd(G); loansSeasonEnd(G);
   // classificação continental
@@ -554,6 +575,8 @@ function endSeason(G) {
     const c = G.clubs[id]; const from = c.league;
     c.league = to;
     c.rep = clamp(c.rep + (dir === 'up' ? 3 : -3), 3, 99);
+    if (from && to && dir === 'up') { const b = PROMO_BONUS[from] ?? (LEAGUES.find((l) => l.id === to)?.tv || 0) * 0.08; payPrize(G, c, b, `⬆️ Bônus de acesso para a ${LEAGUES.find((l) => l.id === to).short}`); }
+    if (from && dir === 'down') { const Lf = LEAGUES.find((l) => l.id === from); if (Lf && Lf.tier === 1) { const para = Math.round(Lf.tv * 0.2); c.money += para; c.fin.prize += para; } }
     if (from) news(G, dir === 'up' ? `⬆️ ${c.name} conquista o acesso para ${to ? LEAGUES.find((l) => l.id === to).short : '?'}!` : `⬇️ ${c.name} é rebaixado${to ? '' : ' e sai das divisões nacionais'}.`);
     if (!to && me.job && me.job.cid === id) { msg(G, 'Clube', '📄 Clube fora das divisões do jogo', `O ${c.name} caiu para uma divisão que não é disputada no jogo. Seu contrato foi encerrado e você está livre no mercado.`); me.hist[me.hist.length - 1].to = 46; me.job = null; }
     if (me.job && me.job.cid === id && !me.job.youth) { me.rep = clamp(me.rep + (dir === 'up' ? 5 : -7), 1, 99); msg(G, 'Diretoria', dir === 'up' ? '⬆️ Acesso conquistado!' : '⬇️ Rebaixamento', dir === 'up' ? `O ${c.name} subiu de divisão! A torcida está em festa.` : `O ${c.name} foi rebaixado. A diretoria vai avaliar seu futuro.`); if (dir === 'down') c.board.conf -= 25; }
@@ -597,7 +620,7 @@ function endSeason(G) {
     c.troph = c.troph.slice(-40);
     if (!(me.job && me.job.cid === c.id) && c.own.user < 51) initSponsor(G, c);
     else c.spon = Math.round(Math.max(c.spon * (0.9 + c.rep / 500), c.rep * c.rep * 1500));
-    c.lastFin = c.fin; c.fin = newFin();
+    c.lastFin = c.fin; c.fin = newFin(); c.extraWB = 0;
   }
   if (me.job) { const mc = G.clubs[me.job.cid]; mc.yb = baseBudget(mc) + Math.round((mc.yb || 0) * 0.3); }
   if (G.nat) natSeasonEnd(G);
