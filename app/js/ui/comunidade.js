@@ -2,7 +2,7 @@
 import { S, H, openSheet, closeSheet, replaceSheet } from './app.js';
 import { esc } from '../util.js';
 export const WA = 'https://chat.whatsapp.com/C44zXTaeoOcJqcsTmjMAwX';
-export const VER = '5.0';
+export const VER = '5.1';
 export function openLink(u) { try { if (window.PranchetaNative?.openUrl) { window.PranchetaNative.openUrl(u); return; } } catch {} window.open(u, '_blank'); }
 function device() { const ua = navigator.userAgent; const a = ua.match(/Android [\d.]+/)?.[0] || (/(iPhone|iPad)/.test(ua) ? 'iOS' : 'Navegador'); const mdl = ua.match(/; ([^;)]+) Build/)?.[1] || ''; let b = ''; try { b = window.PranchetaNative?.versionCode ? ' build ' + window.PranchetaNative.versionCode() : ''; } catch {} return `${a}${mdl ? ' · ' + mdl : ''} · Prancheta ${VER}${b}`; }
 export function comuHtml() {
@@ -33,3 +33,24 @@ export function firstCommunity() {
     <div class="cm-pts"><span>💡 Sugira ideias</span><span>🐞 Avise de bugs</span><span>🆕 Novidades antes</span></div>
     <button class="btn pri big blk" data-a="cmjoin">🤝 Entrar na comunidade</button><button class="btn ghost blk" style="margin-top:6px" data-a="cs">Agora não</button><div class="xs mut" style="margin-top:6px">Dá pra entrar depois pelo menu "Comunidade".</div></div>`); }, 1400);
 }
+
+// ---------- 5.1: vídeo da atualização ----------
+// O vídeo pode vir junto do jogo (VIDEO_LOCAL) ou ser ligado pelo Lumbra Control (remote.video: { on, ver, title, yt, mp4 }).
+export const VIDEO_LOCAL = { ver: VER, title: '', mp4: null, yt: null };
+let RV = null; try { window.LumbraAnalytics?.onRemote((r) => { RV = r && r.video && r.video.on ? r.video : null; document.querySelectorAll('.vid-slot').forEach((el) => (el.innerHTML = videoCard())); }); } catch {}
+export function videoInfo() { const v = RV || VIDEO_LOCAL; return v && (v.mp4 || v.yt) ? v : null; }
+const ytId = (u) => (String(u || '').match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{6,})/) || [])[1];
+window.PVIDCARD = () => videoCard();
+export function videoCard() {
+  const v = videoInfo(); if (!v) return '';
+  return `<button class="vid-card" data-a="vidopen"><span class="vid-play">▶</span><div class="grow"><small>NOVIDADES DA VERSÃO ${esc(v.ver || VER)}</small><b>${esc(v.title || 'Veja o vídeo da atualização')}</b></div></button>`;
+}
+H.vidopen = () => {
+  const v = videoInfo(); if (!v) return; try { localStorage.setItem('prancheta.vid', v.ver || VER); } catch {}
+  const id = ytId(v.yt);
+  const player = v.mp4 ? `<video class="vid-v" src="${esc(v.mp4)}" controls autoplay playsinline></video>` : id ? `<div class="vid-yt"><iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0&playsinline=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe></div>` : '';
+  openSheet(`<h2>🎬 Novidades da versão ${esc(v.ver || VER)}</h2>${player}<div class="row" style="gap:8px;margin-top:10px">${v.yt ? `<button class="btn pri grow" data-a="vidyt">▶ Ver no YouTube</button>` : ''}<button class="btn grow" data-a="cs">Fechar</button></div><p class="xs mut" style="margin-top:8px">Curtiu? Se inscreve no canal e comenta lá o que você quer na próxima atualização!</p>`);
+};
+H.vidyt = () => { const v = videoInfo(); if (v?.yt) openLink(v.yt); };
+// abre sozinho uma vez quando a pessoa entra numa versão nova que tem vídeo
+export function videoFirstTime() { const v = videoInfo(); if (!v) return; let seen = ''; try { seen = localStorage.getItem('prancheta.vid') || ''; } catch {} if (seen === (v.ver || VER)) return; setTimeout(() => { if (!document.querySelector('.sheet-wrap, .sheet')) H.vidopen(); }, 2200); }

@@ -147,7 +147,8 @@ function buildU20x(G, c) {
   const q = { GOL: 2, LD: 2, ZAG: 3, LE: 2, VOL: 2, MC: 2, MEI: 2, PE: 2, PD: 2, ATA: 2 };
   for (const pos of POS) for (let i = 0; i < q[pos]; i++) {
     const age = ri(16, 20);
-    const p = makePlayer(G, { n: genName('BR'), pos, age, ovr: L + gauss() * 4 - (20 - age), club: c.id, u20: true, nat: 'BR', wage: 300 + ri(0, 8) * 100 });
+    const nat = c.country && c.country !== 'XX' ? c.country : 'BR';
+    const p = makePlayer(G, { n: genName(nat), pos, age, ovr: L + gauss() * 4 - (20 - age), club: c.id, u20: true, nat, wage: Math.round((300 + ri(0, 8) * 100) * (c.country === 'BR' ? 1 : 1.4) / 50) * 50 });
     p.pot = clamp(p.ovr + ri(6, 26), p.ovr, 92);
     ids.push(p.id);
   }

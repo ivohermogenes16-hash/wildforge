@@ -1,4 +1,5 @@
 // Telas do universo vivo e dos negócios
+import { costOfLiving } from '../engine/career.js';
 import { esc, money, clamp, POS } from '../util.js';
 import { crest, face, ovrBadge } from './art.js';
 import { S, H, VIEWS, render, toast, openSheet, closeSheet, replaceSheet, save, posTag, wk, shortName, squadTable } from './app.js';
@@ -34,7 +35,7 @@ function patView(G) {
   const inc = (me.job ? me.job.wage : 0) + (me.nat ? me.nat.wage : 0);
   return `<div class="cols2"><div><div class="card hero-card"><div class="xs mut">Patrimônio total</div><div class="xb" style="font-size:26px">${money(tot)}</div>
     ${parts.map(([l, v]) => `<div class="kv"><span>${l}</span><b>${money(v)}</b></div><div>${bar(tot > 0 ? v / tot * 100 : 0)}</div>`).join('')}</div>
-    <div class="card flat"><h3>Renda pessoal</h3><div class="kv"><span>Salários (bruto)</span><b>${money(inc)}/sem.</b></div><div class="kv"><span>Custo de vida</span><b class="bad">−${money(350)}/sem.</b></div>
+    <div class="card flat"><h3>Renda pessoal</h3><div class="kv"><span>Salários (bruto)</span><b>${money(inc)}/sem.</b></div><div class="kv"><span>Custo de vida</span><b class="bad">−${money(costOfLiving(G))}/sem.</b></div>
     <div class="kv"><span>Situação</span><b>${me.retired ? `Aposentado desde ${me.retired}` : me.job ? 'Treinador em atividade' : 'Desempregado'}</b></div>
     <button class="btn sm blk" data-a="go" data-v="financas">Investimentos (CDI, ações, imóveis) ›</button></div></div>
     <div><div class="card flat"><h3>Participações</h3>${cos.map((c) => `<div class="li tap" data-a="coopen" data-v="${c.id}"><span class="grow"><b>${esc(c.n)}</b> <span class="xs mut">${B.SEGS[c.seg].n} · ${c.sh}%</span></span><b>${money(B.coValuation(G, c) * c.sh / 100)}</b></div>`).join('')}

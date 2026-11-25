@@ -68,9 +68,9 @@ export function coValuation(G, co) {
   const contracts = contractsOf(G, co).length;
   const mult = clamp(5 + growth * 4 + co.rep / 30 + contracts * 0.1, 3, 11);
   // empresas novas valem o que têm (caixa + estrutura); o valor pelo lucro só pesa depois de provar resultado (até 1 ano)
-  const mat = clamp((co.wk ?? 99) / 46, 0, 1);
+  const mat = clamp((co.wk ?? 99) / (co.user ? 92 : 46), 0, 1); const multU = co.user ? 0.6 : 1;
   const assets = co.cash - co.debt + (co.inv || 0) * 0.15 + co.emp * 2500 + Object.values(co.d).reduce((s, l) => s + (l - 1) * 90000, 0);
-  return Math.max(0, Math.round((assets + Math.max(annRev * 0.25, annProf * mult) * mat) / 1000) * 1000);
+  return Math.max(0, Math.round((assets + Math.max(annRev * 0.25, annProf * mult) * mat * multU) / 1000) * 1000);
 }
 export function bizWeek(G) {
   initBiz(G); const B = G.biz; const me = G.me;
@@ -83,18 +83,19 @@ export function bizWeek(G) {
     const cs = live.filter((c) => c.seg === seg); const tot = cs.reduce((s, c) => s + attract(c) * reach(c), 0) || 1;
     for (const co of cs) {
       const e = exposure(G, co);
-      const famous = co.user ? (me.pop || 0) / 8 + (me.rep || 0) / 20 : 0; // treinador famoso puxa a marca
+      const famous = co.user ? (me.pop || 0) / 14 + (me.rep || 0) / 30 : 0; // treinador famoso puxa a marca
       const target = clamp(10 + Math.min(60, e * 0.6) + co.d.mkt * 3 + co.ads + famous + co.prods + socialBoost(co) * 40, 5, 98);
       co.rep += (target - co.rep) * 0.03; co.ads = Math.max(0, co.ads * 0.92);
       co.wk = (co.wk ?? 99) + 1;
-      const ramp = co.wk < 40 ? 0.3 + 0.7 * co.wk / 40 : 1; // marca nova leva meses para chegar às lojas
-      const demand = SEGS[seg].mkt / W * (attract(co) * reach(co)) / tot * ramp * (1 + socialBoost(co));
+      // 5.1: marca própria bem mais difícil — demora a chegar às lojas, concorre com marcas grandes, margem menor e imposto
+      const ramp = co.user ? (co.wk < 110 ? 0.12 + 0.88 * co.wk / 110 : 1) : co.wk < 40 ? 0.3 + 0.7 * co.wk / 40 : 1;
+      const demand = SEGS[seg].mkt / W * (attract(co) * reach(co)) / tot * ramp * (1 + socialBoost(co)) * (co.user ? 0.6 : 1);
       socialWeek(G, co, e);
       co.cap = capacity(co); co.rev = Math.round(Math.min(demand, co.cap));
       let contractCost = 0; for (const { s } of contractsOf(G, co)) contractCost += s.val / W;
-      const cogs = co.rev * (0.62 - 0.035 * co.d.prod);
-      co.exp = Math.round(cogs + co.emp * empWage(co) + deptUpkeep(co) + contractCost + co.debt * 0.002);
-      co.prof = co.rev - co.exp; co.cash += co.prof;
+      const cogs = co.rev * (0.62 - 0.035 * co.d.prod + (co.user ? 0.1 : 0));
+      co.exp = Math.round(cogs + co.emp * empWage(co) + deptUpkeep(co) + contractCost + co.debt * 0.002 + (co.user ? 4000 + co.cc.length * 2500 : 0));
+      co.prof = co.rev - co.exp; if (co.user && co.prof > 0) { const tx = Math.round(co.prof * 0.3); co.exp += tx; co.prof -= tx; } co.cash += co.prof;
       co.hist.push({ rev: co.rev, prof: co.prof, rep: Math.round(co.rep) }); if (co.hist.length > 60) co.hist.shift();
       if (co.cash < 0 && co.user) { const loan = -co.cash; co.debt += loan; co.cash = 0; }
       // projetos de produto

@@ -1,8 +1,8 @@
-import { LEAGUES } from '../data/leagues.js';
+import { LEAGUES, COUNTRIES } from '../data/leagues.js';
 import { shuffle } from '../util.js';
 import { SEASON_WEEKS } from './econ.js';
-import { ensureU17 } from './world.js';
-import { CUPS2, CONTS_ALL } from '../data/leagues2.js';
+import { ensureU17, buildU20 } from './world.js';
+import { CUPS2, CONTS_ALL, COUNTRIES2 } from '../data/leagues2.js';
 import { ESTADUAIS } from '../data/estaduais.js';
 
 export const CUPS = [
@@ -56,6 +56,23 @@ function scheduleRR(G, comp, double, weekSpan, slot) {
   comp.games = double ? (comp.groups[0].length - 1) * 2 : comp.groups[0].length - 1;
 }
 
+// 5.1: o sub-20 do usuário pode ser de qualquer clube do jogo
+export function u20Clubs(G) {
+  const base = G.clubs.filter((c) => c.league === 'BRA');
+  const j = G.me?.job; const mine = j && j.youth ? G.clubs[j.cid] : null;
+  if (!mine || base.some((c) => c.id === mine.id)) return { ids: base.map((c) => c.id), name: 'Brasileirão Sub-20', country: 'BR' };
+  if (mine.country === 'BR') { const keep = base.sort((a, b) => b.rep - a.rep).slice(0, base.length - 1); return { ids: [...keep.map((c) => c.id), mine.id], name: 'Brasileirão Sub-20', country: 'BR' }; }
+  const same = G.clubs.filter((c) => c.country === mine.country && c.id !== mine.id && c.league).sort((a, b) => b.rep - a.rep).slice(0, 15);
+  const nm = (COUNTRIES[mine.country] || COUNTRIES2?.[mine.country])?.name || mine.country;
+  return { ids: [mine.id, ...same.map((c) => c.id)], name: `Sub-20 · ${nm}`, country: mine.country };
+}
+export function setupU20(G, from = 0) {
+  const L = u20Clubs(G);
+  for (const id of L.ids) { const c = G.clubs[id]; if (!G.players.some((p) => p && p.club === id && p.u20 && !p.u17)) buildU20(G, c); }
+  if (G.comps.U20) for (const f of G.fix) if (f.c === 'U20' && f.hg == null) { f.w = -1; f.dead = true; f.c = 'U20x'; }
+  const cu = newComp({ id: 'U20', kind: 'youth', name: L.name, short: 'Sub-20', country: L.country, clubs: L.ids, groups: [L.ids] });
+  scheduleRR(G, cu, true, [from, SEASON_WEEKS - 4], 1); G.comps.U20 = cu;
+}
 export function setupU17(G, from) {
   ensureU17(G);
   const ids = G.clubs.filter((c) => c.league === 'BRA').map((c) => c.id);
@@ -87,9 +104,7 @@ export function setupSeason(G) {
     G.comps[L.id] = comp;
   }
   // Sub-20
-  const u20 = G.clubs.filter((c) => c.league === 'BRA').map((c) => c.id);
-  const cu = newComp({ id: 'U20', kind: 'youth', name: 'Brasileirão Sub-20', short: 'Sub-20', country: 'BR', clubs: u20, groups: [u20] });
-  scheduleRR(G, cu, true, [0, SEASON_WEEKS - 4], 1); G.comps.U20 = cu;
+  setupU20(G, 0);
   setupU17(G, 2);
   setupEstaduais(G);
   // Liga amadora (clube próprio)

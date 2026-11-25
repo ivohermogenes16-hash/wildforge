@@ -133,7 +133,7 @@ function agentsWeek(G) {
       cd.agSecret = G.t; const a = agentOf(G, p);
       decision(G, 'Bastidores', `🕵️ Negociação sigilosa: ${p.n}`, `Você descobriu que o empresário ${a.n} conversa em segredo com o ${buyer.name} sobre ${p.n}, sem avisar o clube.`, [
         { l: 'Confrontar o empresário publicamente', pid: p.id, fx: { pmor: -8, psat: -6, pp: 3, conf: 2 } },
-        { l: 'Oferecer renovação para segurar o jogador', pid: p.id, act: 'renov', fx: { psat: 8 } },
+        { l: 'Oferecer renovação para segurar o jogador', pid: p.id, act: 'renovP', fx: { psat: 8 } },
         { l: 'Ignorar e seguir o trabalho', pid: p.id, fx: { psat: -3 }, act: 'secretLeak', buyer: buyer.id },
       ], { def: 2 });
     }

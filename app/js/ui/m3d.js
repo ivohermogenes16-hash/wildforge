@@ -19,6 +19,7 @@ export class Match3D {
     window.addEventListener('message', this.onMsg);
     this.loadT = setTimeout(() => { if (!this.ready) this.h.onFail?.(); }, 20000);
   }
+  walkBtn() { if (this.sk) return; const b = document.createElement('button'); b.className = 'btn m3d-skip'; b.textContent = 'Pular entrada ›'; b.onclick = () => { this.post({ t: 'skipWalk' }); b.remove(); }; this.fr.parentElement.appendChild(b); this.sk = b; }
   post(o) { try { this.fr.contentWindow?.postMessage(o, '*'); } catch {} }
   get paused() { return this._paused; } set paused(v) { this._paused = v; this.post({ t: 'pause', v }); }
   get speed() { return this._speed; } set speed(v) { this._speed = v; this.post({ t: 'speed', n: this.ts() }); }
@@ -42,9 +43,10 @@ export class Match3D {
       case 'loaded': {
         const hc = this.m.s[0].club; const f = this.m.f; const night = (f && f.s === 1) || Math.random() < 0.35;
         this.post({ t: 'setup', home: { name: hc.name, c1: hc.c1, c2: hc.c2 }, stadium: hc.stadium || `Estádio ${hc.city || hc.name}`, kits: this.kits(), teams: [this.team(0), this.team(1)],
-          time: this.opt.time || (night ? 'noite' : Math.random() < 0.5 ? 'dia' : 'tarde'), rain: !!this.opt.rain, replays: this._replays, names: this._names, ts: this.ts(), tact: [this.tactOf(0), this.tactOf(1)] });
+          time: this.opt.time || (night ? 'noite' : Math.random() < 0.5 ? 'dia' : 'tarde'), rain: !!this.opt.rain, replays: this._replays, names: this._names, ts: this.ts(), tact: [this.tactOf(0), this.tactOf(1)], final: !!this.opt.final });
         break; }
-      case 'ready': this.ready = true; clearTimeout(this.loadT); this.h.onReady?.(); break;
+      case 'walk': clearTimeout(this.loadT); this.walkBtn(); break;
+      case 'ready': this.ready = true; clearTimeout(this.loadT); this.sk?.remove(); this.sk = null; this.h.onReady?.(); break;
       case 'shotDone': if (this.wait && this.wait.id === d.id) this.resolve(); break;
       case 'resume': if (this.wait && this.wait.resolved) this.wait = null; break;
     }
@@ -68,7 +70,9 @@ export class Match3D {
       if (SHOT.includes(e.t) && !this.wait) { let slot = this.slotOf(e.side, e.p); if (slot < 0) slot = 9; this.wait = { ev: e, id: ++this.sid }; this.waitT = 0; this.post({ t: 'shot', side: e.side, slot, out: e.t, id: this.sid }); }
       else if (SHOT.includes(e.t)) { if (e.t === 'gol') this.score[e.side]++; this.h.onEvent(e); this.post({ t: 'score', s: this.score }); }
       else if (e.t === 'int') { this.h.onEvent(e); this.post({ t: 'half' }); this.h.onPause('int'); }
-      else if (e.t === 'fim') { this.h.onEvent(e); this.post({ t: 'end' }); this.finish(); }
+      else if (e.t === 'fim') { this.h.onEvent(e); const sc = this.m.score; const w = sc[0] > sc[1] ? 0 : sc[1] > sc[0] ? 1 : -1;
+        if (this.opt.final && w >= 0) { const cap = this.m.s[w].club.capId; let slot = cap != null ? this.slotOf(w, cap) : -1; if (slot < 0) slot = 9; this.post({ t: 'champ', side: w, cap: slot }); this.champT = setTimeout(() => this.finish(), 9000); this.h.onChamp?.(w); }
+        else { this.post({ t: 'end' }); this.finish(); } }
       else { this.h.onEvent(e); const slot = this.slotOf(e.side, e.p); if (['sub', 'ver', 'am', 'les'].includes(e.t) && slot >= 0) this.post({ t: 'ev', e: e.t, side: e.side, slot, id: e.p, name: short(this.G.players[e.p]?.n || '') }); }
     }
   }
@@ -82,5 +86,5 @@ export class Match3D {
   }
   inject(e) { if (e.t === 'gol') { this.score[e.side]++; this.post({ t: 'score', s: this.score }); } }
   resize() {} draw() {}
-  destroy() { window.removeEventListener('message', this.onMsg); clearTimeout(this.loadT); this.fr.remove(); }
+  destroy() { window.removeEventListener('message', this.onMsg); clearTimeout(this.loadT); clearTimeout(this.champT); this.sk?.remove(); this.fr.remove(); }
 }

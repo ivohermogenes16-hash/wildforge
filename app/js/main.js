@@ -15,7 +15,7 @@ import './ui/tatica.js';
 import './ui/simular.js';
 import './ui/presidente.js';
 import { musicOn, musicOff } from './ui/audio.js';
-import { firstCommunity } from './ui/comunidade.js';
+import { firstCommunity, videoCard, videoFirstTime } from './ui/comunidade.js';
 import { checkUpdate } from './ui/pacotes.js';
 import { startIcons, stripEmoji } from './ui/icons.js';
 import { initUniverse } from './engine/universe.js';
@@ -45,7 +45,7 @@ async function title() {
     ['tslots', 'Carreiras', 'Até 3 salvas'],
     ['tcomu', 'Comunidade', 'Ideias e bugs'],
     ['tset', 'Configurações', 'Som, 3D, moeda'],
-    ['tnews', 'Novidades', 'Versão 5.0'],
+    ['tnews', 'Novidades', 'Versão 5.1'],
     ['thelp', 'Como jogar', ''],
     ['tpack', 'Pacotes', 'Escudos e times'],
   ].filter(Boolean);
@@ -58,11 +58,12 @@ async function title() {
     <div class="rc-logo">PRAN<span>CHETA</span></div>
     <div class="rc-sub">Do sub-20 ao império do futebol.</div>
     <div class="rc-stats"><div><b>960+</b><span>clubes reais</span></div><div><b>28</b><span>ligas</span></div><div><b>18</b><span>países</span></div></div>
+    <div class="vid-slot">${videoCard()}</div>
     ${m ? `<div class="rc-save" data-a="loadsave" style="--c1:${m.c1 || '#1b2a25'};--c2:${m.c2 || '#0b1210'}"><small>Continuar · ${slotName(cur)}</small><b>${esc(m.club)}</b><span>${m.year ? `${m.year}, semana ${m.week + 1}` : ''}</span><i>▶</i></div>` : `<button class="btn pri big rc-cta" data-a="ng">✨ Começar carreira</button>`}
   </div></div>
-  <div class="rc-ver">Lumbra Games · Versão 5.0${build}</div></div>`;
+  <div class="rc-ver">Lumbra Games · Versão 5.1${build}</div></div>`;
   startBg();
-  firstCommunity(); musicOn();
+  firstCommunity(); videoFirstTime(); musicOn();
 }
 const slotName = (s) => 'Espaço ' + s.slice(-1);
 H.tslots = () => {
@@ -102,7 +103,15 @@ function setHtml() {
 H.setv = (v) => { const [k, x] = v.split(':'); SET[k] = typeof DEFV[k] === 'boolean' ? x === '1' : typeof DEFV[k] === 'number' ? +x : x; saveSet(); if (k === 'music') { if (SET.music && !S.G) musicOn(); else musicOff(); } if (k === 'voice' && SET.voice !== 'off') { import('./ui/audio.js').then((a) => a.say('Narração ligada. Bola rolando!', 'teste', true)); } replaceSheet(setHtml()); applyTheme(); if (S.G) render(); };
 const DEFV = DEF;
 H.setnotif = async () => { const ok = await askNotif(); toast(ok ? '🔔 Notificações liberadas' : 'Permissão negada ou indisponível'); };
-H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 5.0</h2><div class="list">${[
+H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 5.1</h2><div class="list">${[
+  ['🏆', 'Final com taça: ela aparece no pedestal na entrada e o campeão levanta e comemora'],
+  ['🎺', 'No 3D os times entram em campo e ficam perfilados para o hino'],
+  ['👔', 'Dono de clube: propostas de patrocínio, preço do ingresso com público estimado e jogos do clube'],
+  ['🌱', 'Sub-20 de qualquer clube do jogo'],
+  ['📊', 'A tabela da tela inicial mostra o campeonato do próximo jogo'],
+  ['💸', 'Custo de vida acompanha seu patrimônio e a marca própria ficou bem mais difícil'],
+  ['🐞', 'Corrigidos: tela preta no pênalti, "R$ NaN" nas finanças, empréstimo travado na 1ª semana e travamento no fim da temporada'],
+].map(([i, t]) => `<div class="li"><span style="font-size:20px">${i}</span><span class="grow">${t}</span></div>`).join('')}</div><h3 style="margin-top:14px">Versão 5.0</h3><div class="list">${[
   ['📋', 'Tática nova estilo EA FC: campo em perspectiva, abas Elenco/Táticas/Atribuições, reservas em grade e trocas sugeridas'],
   ['🎚️', 'Estilo de jogo com controles deslizantes — e o time realmente joga diferente no 3D e no 2D'],
   ['✏️', 'Prancheta ao vivo: pause, desenhe setas e o time obedece; substituições com o campo na tela'],
@@ -173,7 +182,7 @@ H.loadsave = async () => { goFull(); musicOff(); const G = await loadGame(); if 
 H.ng = () => { goFull(); S.ng = { step: 0, name: '', age: 32, mode: 'sub20', lg: 'BRA', club: null, nat: 'BR', style: 'equil', origin: 'exjog', color: 'esmeralda' }; wiz(); };
 
 const MODES = {
-  sub20: { ic: '🌱', k: 'CARREIRA', t: 'Começar no Sub-20', d: 'Você assume a base de um clube da Série A. Revele garotos, ganhe nome e suba até o profissional.', dif: 3.5, din: 1, fam: 0.5, rec: true, g: ['#16a34a', '#064e3b'], p: ['Base, Sub-17 e olheiros', 'Propostas do profissional ao se destacar', 'Junte dinheiro e vire dono de clube'] },
+  sub20: { ic: '🌱', k: 'CARREIRA', t: 'Começar no Sub-20', d: 'Você assume a base de qualquer clube do jogo. Revele garotos, ganhe nome e suba até o profissional.', dif: 3.5, din: 1, fam: 0.5, rec: true, g: ['#16a34a', '#064e3b'], p: ['Base, Sub-17 e olheiros', 'Propostas do profissional ao se destacar', 'Junte dinheiro e vire dono de clube'] },
   baixo: { ic: '🧗', k: 'CARREIRA', t: 'Técnico em início de carreira', d: 'Assuma o time principal de qualquer clube do mundo, de qualquer divisão, sem fama e sem dinheiro.', dif: 4, din: 1.5, fam: 1, g: ['#2563eb', '#1e1b4b'], p: ['Qualquer país e divisão', 'Diretoria exigente, pouca verba', 'Do pior ao topo'] },
   livre: { ic: '🌍', k: 'SEM AMARRAS', t: 'Modo livre', d: 'Escolha qualquer clube já como técnico experiente e com dinheiro no bolso para investir.', dif: 2, din: 4.5, fam: 4, g: ['#ca8a04', '#422006'], p: ['Fama e dinheiro desde o início', 'Ideal para montar um império', 'Compre clubes e empresas cedo'] },
 };
@@ -219,12 +228,11 @@ function wiz() {
       <ul>${M.p.map((x) => `<li>${x}</li>`).join('')}</ul></div>${n.mode === k ? '<span class="md-check">✓</span>' : ''}</button>`).join('')}</div>
     <button class="btn pri big blk" style="max-width:420px;margin:10px auto 0" data-a="w2">Próximo ›</button>`;
   } else if (n.step === 2) {
-    const lgs = n.mode === 'sub20' ? LEAGUES.filter((l) => l.id === 'BRA') : LEAGUES;
-    if (n.mode === 'sub20') n.lg = 'BRA';
+    const lgs = LEAGUES; // 5.1: sub-20 de qualquer clube do jogo
     const clubs = S.preview.clubs.filter((c) => c.league === n.lg).sort((a, b) => b.rep - a.rep);
     const sel = clubs.find((c) => c.id === n.club);
-    h += `<div class="hint" style="margin-bottom:10px">${n.mode === 'sub20' ? 'Escolha o clube onde você vai treinar o Sub-20.' : 'Escolha seu clube. As estrelas mostram a força do elenco.'}</div>`;
-    if (n.mode !== 'sub20') { const cts = [...new Set(LEAGUES.map((l) => l.country))]; const ct = n.ct || LEAGUES.find((l) => l.id === n.lg)?.country || 'BR';
+    h += `<div class="hint" style="margin-bottom:10px">${n.mode === 'sub20' ? 'Escolha o clube onde você vai treinar o Sub-20 — pode ser qualquer clube do jogo.' : 'Escolha seu clube. As estrelas mostram a força do elenco.'}</div>`;
+    { const cts = [...new Set(LEAGUES.map((l) => l.country))]; const ct = n.ct || LEAGUES.find((l) => l.id === n.lg)?.country || 'BR';
       h += `<div class="chips" style="margin-bottom:8px">${cts.map((k) => `<span class="chip ${ct === k ? 'on' : ''}" data-a="wct" data-v="${k}">${COUNTRIES[k]?.flag || ''} ${esc(COUNTRIES[k]?.name || k)}</span>`).join('')}</div>`;
       h += `<div class="seg" style="margin:0 0 10px">${lgs.filter((l) => l.country === ct).map((l) => `<button class="${n.lg === l.id ? 'on' : ''}" data-a="wlg" data-v="${l.id}">${esc(l.short || l.name)}</button>`).join('')}</div>`; }
     h += `<div class="clubgrid">${clubs.map((c) => `<div class="li tap ${n.club === c.id ? 'sel' : ''}" data-a="wclub" data-v="${c.id}">${crest(c, 34)}<div class="grow"><div class="b ell">${esc(c.name)}</div><div class="xs ell">${starsH(clubStars(c.rep))}</div></div></div>`).join('')}</div></div>

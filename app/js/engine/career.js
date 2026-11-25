@@ -15,7 +15,7 @@ export function weeklyPersonal(G) {
   const me = G.me, inv = me.inv;
   if (me.job) me.money += Math.round(me.job.wage * 0.75);
   if (me.retired) me.money += 0;
-  me.money -= 350; // custo de vida
+  me.money -= costOfLiving(G); // custo de vida (sobe com o padrão de vida)
   inv.cdi = Math.round(inv.cdi * 1.0024);
   const r = 0.0022 + gauss() * 0.035;
   inv.acoes = Math.round(inv.acoes * (1 + r));
@@ -25,6 +25,12 @@ export function weeklyPersonal(G) {
   inv.hist = (inv.hist || []).concat([Math.round(netWorth(G))]).slice(-40);
 }
 
+// 5.1: o padrão de vida acompanha o que o treinador tem e ganha (casa, carro, viagens, família…), sem exagerar
+export function costOfLiving(G) {
+  const me = G.me; const nw = Math.max(0, netWorth(G)); const w = me.job ? me.job.wage : 0;
+  const c = 350 + w * 0.12 + Math.min(nw, 5e7) * 0.0004 + Math.max(0, nw - 5e7) * 0.0001;
+  return Math.round(Math.min(c, 350 + w * 0.5 + 25000) / 10) * 10;
+}
 export function netWorth(G) {
   const me = G.me, inv = me.inv;
   let v = me.money + inv.cdi + inv.acoes + inv.imoveis * (inv.imovelVal || APT_PRICE);

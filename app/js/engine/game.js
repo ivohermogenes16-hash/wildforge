@@ -2,6 +2,7 @@ import { checkPromises } from './coach.js';
 import { LEAGUES, RESERVE } from '../data/leagues.js';
 import { clamp, ri, rf, rnd, gauss, pick, shuffle, money } from '../util.js';
 import { prizeOf, LEAGUE_PRIZE, PROMO_BONUS, SEASON_WEEKS, TICKET, coachWage, playerWage, playerValue } from './econ.js';
+import { setupU20 } from './season.js';
 import { createWorld, makePlayer, genName, buildU20, clubLevel, START_YEAR, newFin, initFinances, QUOTA } from './world.js';
 import { setupSeason, progressComps, recordResult, standings, koWinner, CUPS, CONTS } from './season.js';
 import { autoLineup, quickSim, penalties, validLineup, FORMATIONS, FITPOS, effAt, available, formOf } from './match.js';
@@ -9,7 +10,7 @@ import { aiTransferWeek, inWindow, anyWindow, windowInfo, expireContracts, playe
 import { weeklyPersonal, ownClubWeek, ownSeasonEnd } from './career.js';
 import { ensureBase, scoutWeek, baseBudget } from './youth.js';
 import { extraWeek, seededYouth, goldenGen, bigAwards, legendsCapture, seasonRecap, attendance, mosaicFor } from './extra.js';
-import { migrate, appointAI, coachLeaves, aiCoachResult, coachChampion, titleWeight, lifeWeek, lifeSeasonEnd, seasonAwards, secondaryEnd, secondaryObjective, afterUserMatch, boardK, devMul, injMul, recovBonus, retiredToCoach, tl } from './life.js';
+import { repairNaN, migrate, appointAI, coachLeaves, aiCoachResult, coachChampion, titleWeight, lifeWeek, lifeSeasonEnd, seasonAwards, secondaryEnd, secondaryObjective, afterUserMatch, boardK, devMul, injMul, recovBonus, retiredToCoach, tl } from './life.js';
 import { BOARD_TYPES } from './world.js';
 import { initNations, natSetupYear, natSlot, natWeek, natSeasonEnd } from './nations.js';
 import { marketWeek, loansSeasonEnd } from './market2.js';
@@ -32,6 +33,7 @@ export function newGame(opts) {
   setupSeason(G);
   natSetupYear(G);
   takeJob(G, opts.club, opts.mode === 'sub20', true);
+  if (opts.mode === 'sub20' && !G.comps.U20?.clubs.includes(opts.club)) setupU20(G, 0);
   preseason(G);
   G.news.push({ t: 0, txt: `${G.me.name} assume o ${opts.mode === 'sub20' ? 'sub-20 do ' : ''}${G.clubs[opts.club].name}. Começa a temporada ${G.year}!` });
   welcome(G);
@@ -337,6 +339,7 @@ function onEvent(G, e) {
 // ---------------- Semana ----------------
 function endWeek(G) {
   try { checkPromises(G); } catch (e) { console.warn(e); }
+  try { repairNaN(G); } catch (e) { console.warn(e); }
   const wages = new Map();
   for (const p of G.players) { if (!p || p.club < 0) continue; if (p.loan) { const sh = p.loan.share ?? 1; wages.set(p.club, (wages.get(p.club) || 0) + p.wage * sh); wages.set(p.loan.from, (wages.get(p.loan.from) || 0) + p.wage * (1 - sh)); } else wages.set(p.club, (wages.get(p.club) || 0) + p.wage); }
   for (const c of G.clubs) {

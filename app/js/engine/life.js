@@ -6,7 +6,7 @@
 // =====================================================================
 import { clamp, ri, rf, rnd, pick, money, hash, seeded, shuffle } from '../util.js';
 import { genName, makePlayer, BOARD_TYPES, initClubLife, initPlayerLife, clubLevel, expandWorld } from './world.js';
-import { playerWage, playerValue, WAGE_SCALE } from './econ.js';
+import { playerWage, playerValue, WAGE_SCALE, coachWage, TICKET } from './econ.js';
 import { standings } from './season.js';
 import { LEAGUES } from '../data/leagues.js';
 import { pressPre, pressPost, pressHeadline } from './press.js';
@@ -43,7 +43,22 @@ const myJobClub = (G) => (G.me.job ? G.clubs[G.me.job.cid] : null);
 const isSenior = (G) => G.me.job && !G.me.job.youth;
 
 // ===================== MIGRAÇÃO / COMPATIBILIDADE =====================
+// 5.1: conserta valores quebrados (NaN) de saves afetados pelo bug da "Negociação sigilosa"
+export function repairNaN(G) {
+  const ok = (v) => typeof v === 'number' && Number.isFinite(v); let fixed = false; const me = G.me;
+  if (me.job) { const jc = G.clubs[me.job.cid]; if (!ok(me.job.wage) && jc) { me.job.wage = coachWage(jc.rep, jc.country, !!me.job.youth); fixed = true; } if (!ok(me.job.until)) { me.job.until = G.year + 1; fixed = true; } }
+  if (!ok(me.money)) { me.money = Math.max(50000, Math.round((me.job?.wage || 5000) * 20)); fixed = true; }
+  for (const p of G.players) if (p && !ok(p.wage)) { const c = G.clubs[p.club]; p.wage = p.u20 ? 500 : playerWage(p, c?.country || 'BR'); fixed = true; }
+  for (const c of G.clubs) {
+    if (c.fin) for (const k of Object.keys(c.fin)) if (typeof c.fin[k] === 'number' && !ok(c.fin[k])) { c.fin[k] = 0; fixed = true; }
+    if (c.extraWB != null && !ok(c.extraWB)) { c.extraWB = 0; fixed = true; }
+    if (!ok(c.money)) { const L = G.comps[c.league]; c.money = Math.round(((L?.tv || 2e6) * (0.55 + 0.9 * (c.rep || 30) / 100) + (c.spon || 0)) * 0.25 / 1000) * 1000; fixed = true; }
+  }
+  if (me.verba != null && !ok(me.verba)) { me.verba = 0; fixed = true; }
+  return fixed;
+}
 export function migrate(G) {
+  try { if (repairNaN(G)) console.warn('save reparado (NaN)'); } catch (e) { console.warn(e); }
   expandWorld(G);
   econV2(G);
   G.coaches ||= []; G.hist ||= {}; G.timeline ||= []; G.builds ||= []; G.rec ||= {};
@@ -554,7 +569,8 @@ export function resolveDecision(G, m, i, auto) {
     case 'paciencia': if (Math.random() < me.rep / 100 + 0.25) { c.board.conf = clamp(c.board.conf + 4, 0, 100); out = 'A diretoria concordou em dar mais tempo.'; } else { c.board.conf = clamp(c.board.conf - 4, 0, 100); out = 'A diretoria não se convenceu.'; } break;
     case 'vendeEstrela': { const best = G.players.filter((p) => p && p.club === c.id && !p.u20).sort((a, b) => playerValue(b) - playerValue(a))[0]; if (best) { best.lst = true; best.sat = clamp(best.sat - 5, 0, 100); } c.board.conf = clamp(c.board.conf + 5, 0, 100); out = best ? `${best.n} foi colocado à venda.` : ''; break; }
     case 'congelar': me.freeze = G.t + Math.max(4, 46 - G.week); c.board.conf = clamp(c.board.conf + 4, 0, 100); out = 'Contratações congeladas até o fim da temporada.'; break;
-    case 'renov': me.job.wage = Math.round(me.job.wage * o.r / 100) * 100; me.job.until = G.year + o.y; out = `✍️ Contrato renovado até ${me.job.until}. Novo salário: ${money(me.job.wage)}/sem.`; c.board.conf = clamp(c.board.conf + 3, 0, 100); break;
+    case 'renovP': if (P) { const nw = Math.max(P.wage, Math.round(playerWage(P, c?.country || 'BR') * 1.1 / 50) * 50); P.wage = nw; P.con = Math.max(P.con || G.year, G.year + 3); P.lst = false; out = `✍️ ${P.n} renovou até ${P.con}: ${money(nw)}/sem.`; } break;
+    case 'renov': if (!(o.r > 0) || !(o.y > 0)) break; me.job.wage = Math.round(me.job.wage * o.r / 100) * 100; me.job.until = G.year + o.y; out = `✍️ Contrato renovado até ${me.job.until}. Novo salário: ${money(me.job.wage)}/sem.`; c.board.conf = clamp(c.board.conf + 3, 0, 100); break;
     case 'renovAlta': if (c.board.conf > 72 || Math.random() < (c.board.conf - 40) / 60) { me.job.wage = Math.round(me.job.wage * 1.25 / 100) * 100; me.job.until = G.year + 3; out = `✍️ A diretoria aceitou! Contrato até ${me.job.until}, salário ${money(me.job.wage)}/sem.`; } else { me.job.wage = Math.round(me.job.wage * 1.08 / 100) * 100; me.job.until = G.year + 1; out = 'A diretoria recusou o aumento grande; renovou por 1 ano com +8%.'; } break;
     case 'naoRenov': me.job.leaving = true; out = 'Você sai do clube ao fim da temporada.'; break;
     case 'promTit': me.promises.push({ k: 'titular', pid: P.id, until: G.t + 3 }); P.sat = clamp(P.sat + 15, 0, 100); P.rel = clamp(P.rel + 8, 0, 100); out = `Promessa feita a ${P.n}: ele precisa jogar nas próximas 3 semanas.`; break;
@@ -711,7 +727,30 @@ function worldEvents(G) {
 }
 
 // ===================== GANCHOS SEMANAIS =====================
+// 5.1: propostas de patrocínio para os clubes que o usuário é dono (ele escolhe no Painel do Presidente)
+export function ownerSponsorWeek(G) {
+  for (const c of G.clubs) {
+    if (!c.spons || !(c.own?.user >= 51)) continue;
+    c.sponOffers = (c.sponOffers || []).filter((o) => o.exp > G.t);
+    if (c.sponOffers.length >= 3 || rnd() > 0.09) continue;
+    const s = pick(c.spons); const base = sponsorValue(G, c, s.slot); const k = rf(0.85, 1.35);
+    const used = new Set([...c.spons.map((x) => x.n), ...c.sponOffers.map((x) => x.n)]);
+    const pool = (s.slot === 'Fornecedor' ? KITS : SPONSORS).filter((n) => !used.has(n)); if (!pool.length) continue;
+    const val = Math.round(Math.max(base * k, s.val * rf(0.8, 1.25)) / 1000) * 1000; const y = ri(1, 4);
+    c.sponOffers.push({ id: (G.soId = (G.soId || 0) + 1), slot: s.slot, n: pick(pool), val, y, exp: G.t + ri(3, 6), bonus: rnd() < 0.35 ? Math.round(val * rf(0.05, 0.15) / 1000) * 1000 : 0 });
+    msg(G, 'Departamento comercial', `🤝 Nova proposta de patrocínio · ${c.name}`, `Uma empresa quer patrocinar o ${c.name} (${s.slot.toLowerCase()}). Veja no Painel do Presidente.`);
+  }
+}
+export function acceptSponsor(G, c, id) {
+  const o = (c.sponOffers || []).find((x) => x.id === id); if (!o) return 'Essa proposta não está mais disponível.';
+  const s = c.spons.find((x) => x.slot === o.slot); if (!s) return 'Espaço de patrocínio inválido.';
+  const multa = s.until > G.year && s.n !== o.n ? Math.round(s.val * 0.3 / 1000) * 1000 : 0;
+  c.money -= multa; c.fin.other = (c.fin.other || 0) + multa; if (o.bonus) { c.money += o.bonus; c.fin.spon += o.bonus; }
+  s.n = o.n; s.val = o.val; s.until = G.year + o.y; syncSpon(c); c.sponOffers = c.sponOffers.filter((x) => x.id !== id);
+  return `🤝 ${o.n} é o novo patrocinador (${o.slot}) do ${c.name}: ${money(o.val)}/temporada até ${s.until}${multa ? ` · multa rescisória de ${money(multa)}` : ''}${o.bonus ? ` · luvas de ${money(o.bonus)}` : ''}.`;
+}
 export function lifeWeek(G) {
+  try { ownerSponsorWeek(G); } catch (e) { console.warn(e); }
   buildsWeek(G);
   boardWeek(G);
   squadWeek(G);
@@ -720,6 +759,7 @@ export function lifeWeek(G) {
   for (const c of G.clubs) {
     if (!c.league && c.league !== 'AMA') continue;
     const sw = staffWages(c); if (sw) { c.money -= sw; c.fin.staff += sw; }
+    if (c.price != null) { const r = c.price / (TICKET[c.country] ?? 20); if (r > 1.5) c.fans = clamp((c.fans ?? 55) - (r - 1.5) * 0.6, 5, 100); else if (r < 0.7) c.fans = clamp((c.fans ?? 55) + 0.15, 5, 100); }
     if (c.money < 0) { const j = -c.money * 0.0025; c.money -= j; c.fin.juros += j; }
   }
   // decisões que expiram sem resposta usam a opção padrão

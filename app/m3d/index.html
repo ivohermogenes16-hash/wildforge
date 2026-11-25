@@ -43,7 +43,7 @@
 <script type="importmap">{ "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/addons/" } }</script>
 </head>
 <body>
-<div id="load"><div><b>PRANCHETA 3D</b><span>entrando em campo…</span></div></div>
+<div id="load"><div><b>PRANCHETA 3D</b><span>os times estão no túnel…</span></div></div>
 <div id="ui">
   <div class="top"><span class="tag">Teste 3D · Etapa 3</span><span class="ttl">Jogadores e animações</span></div>
   <div id="fps">—</div><button id="tg">Ocultar menu</button>
@@ -1328,6 +1328,101 @@ if (EMBED) {
   hud.style.display = 'none';
   setTimeout(() => post({ t: 'loaded' }), 50);
 }
+
+// ================= 5.1: ENTRADA EM CAMPO (perfilados para o hino) e TAÇA NAS FINAIS =================
+const CER = { on: false, t: 0, final: false, champ: null, cap: null, conf: null };
+const LINE_Z = W / 2 - 10;
+// taça (sem marca: troféu genérico dourado) + pedestal
+const TROPHY = (() => {
+  const g = new THREE.Group(); const gold = new THREE.MeshStandardMaterial({ color: '#e8b923', metalness: 0.85, roughness: 0.22, emissive: '#3a2600', emissiveIntensity: 0.35 });
+  const prof = [[0.0, 0], [0.13, 0], [0.13, 0.03], [0.06, 0.06], [0.045, 0.18], [0.07, 0.22], [0.16, 0.3], [0.2, 0.42], [0.21, 0.52], [0.19, 0.53], [0.0, 0.5]].map(([x, y]) => new THREE.Vector2(x, y));
+  const cup = new THREE.Mesh(new THREE.LatheGeometry(prof, 28), gold); g.add(cup);
+  for (const s of [-1, 1]) { const h = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.016, 8, 18, Math.PI * 1.25), gold); h.position.set(s * 0.2, 0.4, 0); h.rotation.z = s > 0 ? -Math.PI * 0.6 : Math.PI * 1.6; g.add(h); }
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 0.09, 24), new THREE.MeshStandardMaterial({ color: '#1a1a1a', roughness: 0.5 })); base.position.y = -0.04; g.add(base);
+  g.scale.setScalar(1.25); g.visible = false; scene.add(g); return g;
+})();
+const PED = (() => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.38, 1.05, 28), new THREE.MeshStandardMaterial({ color: '#f4f4f0', roughness: 0.4 })); m.position.set(0, 0.525, LINE_Z + 4.2); m.visible = false; scene.add(m);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 28), new THREE.MeshStandardMaterial({ color: '#c9a227', metalness: 0.7, roughness: 0.3 })); top.position.y = 0.55; m.add(top); return m; })();
+const CONF = (() => { const N = 420, geo = new THREE.BufferGeometry(); const pos = new Float32Array(N * 3), col = new Float32Array(N * 3); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.16, vertexColors: true })); pts.visible = false; scene.add(pts); return { pts, pos, col, N, v: new Float32Array(N) }; })();
+ACT.lift = (J, k, a, t) => { Object.assign(J, { lx: -3.05, rx: -3.05, el: -0.08, er: -0.08, lz: 0.12, rz: -0.12, oy: 0.04 * Math.abs(Math.sin(t * 3)), sx: -0.12 }); };
+ACT.hino = (J) => { Object.assign(J, { lx: 0.05, rx: 0.05, el: -0.15, er: -0.15, lz: 0.02, rz: -0.02 }); };
+function confettiStart(tm) {
+  const c = CONF, a = new THREE.Color(KITS[tm].shirt), b = new THREE.Color(KITS[tm].shorts), g = new THREE.Color('#ffd54a');
+  for (let i = 0; i < c.N; i++) { c.pos[i * 3] = (Math.random() - 0.5) * 22; c.pos[i * 3 + 1] = 6 + Math.random() * 14; c.pos[i * 3 + 2] = LINE_Z - 6 + (Math.random() - 0.5) * 14; const k = i % 3 === 0 ? g : i % 2 ? a : b; c.col[i * 3] = k.r; c.col[i * 3 + 1] = k.g; c.col[i * 3 + 2] = k.b; c.v[i] = 1.2 + Math.random() * 1.6; }
+  c.pts.geometry.attributes.color.needsUpdate = true; c.pts.visible = true;
+}
+function confettiStep(dt, t) { const c = CONF; if (!c.pts.visible) return; for (let i = 0; i < c.N; i++) { c.pos[i * 3 + 1] -= c.v[i] * dt; c.pos[i * 3] += Math.sin(t * 2 + i) * dt * 0.6; if (c.pos[i * 3 + 1] < 0.05) c.pos[i * 3 + 1] = 8 + Math.random() * 10; } c.pts.geometry.attributes.position.needsUpdate = true; }
+function startWalk(final) {
+  CER.on = true; CER.t = 0; CER.final = !!final; G.phase = 'walk'; G.owner = null; G.pass = null; G.shot = null; ball.held = null;
+  PED.visible = TROPHY.visible = CER.final; if (CER.final) TROPHY.position.set(0, 1.12, LINE_Z + 4.2);
+  const order = [0, 1].map((tm) => players.filter((p) => p.team === tm && !p.off).sort((a, b) => (a.gk ? -1 : 0) - (b.gk ? -1 : 0) || a.num - b.num));
+  for (const p of players) { p.act = null; p.mood = null; p.pend = null; p.vel.set(0, 0, 0); p.snap = true; }
+  order.forEach((list, tm) => list.forEach((p, k) => { const s = tm === 0 ? -1 : 1; p.cer = V(s * (1.4 + k * 1.05), 0, LINE_Z); p.pos.set(s * 0.6 - s * 0.2, 0, W / 2 + 4 + k * 1.1); p.target.copy(p.pos); p.delay = 0.3 + k * 0.25; p.spd = 3.4; }));
+  const refs = [REF, ...ASTS]; refs.forEach((r, k) => { r.cer = V((k - 1) * 0.9, 0, LINE_Z - 0.2); r.pos.set((k - 1) * 0.5, 0, W / 2 + 2.4); r.target.copy(r.pos); r.delay = 0; r.spd = 3.4; r.snap = true; });
+  ball.pos.set(0, CER.final ? -4 : 1.17, LINE_Z + 4.2); ball.vel.set(0, 0, 0); PED.visible = true;
+}
+function walkLogic(dt) {
+  CER.t += dt;
+  for (const p of players) { if (!p.cer) continue; if (CER.t >= p.delay) { p.target.copy(p.cer); } if (p.pos.distanceTo(p.cer) < 0.35 && CER.t > 4) { p.target.copy(p.pos); if (!p.mood) p.mood = 'hino'; } }
+  ball.pos.set(0, CER.final ? -4 : 1.17, LINE_Z + 4.2); ball.vel.set(0, 0, 0);
+  if (CER.t > 12.5 || CER.skip) endWalk();
+}
+function endWalk() { if (!CER.on) return; CER.on = false; CER.skip = false; PED.visible = false; TROPHY.visible = false; for (const p of players) { p.cer = null; p.mood = null; } kickoff(0); post({ t: 'ready' }); }
+function champLogic(dt, t) {
+  CER.t += dt; const tm = CER.champ, cap = CER.cap;
+  const win = players.filter((p) => p.team === tm && !p.off);
+  for (const p of players) {
+    if (p.ref) { p.target.set(-8, 0, LINE_Z - 4); p.spd = 2; continue; }
+    if (p.team === tm) {
+      if (p === cap) { p.target.set(0, 0, LINE_Z - 2); p.spd = 3; if (p.pos.distanceTo(p.target) < 0.5 && !(p.act && p.act.type === 'lift')) startAct(p, 'lift', { loop: true }); continue; }
+      const k = win.indexOf(p); const ang = Math.PI * (0.15 + 0.7 * (k / Math.max(1, win.length - 1))); p.target.set(Math.cos(ang) * 3.2, 0, LINE_Z - 2 - Math.sin(ang) * 2.6); p.spd = 5;
+      if (p.pos.distanceTo(p.target) < 0.8 && !p.act) startAct(p, 'festa', { loop: true, ph: k });
+    } else { p.mood = 'sad'; p.act = null; p.target.set((p.team === 0 ? -1 : 1) * 18, 0, (p.slot - 5) * 2.2); p.spd = 1.6; }
+  }
+  // taça nas mãos do capitão
+  if (cap) { if (cap.act && cap.act.type === 'lift') { handsPos(cap, _pv, false); TROPHY.position.set(_pv.x, _pv.y + 0.08 + 0.05 * Math.sin(t * 3), _pv.z); } else { TROPHY.position.set(0, 1.12, LINE_Z + 4.2); } TROPHY.visible = true; PED.visible = !(cap.act && cap.act.type === 'lift'); }
+  ball.pos.set(0, -4, 0);
+  confettiStep(dt, t);
+}
+// substitui a lógica e a câmera nas cerimônias
+const _ug = updateGame;
+updateGame = function (dt, t) {
+  if (G.phase === 'walk') walkLogic(dt); else if (G.phase === 'champ') champLogic(dt, t);
+  _ug(dt, t);
+  if (G.phase === 'walk' || G.phase === 'champ') { ball.mesh.position.copy(ball.pos); }
+};
+const _ct = camTarget;
+camTarget = function (t) {
+  if (G.phase === 'walk') {
+    const k = clamp((CER.t - 4) / 8.5, 0, 1); const x = lerp(-14, 14, k);
+    if (CER.t < 4) { camT.p.set(0, 3.2, W / 2 + 9); camT.l.set(0, 1.2, W / 2 + 1); }
+    else { camT.p.set(x, 2.1, LINE_Z + 7.5); camT.l.set(x * 0.85, 1.35, LINE_Z); }
+    camFov = 40; return;
+  }
+  if (G.phase === 'champ') { const o = t * 0.25; camT.p.set(Math.sin(o) * 9, 3.2 + Math.sin(t * 0.4) * 0.6, LINE_Z - 2 + Math.cos(o) * 9 + 2); camT.l.set(0, 1.9, LINE_Z - 2.2); camFov = 42; return; }
+  _ct(t);
+};
+function startChamp(side, capSlot) {
+  CER.champ = side; G.phase = 'champ'; CER.t = 0; G.owner = null; ball.held = null;
+  const win = players.filter((p) => p.team === side && !p.off && !p.gk);
+  CER.cap = players[side * 11 + capSlot] && !players[side * 11 + capSlot].off ? players[side * 11 + capSlot] : win[0];
+  for (const p of players) { p.act = null; p.mood = null; p.pend = null; }
+  TROPHY.visible = true; PED.visible = true; TROPHY.position.set(0, 1.12, LINE_Z + 4.2); PED.position.set(0, 0.525, LINE_Z + 4.2);
+  confettiStart(side); crowdUniforms.uExcite.value = 1; banner('CAMPEÃO!', side);
+}
+window.addEventListener('message', (e) => { const d = e.data || {}; if (!EMBED) return;
+  if (d.t === 'champ') startChamp(d.side, d.cap ?? 9);
+  else if (d.t === 'skipWalk') CER.skip = true;
+});
+// no modo embutido a partida começa pela entrada dos times (o "ready" só vai depois do perfilamento)
+const _setup = setupMatch;
+setupMatch = function (d) {
+  const _post = post; let held = null; post = (o) => { if (o && o.t === 'ready') { held = o; return; } _post(o); };
+  try { _setup(d); } finally { post = _post; }
+  post({ t: 'walk' }); startWalk(!!d.final);
+  const ld = document.getElementById('load'); if (ld) { ld.style.opacity = 0; setTimeout(() => ld.remove(), 600); }
+};
 
 $('#gMode').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; for (const x of $('#gMode').children) x.classList.toggle('on', x === b); const v = b.dataset.m === 'vit'; $('#gAnim').style.display = v ? '' : 'none'; hud.style.display = v ? 'none' : ''; setVit(v); };
 $('#gAnim').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; for (const x of $('#gAnim').children) x.classList.toggle('on', x === b); VIT.anim = b.dataset.a; VIT.t = 0; VIT.cyc = -1; for (const p of players) { p.act = null; p.mood = null; } };

@@ -144,10 +144,16 @@ VIEWS.home = () => {
       <div class="match-hero"><div data-a="club" data-v="${hc.id}">${crest(hc, 54)}<div class="nm">${esc(hc.name)}</div><div class="xs mut">${Math.round(strength(G, hc.id, me.job.youth))} força</div></div><div class="vs">VS</div><div data-a="club" data-v="${ac.id}">${crest(ac, 54)}<div class="nm">${esc(ac.name)}</div><div class="xs mut">${Math.round(strength(G, ac.id, me.job.youth))} força</div></div></div>
       <div class="row" style="gap:8px;margin-top:10px"><button class="btn pri grow" data-a="continue">${now ? '▶ Ir para o jogo' : 'Continuar ›'}</button><button class="btn" data-a="simper">⏩ Simular período</button></div></div>`;
     }
+    col1 += `<div class="vid-slot">${window.PVIDCARD ? window.PVIDCARD() : ''}</div>`;
     if (!me.job.youth) col1 += `<div class="card"><div class="row sm"><span class="grow mut">Confiança da diretoria</span><b>${Math.round(c.board.conf)}%</b></div><div class="bar"><i style="width:${c.board.conf}%;background:${c.board.conf < 30 ? 'var(--red)' : c.board.conf < 55 ? 'var(--gold)' : 'var(--ac)'}"></i></div><div class="xs mut" style="margin-top:6px">🎯 ${esc(me.obj?.text || '')}</div></div>`;
     else col1 += `<div class="card"><div class="row sm"><span class="grow mut">Sua reputação</span><b>${Math.round(me.rep)}/100</b></div><div class="bar"><i style="width:${me.rep}%;background:linear-gradient(90deg,var(--ac2),var(--gold))"></i></div><div class="xs mut" style="margin-top:6px">Técnico do sub-20: vença e revele talentos para ser notado.</div></div>`;
-    const compId = me.job.youth ? 'U20' : c.league; const comp = G.comps[compId];
-    if (comp && comp.table[c.id]) col2 += `<div class="card"><h3><span>${esc(comp.short)}</span><span class="form">${comp.table[c.id].form.split('').map((x) => `<i class="${x}"></i>`).join('')}</span></h3>${miniTable(comp, c.id)}</div>`;
+    // 5.1: a tabela acompanha o campeonato do próximo jogo (estadual, copa, continental…)
+    const nfc = nf ? G.comps[nf.c] : null; let compId = me.job.youth ? 'U20' : c.league;
+    if (nfc && nfc.table?.[c.id] && nf.ko < 0) compId = nf.c;
+    const comp = G.comps[compId];
+    if (nfc && nf.ko >= 0 && nfc.ko?.[nf.ko]) { const ties = nfc.ko[nf.ko].map((i) => G.fix[i]).filter(Boolean).filter((x, k, a) => a.findIndex((y) => (y.h === x.h && y.a === x.a) || (y.h === x.a && y.a === x.h)) === k).slice(0, 8);
+      col2 += `<div class="card"><h3><span>${esc(nfc.short || nfc.name)} · ${esc(fixPhase(nf))}</span></h3><div class="list">${ties.map((x) => `<div class="li xs ${x.h === c.id || x.a === c.id ? 'sel' : ''}">${crest(G.clubs[x.h], 16)}<span class="grow ell">${esc(G.clubs[x.h].short || G.clubs[x.h].name)}</span><b>${x.hg != null ? `${x.hg}–${x.ag}` : '×'}</b><span class="grow ell" style="text-align:right">${esc(G.clubs[x.a].short || G.clubs[x.a].name)}</span>${crest(G.clubs[x.a], 16)}</div>`).join('')}</div></div>`; }
+    else if (comp && comp.table[c.id]) col2 += `<div class="card"><h3><span>${esc(comp.short)}</span><span class="form">${comp.table[c.id].form.split('').map((x) => `<i class="${x}"></i>`).join('')}</span></h3>${miniTable(comp, c.id)}</div>`;
     const last = fixturesOf(G, c.id).filter((f) => f.hg != null && (me.job.youth ? f.c === 'U20' : G.comps[f.c]?.kind !== 'youth')).slice(-3).reverse();
     if (last.length) col2 += `<div class="card"><h3>Últimos resultados</h3><div class="list">${last.map((f) => fixLine(f, c.id)).join('')}</div></div>`;
   }

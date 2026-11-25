@@ -107,6 +107,21 @@ H.poupar = (v) => {
 H.goquick = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m } = setup(f); finishMatch(f, m.finish(true)); };
 H.golive = (v) => { const f = S.G.fix[+v]; closeSheet(true); const { m, side } = setup(f); const go = () => launchLive(f, m, side, S.G.clubs[f.h], S.G.clubs[f.a], null);
   const big = S.G.me.job?.youth ? false : bigGame(S.G, f); if (big && SET.matchday !== false) matchDay(f, m, big, go); else go(); };
+// taça genérica (sem marca de competição real)
+export const TROPHY_SVG = `<svg viewBox="0 0 120 170" class="cup-svg"><defs><linearGradient id="cg" x1="0" x2="1"><stop offset="0" stop-color="#8a6410"/><stop offset=".35" stop-color="#ffe17a"/><stop offset=".6" stop-color="#e8b923"/><stop offset="1" stop-color="#7a560c"/></linearGradient></defs>
+<path d="M30 20h60v12c0 26-12 44-30 48-18-4-30-22-30-48z" fill="url(#cg)"/><path d="M30 28c-14 0-20 8-18 18 2 11 12 16 22 15" fill="none" stroke="url(#cg)" stroke-width="6"/><path d="M90 28c14 0 20 8 18 18-2 11-12 16-22 15" fill="none" stroke="url(#cg)" stroke-width="6"/>
+<rect x="54" y="80" width="12" height="26" fill="url(#cg)"/><path d="M40 106h40l6 14H34z" fill="url(#cg)"/><rect x="30" y="120" width="60" height="14" rx="2" fill="#1d1d1d"/><rect x="38" y="125" width="44" height="4" rx="2" fill="#e8b923" opacity=".7"/>
+<rect x="22" y="134" width="76" height="36" rx="3" fill="#f2f2ee"/><rect x="22" y="134" width="76" height="5" fill="#c9a227"/></svg>`;
+export function isFinal(G, f) { try { return !G.me.job?.youth && bigGame(G, f) === 'final'; } catch { return false; } }
+// campeão de uma final: levantar a taça e comemorar (2D, ou depois dos pênaltis)
+export function champCelebrate(G, club, comp, done) {
+  const el = document.createElement('div'); el.className = 'champ-ov'; el.style.setProperty('--c1', club.c1 || '#2fe08a'); el.style.setProperty('--c2', club.c2 || '#fff');
+  el.innerHTML = `<div class="ch-conf">${Array.from({ length: 70 }, (_, i) => `<i style="--x:${(i * 37) % 100};--d:${(i % 9) * 0.25}s;--r:${(i * 53) % 360}deg;--k:${i % 3}"></i>`).join('')}</div>
+  <div class="ch-in"><div class="ch-tag">${esc(comp.name)}</div><div class="ch-lift">${TROPHY_SVG}</div>
+  <div class="ch-t">CAMPEÃO!</div><div class="ch-club">${crest(club, 44)}<b>${esc(club.name)}</b></div><button class="btn pri big ch-go">Comemorar ›</button></div>`;
+  document.body.appendChild(el); try { window.PAUDIO?.roar(true); window.PSFX?.('horn'); window.PSAY?.(`É campeão! ${club.name} levanta a taça!`, 'gol', true); } catch {}
+  el.querySelector('.ch-go').onclick = () => { el.classList.add('out'); setTimeout(() => { el.remove(); done?.(); }, 380); };
+}
 // ---------- dia de jogo (só em jogo grande) ----------
 function matchDay(f, m, big, go) {
   const G = S.G; const hc = G.clubs[f.h], ac = G.clubs[f.a]; const comp = G.comps[f.c];
@@ -116,7 +131,7 @@ function matchDay(f, m, big, go) {
   const wx = { sol: '☀️ Sol', nublado: '☁️ Nublado', chuva: '🌧️ Chuva', frio: '🧊 Frio', calor: '🔥 Calor' }[m.weather] || '';
   const el = document.createElement('div'); el.className = 'mday'; el.innerHTML = `<div class="md-bg"><i></i><i></i><i></i><i></i></div><div class="md-in">
    <div class="md-tag">${esc(comp.name)} · ${esc(fixPhase(f))}</div><div class="md-t">${T}</div><div class="md-sub">${esc(sub)}</div>
-   <div class="md-vs"><div class="md-c">${crest(hc, 74)}<b>${esc(hc.name)}</b></div><span>×</span><div class="md-c">${crest(ac, 74)}<b>${esc(ac.name)}</b></div></div>
+   <div class="md-vs"><div class="md-c">${crest(hc, 74)}<b>${esc(hc.name)}</b></div>${big === 'final' ? `<div class="md-cup">${TROPHY_SVG}</div>` : '<span>×</span>'}<div class="md-c">${crest(ac, 74)}<b>${esc(ac.name)}</b></div></div>
    <div class="md-info"><span>🏟️ ${esc(stad)}</span><span>👥 ${pub.toLocaleString('pt-BR')} torcedores</span>${wx ? `<span>${wx}</span>` : ''}<span>🧑‍⚖️ ${esc(m.ref?.nome || '')}</span></div>
    <button class="btn pri big md-go">▶ Entrar em campo</button></div>`;
   document.body.appendChild(el); try { window.PAUDIO?.crowd?.(0.6, 4); window.PSFX?.('horn'); } catch {}
@@ -150,7 +165,7 @@ export function launchLive(f, m, side, hc, ac, done) {
     onFail: () => { if (!L || !(L.viz instanceof Match3D)) return; L.viz.destroy(); cv.style.display = ''; wrap.classList.remove('d3'); L.viz = new MatchViz(cv, G, m, side, hooks); L.viz.speed = SET.speed; L.viz.replays = SET.replays; L.viz.resize(); toast('3D indisponível neste aparelho — mostrando em 2D'); },
   };
   const use3d = SET.view3d !== '2d';
-  if (use3d) { cv.style.display = 'none'; wrap.classList.add('d3'); L.viz = new Match3D(wrap.querySelector('.lv-pitch'), G, m, side, hooks, { rain: m.weather === 'chuva' }); }
+  if (use3d) { cv.style.display = 'none'; wrap.classList.add('d3'); L.viz = new Match3D(wrap.querySelector('.lv-pitch'), G, m, side, hooks, { rain: m.weather === 'chuva', final: isFinal(G, f) }); L.champ3d = isFinal(G, f); }
   else L.viz = new MatchViz(cv, G, m, side, hooks);
   cv.addEventListener('click', () => L?.viz.skipReplay());
   L.lastNar = 0; L.viz.speed = SET.speed; L.viz.replays = SET.replays;
@@ -246,7 +261,7 @@ function narrate() {
 }
 function addFeed(e) {
   const el = document.getElementById('lfeed'); if (!el) return;
-  const d = document.createElement('div'); d.className = 'ev ' + e.t + (e.side === L.side ? ' mine' : '');
+  const d = document.createElement('div'); d.className = 'ev ' + (e.t === 'lance' ? 'ev-lance' : e.t) + (e.side === L.side ? ' mine' : ''); // 'lance' sozinho pegava o CSS da tela cheia do pênalti (tela preta)
   const tx = evText(e); d.innerHTML = `<b class="dim">${e.m != null ? e.m + "'" : ''}</b> ${tx}`;
   el.prepend(d);
   if (SET.narr && ['gol', 'trave', 'def', 'ver', 'nar', 'int', 'fim'].includes(e.t)) { const n = document.getElementById('lnar'); if (n) { n.innerHTML = tx.replace(/<[^>]+>/g, ''); n.className = 'lv-nar on ' + e.t; L.narT = performance.now() + 3200; } }
@@ -346,7 +361,7 @@ function endLive() {
   if (el && !el.innerHTML) el.innerHTML = `<button class="btn pri blk" style="margin-top:8px" data-a="lfinish">Ver resumo ›</button>`;
 }
 H.lfinish = () => {
-  const f = L.f, res = L.m.result(), done = L.done;
+  const f = L.f, res = L.m.result(), done = L.done; if (L.champ3d && L.m.score[0] !== L.m.score[1]) res._champShown = true;
   cancelAnimationFrame(L.raf); window.removeEventListener('resize', L.onResize); L.viz.destroy?.(); document.getElementById('live')?.remove();
   L = null;
   (done || finishMatch)(f, res);
@@ -376,10 +391,13 @@ export function finishMatch(f, res) {
   try { window.LumbraAnalytics?.event('partida_fim', { mata_mata: f.ko >= 0 ? 1 : 0 }); } catch {}
   if (f.ko >= 0 && res.hg === res.ag) res.pen = penalties();
   const w = f.w, sl = f.s, c = myClub(G);
+  const fin = isFinal(G, f);
   playSlot(G, res);
   try { if (!G.me.job?.youth && SET.social !== false) socialAfterMatch(G, f, c); } catch (e) { console.warn(e); }
   save(); render();
   const hc = G.clubs[f.h], ac = G.clubs[f.a];
+  if (fin && c && !res._champShown) { const s0 = f.h === c.id ? 0 : 1; const gf = s0 ? f.ag : f.hg, ga = s0 ? f.hg : f.ag; const won = gf > ga || (gf === ga && f.pen && (s0 ? f.pen[1] > f.pen[0] : f.pen[0] > f.pen[1]));
+    if (won) { setTimeout(() => champCelebrate(G, c, G.comps[f.c]), 450); } }
   const ev = f.ev || [];
   const gl = (side) => ev.filter((e) => e[1] === 0 && e[2] === side).map((e) => `<div class="xs">⚽ ${esc(G.players[e[3]]?.n || '?')} ${e[0]}'</div>`).join('');
   const others = G.fix.filter((x) => x.c === f.c && x.w === w && x.s === sl && x.i !== f.i && x.hg != null).slice(0, 12);

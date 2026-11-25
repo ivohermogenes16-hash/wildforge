@@ -26,7 +26,9 @@ export function doLoan(G, p, to, type, fee, share) {
 export function endLoan(G, p, buy) {
   const L = p.loan; if (!L) return;
   const F = G.clubs[L.from], T = G.clubs[p.club];
-  if (!T || !F || p.club < 0) { p.loan = null; return; }
+  // origem ou destino que não existe mais (ex.: clube removido): o empréstimo acaba sem travar o fim de temporada
+  if (!F) { p.loan = null; if (!T) p.club = -1; return; }
+  if (!T || p.club < 0) { p.loan = null; p.club = F.id; return; }
   if (buy) {
     T.money -= L.fee; T.fin.tout += L.fee; F.money += L.fee; F.fin.tin += L.fee;
     p.loan = null; p.con = Math.max(p.con, G.year + 3); p.wage = Math.max(p.wage, playerWage(p, T.country));
@@ -74,7 +76,7 @@ export function loanRequest(G, p, type, share) {
   const ck = loanCheck(G, p, type, share); if (!ck.ok) return ck;
   const fee = type === 'simples' ? 0 : Math.round(playerValue(p) * (type === 'obrig' ? 0.95 : 1.1) / 1000) * 1000;
   if (type !== 'simples' && fee > c.money * 1.2) return { ok: false, why: `Seu clube não teria caixa para a compra futura (${money(fee)}).` };
-  if ((p.lnAsk || 0) >= G.t) return { ok: false, why: `O ${own.name} já respondeu esta semana. Tente de novo na próxima.` };
+  if ((p.lnAsk ?? -1) >= G.t) return { ok: false, why: `O ${own.name} já respondeu esta semana. Tente de novo na próxima.` };
   p.lnAsk = G.t;
   if (rnd() < ck.pr) { doLoan(G, p, c.id, type, fee, share); if (G.me.car) G.me.car.trans++; return { ok: true, why: `✅ ${p.n} chega emprestado${type !== 'simples' ? ` (compra: ${money(fee)})` : ''}!` }; }
   return { ok: false, why: `❌ O ${own.name} recusou. Pagar mais do salário ou incluir obrigação de compra ajuda.` };
@@ -179,7 +181,7 @@ export function marketWeek(G) {
     const cid = myCid(G);
     for (const p of G.players) if (p && p.loan && p.club === cid && p.loan.type === 'opcao' && !p.loan.asked) {
       p.loan.asked = true;
-      G.inbox.unshift({ id: (G.inbox[0]?.id || 0) + 1, t: G.t, y: G.year, w: G.week, from: G.clubs[p.loan.from].name, title: `🔁 Opção de compra: ${p.n}`, body: `O empréstimo de ${p.n} termina no fim da temporada. Você pode exercer a opção e comprá-lo por ${money(p.loan.fee)}.\nTemporada: ${p.st.j} jogos, ${p.st.g} gols${p.st.j ? `, nota ${(p.st.ns / p.st.j).toFixed(1)}` : ''}.`, read: false, kind: 'dec', opts: [{ l: `Comprar por ${money(p.loan.fee)}`, act: 'buyOpt', pid: p.id }, { l: 'Devolver ao fim do empréstimo', fx: {} }], def: 1, exp: G.t + 5, cid });
+      G.inbox.unshift({ id: (G.inbox[0]?.id || 0) + 1, t: G.t, y: G.year, w: G.week, from: G.clubs[p.loan.from]?.name || 'Clube de origem', title: `🔁 Opção de compra: ${p.n}`, body: `O empréstimo de ${p.n} termina no fim da temporada. Você pode exercer a opção e comprá-lo por ${money(p.loan.fee)}.\nTemporada: ${p.st.j} jogos, ${p.st.g} gols${p.st.j ? `, nota ${(p.st.ns / p.st.j).toFixed(1)}` : ''}.`, read: false, kind: 'dec', opts: [{ l: `Comprar por ${money(p.loan.fee)}`, act: 'buyOpt', pid: p.id }, { l: 'Devolver ao fim do empréstimo', fx: {} }], def: 1, exp: G.t + 5, cid });
     }
   }
 }
@@ -187,6 +189,7 @@ export function loansSeasonEnd(G) {
   for (const p of G.players) {
     if (!p || !p.loan || p.loan.until > G.year) continue;
     const L = p.loan; const T = G.clubs[p.club];
+    if (!T || !G.clubs[L.from]) { try { endLoan(G, p, false); } catch (e) { p.loan = null; } continue; }
     let buy = false;
     if (L.type === 'obrig') buy = T && T.money > -1e9;
     else if (L.type === 'opcao') {

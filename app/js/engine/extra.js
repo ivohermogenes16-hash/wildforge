@@ -1,5 +1,6 @@
 // Grande atualização: lesões detalhadas, capitão, sócio-torcedor e mosaicos, convocações,
 // propostas de fim de janela, gerações de ouro, prêmios (Bola de Ouro, seleção), lendas e resumo da semana.
+import { TICKET } from './econ.js';
 import { clamp, rnd, ri, rf, pick, money, hash, withSeed } from '../util.js';
 import { playerValue } from './econ.js';
 import { windowInfo, willJoin, askPrice } from './market.js';
@@ -58,8 +59,9 @@ function socioWeek(G) {
   const inc = Math.round(s.n * s.price * fee / 4.3); c.money += inc; c.fin && (c.fin.socio = (c.fin.socio || 0) + inc);
 }
 export function attendance(G, hc, ac, f, comp) {
-  const s = hc.socio ? Math.min(hc.socio.n * 0.7, (hc.cap || 3) * 1000 * 0.6) : 0; const price = hc.price ?? 40;
-  const occ = clamp(0.3 + hc.rep / 170 + (ac.rep > 75 ? 0.12 : 0) + (f.ko >= 0 ? 0.1 : 0) + ((hc.fans ?? 55) - 55) / 300 - Math.max(0, price - 60) / 400, 0.12, 1);
+  const s = hc.socio ? Math.min(hc.socio.n * 0.7, (hc.cap || 3) * 1000 * 0.6) : 0; const ref = TICKET[hc.country] ?? 20; const r = (hc.price ?? ref) / ref;
+  // 5.1: preço relativo ao normal do país: caro esvazia o estádio, barato enche
+  const occ = clamp(0.3 + hc.rep / 170 + (ac.rep > 75 ? 0.12 : 0) + (f.ko >= 0 ? 0.1 : 0) + ((hc.fans ?? 55) - 55) / 300 - Math.max(0, r - 1) * 0.32 + Math.max(0, 1 - r) * 0.18, 0.08, 1);
   return Math.round(Math.min((hc.cap || 3) * 1000, s + (hc.cap || 3) * 1000 * occ * 0.92));
 }
 export function mosaicFor(G, f) { const c = myC(G); if (!c || f.h !== c.id) return null; const big = f.ko >= 0 || (G.clubs[f.a].rep > 72) || f.derby; if (!big) return null; return pick(['Mosaico 3D com o escudo', 'Bandeirão gigante na arquibancada', 'Mosaico com as cores do clube', 'Coreografia com sinalizadores e papel picado']); }
