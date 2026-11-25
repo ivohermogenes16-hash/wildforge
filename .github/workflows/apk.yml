@@ -30,7 +30,7 @@ jobs:
           unzip -q /tmp/cmd.zip -d "$ANDROID_HOME/cmdline-tools"
           mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "platforms;android-36" "build-tools;34.0.0" "platform-tools" > /dev/null
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
           curl -sSL -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
@@ -59,13 +59,28 @@ jobs:
       - name: Preparar o arquivo
         run: cp android/app/build/outputs/apk/release/app-release.apk prancheta.apk
 
+      # Arquivo para a Google Play (AAB). Mesmo jogo, mesma chave; só muda o formato e mira o Android 36.
+      - name: Montar o AAB (Google Play)
+        working-directory: android
+        env:
+          VCODE: ${{ github.run_number }}
+          CSDK: '36'
+          TSDK: '36'
+          LUMBRA_KEY_PASS: ${{ secrets.LUMBRA_KEY_PASS }}
+        run: gradle bundleRelease --no-daemon --stacktrace
+
+      - name: Preparar o AAB
+        run: cp android/app/build/outputs/bundle/release/app-release.aab prancheta.aab
+
       - name: Publicar para download
         uses: softprops/action-gh-release@v2
         with:
           tag_name: prancheta-apk
           target_commitish: ${{ github.sha }}
           name: Prancheta (versão ${{ github.run_number }})
-          body: Baixe o arquivo **prancheta.apk** abaixo e instale no Android. Para atualizar, instale por cima da versão antiga (sua carreira continua salva).
-          files: prancheta.apk
+          body: Baixe o arquivo **prancheta.apk** abaixo e instale no Android. Para atualizar, instale por cima da versão antiga (sua carreira continua salva). O arquivo **prancheta.aab** é a versão para enviar à Google Play.
+          files: |
+            prancheta.apk
+            prancheta.aab
           make_latest: false
           overwrite_files: true

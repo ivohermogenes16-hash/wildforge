@@ -4,15 +4,18 @@ plugins {
 
 // número da versão vem da montagem no GitHub (cada montagem nova é uma versão nova)
 def vcode = (System.getenv("VCODE") ?: "1") as Integer
+// APK do site continua no Android 34; o arquivo da Google Play (AAB) é montado mirando o Android 36, como a Play exige
+def csdk = (System.getenv("CSDK") ?: "34") as Integer
+def tsdk = (System.getenv("TSDK") ?: "34") as Integer
 
 android {
     namespace 'io.github.prancheta'
-    compileSdk 34
+    compileSdk csdk
 
     defaultConfig {
         applicationId "com.lumbragames.prancheta"
         minSdk 24
-        targetSdk 34
+        targetSdk tsdk
         versionCode vcode
         versionName "1." + vcode
     }
