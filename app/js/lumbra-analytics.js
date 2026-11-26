@@ -318,10 +318,11 @@
         return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }).then(function (r) { return r.json(); }); };
       var prev = store.uid;
       return auth().then(function () { return call(true); }).then(function (j) {
-        if (j.error && /FEDERATED_USER_ID_ALREADY_LINKED|CREDENTIAL_TOO_OLD|INVALID_ID_TOKEN/.test(j.error.message || "")) return call(false);
+        // ligar à conta atual falhou (Google já tem conta, mesmo e-mail em outra conta etc.): entra direto com o Google
+        if (!j.idToken || j.needConfirmation || j.errorMessage || j.error) return call(false);
         return j;
       }).then(function (j) {
-        if (!j.idToken) throw new Error((j.error && j.error.message) || "google");
+        if (!j.idToken) throw new Error((j.error && j.error.message) || j.errorMessage || (j.needConfirmation ? "conta já existe" : "sem resposta"));
         store.tok = j.idToken; store.ref = j.refreshToken; store.uid = j.localId; store.exp = now() + (+j.expiresIn || 3600) * 1000;
         store.g = { email: j.email || "", name: j.displayName || j.fullName || "" }; save();
         return { uid: j.localId, switched: prev && prev !== j.localId, email: j.email || "", name: j.displayName || j.fullName || "" };
