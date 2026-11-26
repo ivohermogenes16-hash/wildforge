@@ -2,7 +2,7 @@
 import { S, H, openSheet, closeSheet, replaceSheet, centerNote } from './app.js';
 import { esc } from '../util.js';
 export const WA = 'https://chat.whatsapp.com/C44zXTaeoOcJqcsTmjMAwX';
-export const VER = '6.1';
+export const VER = '6.2';
 export function openLink(u) { try { if (window.PranchetaNative?.openUrl) { window.PranchetaNative.openUrl(u); return; } } catch {} window.open(u, '_blank'); }
 function device() { const ua = navigator.userAgent; const a = ua.match(/Android [\d.]+/)?.[0] || (/(iPhone|iPad)/.test(ua) ? 'iOS' : 'Navegador'); const mdl = ua.match(/; ([^;)]+) Build/)?.[1] || ''; let b = ''; try { b = window.PranchetaNative?.versionCode ? ' build ' + window.PranchetaNative.versionCode() : ''; } catch {} return `${a}${mdl ? ' · ' + mdl : ''} · Prancheta ${VER}${b}`; }
 export function comuHtml() {

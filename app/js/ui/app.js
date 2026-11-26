@@ -89,7 +89,8 @@ export function render() {
   } catch (e) { console.error(e); body = `<div class="card bad">Erro: ${esc(e.message)}</div>`; }
   const now = userFixNow(G);
   const sc = app.querySelector('main')?.scrollTop || 0; const vk = (S.page || S.tab) + ':' + (S.page ? '' : S.sub[S.tab] || ''); const same = app.dataset.view === vk;
-  app.innerHTML = `<nav class="rail">${NAV.filter(([k]) => k !== 'nat' || S.G.me.nat).map(([k, l, ic]) => `<button class="${S.tab === k && !S.page ? 'on' : ''}" data-a="tab" data-v="${k}">${ICONS[ic]}<span>${l}</span>${k === 'more' && unread ? `<span class="badge">${unread}</span>` : ''}</button>`).join('')}</nav>
+  app.style.setProperty('--cc1', c?.c1 || '#2fe08a'); app.style.setProperty('--cc2', c?.c2 || '#0b4d2c'); app.classList.add('fcx');
+  app.innerHTML = `<nav class="rail"><div class="rail-top">${c ? crest(c, 30) : '<b>P</b>'}</div>${NAV.filter(([k]) => k !== 'nat' || S.G.me.nat).map(([k, l, ic]) => `<button class="${S.tab === k && !S.page ? 'on' : ''}" data-a="tab" data-v="${k}">${ICONS[ic]}<span>${l}</span>${k === 'more' && unread ? `<span class="badge">${unread}</span>` : ''}</button>`).join('')}</nav>
   <div class="right"><header class="top">${S.page ? `<button class="btn sm" data-a="back">‹ Voltar</button>` : c ? crest(c, 32) : '<span class="logo" style="font-size:20px">P<span>.</span></span>'}
     <div class="grow"><div class="t1 ell">${esc(S.page ? (PAGES_T[S.page] || '') : title)}</div><div class="t2">${dateStr(Math.min(G.week, SEASON_WEEKS - 1), true)} de ${G.year} ${G.me.job && !G.me.job.youth ? (inWindow(G) ? '<span class="mk-pill open">Mercado aberto</span>' : '<span class="mk-pill">Mercado fechado</span>') : `· sem. ${Math.min(G.week, SEASON_WEEKS - 1) + 1}/${SEASON_WEEKS}`}${c && G.me.obj ? ` · 🎯 ${esc(G.me.obj.text)}` : ''}</div></div>
     <button class="icon-btn" data-a="search" title="Buscar">🔎</button><button class="icon-btn" data-a="go" data-v="inbox">📩${unread ? `<span class="badge">${unread}</span>` : ''}</button>
@@ -134,6 +135,18 @@ function miniTable(comp, cid) {
   return `<table class="tb"><tr><th>#</th><th class="l">Clube</th><th>J</th><th>SG</th><th>P</th></tr>${tab.slice(from, from + 8).map((id, k) => { const r = comp.table[id], cl = G.clubs[id]; return `<tr class="${id === cid ? 'me' : ''}" data-a="club" data-v="${id}"><td>${from + k + 1}</td><td class="l"><span class="row" style="gap:6px">${crest(cl, 18)}<span class="ell" style="max-width:120px">${esc(cl.name)}</span></span></td><td>${r.p}</td><td>${r.gf - r.ga}</td><td class="b">${r.pts}</td></tr>`; }).join('')}</table>`;
 }
 const VIEWS = {};
+function hubBanner(G, c) {
+  const me = G.me, youth = me.job.youth; const compId = youth ? 'U20' : c.league; const comp = G.comps[compId];
+  let pos = '', form = '', pts = '';
+  if (comp && comp.table && comp.table[c.id]) { const gi = Math.max(0, comp.groups.findIndex((g) => g.includes(c.id))); const tab = standings(G, comp, gi); pos = tab.indexOf(c.id) + 1; const r = comp.table[c.id]; form = r.form || ''; pts = r.pts; }
+  const sq = G.players.filter((p) => p && p.club === c.id && (youth ? p.u20 : !p.u20)); const avg = Math.round(sq.reduce((s, p) => s + p.ovr, 0) / (sq.length || 1));
+  const best = sq.slice().sort((a, b) => b.ovr - a.ovr)[0];
+  const stat = (l, v, cls = '') => `<div class="hb-st ${cls}"><small>${l}</small><b>${v}</b></div>`;
+  return `<div class="hub-banner"><div class="hb-name">${esc(c.short || c.name)}</div><div class="hb-crest">${crest(c, 64)}</div>
+  <div class="hb-main"><small>${esc(comp?.short || comp?.name || '')} · ${G.year}</small><b>${esc(youth ? c.name + ' Sub-20' : c.name)}</b>
+  <div class="hb-form">${form ? form.split('').slice(-5).map((x) => `<i class="${x}">${x}</i>`).join('') : '<span class="xs mut">Sem jogos ainda</span>'}</div></div>
+  <div class="hb-stats">${stat('Posição', pos ? pos + 'º' : '–', 'hl')}${stat('Pontos', pts === '' ? '–' : pts)}${stat('Média', avg)}${stat('Estrela', best ? `<span class="ell">${esc(shortName(best.n))}</span> <em>${best.ovr}</em>` : '–', 'wide')}${!youth ? stat('Diretoria', Math.round(c.board.conf) + '%') : stat('Reputação', Math.round(me.rep))}</div></div>`;
+}
 VIEWS.home = () => {
   const G = S.G, me = G.me, c = myClub(G);
   let col1 = '', col2 = '', col3 = '';
@@ -173,7 +186,7 @@ VIEWS.home = () => {
   col3 += `<div class="card"><h3><span>Notícias</span><span class="sm" data-a="newsgo">ver jornal ›</span></h3><div>${S.newsHome ? S.newsHome(G) : ''}</div></div>`;
   if (me.nat) { const nf = nextNatFix(G); const T = G.nat.teams[me.nat.code]; const tm = (k) => G.nat.teams[k]; col1 += `<div class="card" data-a="tab" data-v="nat"><h3><span>${T.flag} Seleção ${esc(T.name)}</span><span class="pill">Federação ${Math.round(T.conf)}%</span></h3>${nf ? `<div class="row" style="justify-content:center;gap:10px"><span style="font-size:26px">${tm(nf.h).flag}</span><b>${esc(tm(nf.h).name)} x ${esc(tm(nf.a).name)}</b><span style="font-size:26px">${tm(nf.a).flag}</span></div><div class="xs mut" style="text-align:center">${wk(nf.w)}${nf.w === G.week && G.slot === 0 ? ' · HOJE' : ''}</div>` : '<div class="xs mut">Sem jogos marcados.</div>'}</div>`; }
   col1 = `<div id="homex"></div>` + col1;
-  return `<div class="dash"><div>${col1}</div><div>${col2 || col3}</div>${col2 ? `<div>${col3}</div>` : ''}</div>`;
+  return `${c ? hubBanner(G, c) : ''}<div class="dash"><div>${col1}</div><div>${col2 || col3}</div>${col2 ? `<div>${col3}</div>` : ''}</div>`;
 };
 
 // ---------- ELENCO (tabela estilo FM) ----------

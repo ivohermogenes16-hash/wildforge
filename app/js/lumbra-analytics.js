@@ -309,6 +309,24 @@
     // configuração remota publicada no Lumbra Control (avisos, evento ativo, versão mínima)
     get remote() { return remote; },
     onRemote: function (cb) { if (typeof cb === "function") { remoteCbs.push(cb); if (remote) try { cb(remote); } catch (e) {} } },
-    eventActive: function () { return remote && inWindow(remote.event) ? remote.event : null; }
+    eventActive: function () { return remote && inWindow(remote.event) ? remote.event : null; },
+    // 6.2: entrar com Google. Liga o Google à conta atual (mesmo uid) ou, se esse Google já tem conta (reinstalou), entra nela.
+    google: function (googleIdToken) {
+      if (!cfg || !store) return Promise.reject(new Error("offline"));
+      var url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=" + cfg.apiKey;
+      var call = function (link) { var b = { postBody: "id_token=" + encodeURIComponent(googleIdToken) + "&providerId=google.com", requestUri: "http://localhost", returnSecureToken: true, returnIdpCredential: true }; if (link) b.idToken = store.tok;
+        return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }).then(function (r) { return r.json(); }); };
+      var prev = store.uid;
+      return auth().then(function () { return call(true); }).then(function (j) {
+        if (j.error && /FEDERATED_USER_ID_ALREADY_LINKED|CREDENTIAL_TOO_OLD|INVALID_ID_TOKEN/.test(j.error.message || "")) return call(false);
+        return j;
+      }).then(function (j) {
+        if (!j.idToken) throw new Error((j.error && j.error.message) || "google");
+        store.tok = j.idToken; store.ref = j.refreshToken; store.uid = j.localId; store.exp = now() + (+j.expiresIn || 3600) * 1000;
+        store.g = { email: j.email || "", name: j.displayName || j.fullName || "" }; save();
+        return { uid: j.localId, switched: prev && prev !== j.localId, email: j.email || "", name: j.displayName || j.fullName || "" };
+      });
+    },
+    get account() { return store && store.g || null; }
   };
 })(window);

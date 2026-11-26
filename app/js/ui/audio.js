@@ -41,14 +41,50 @@ document.addEventListener('pointerdown', (e) => { const b = e.target.closest?.('
 
 // ---------- torcida e jogo ----------
 let CROWD = null, crowdT = 0;
+// torcida: murmúrio de vozes (não chiado) + cantos ritmados com palmas e bumbo, que mudam de tempo em tempo
+function babble(vol) {
+  const a = AC; const out = a.createGain(); out.gain.value = 0.0001; out.connect(MASTER); out.gain.linearRampToValueAtTime(vol, a.currentTime + 1.5);
+  const src = a.createBufferSource(); src.buffer = NOISE; src.loop = true;
+  const vs = [];
+  for (const [f, q, g] of [[420, 6, 0.5], [780, 7, 0.38], [1250, 8, 0.24], [2400, 9, 0.12]]) {
+    const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; const gg = a.createGain(); gg.gain.value = g;
+    const lfo = a.createOscillator(), lg = a.createGain(); lfo.frequency.value = 3 + Math.random() * 4; lg.gain.value = g * 0.6; lfo.connect(lg); lg.connect(gg.gain); lfo.start();
+    const lfo2 = a.createOscillator(), lg2 = a.createGain(); lfo2.frequency.value = 0.15 + Math.random() * 0.2; lg2.gain.value = f * 0.12; lfo2.connect(lg2); lg2.connect(bp.frequency); lfo2.start();
+    src.connect(bp); bp.connect(gg); gg.connect(out); vs.push(lfo, lfo2);
+  }
+  src.start(); return { out, src, vs };
+}
+const CHANTS = [
+  // [notas (Hz) do canto, ritmo em batidas, bpm]
+  { n: [392, 392, 440, 392, 330, 294, 330, 392], r: [1, 1, 1, 1, 1, 1, 2, 2], bpm: 132 },
+  { n: [330, 392, 392, 440, 494, 440, 392, 330], r: [1, 1, 2, 1, 1, 1, 1, 2], bpm: 120 },
+  { n: [440, 440, 392, 440, 523, 494, 440, 392], r: [2, 1, 1, 2, 1, 1, 1, 1], bpm: 140 },
+];
+function chant(t0, k, vol) {
+  const a = AC; const C = CHANTS[k % CHANTS.length]; const beat = 60 / C.bpm; let t = t0;
+  for (let i = 0; i < C.n.length; i++) { const d = C.r[i] * beat; const f = C.n[i];
+    // milhares de vozes = vários osciladores levemente desafinados passando por um filtro de "vogal"
+    const g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.05); g.gain.setValueAtTime(vol, t + d * 0.75); g.gain.linearRampToValueAtTime(0.0001, t + d * 0.98);
+    const v = a.createBiquadFilter(); v.type = 'bandpass'; v.frequency.value = 900; v.Q.value = 1.4; v.connect(g); g.connect(MASTER);
+    for (const det of [-22, -9, 0, 7, 18, 31]) { const o = a.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f / 2; o.detune.value = det + (Math.random() - 0.5) * 10; o.connect(v); o.start(t); o.stop(t + d); }
+    const n = a.createBufferSource(); n.buffer = NOISE; const nf = a.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 1600; nf.Q.value = 0.8; const ng = a.createGain(); ng.gain.value = 0.35; n.connect(nf); nf.connect(ng); ng.connect(g); n.start(t); n.stop(t + d);
+    t += d; }
+  // palmas e bumbo no tempo
+  const bars = C.r.reduce((x, y) => x + y, 0);
+  for (let i = 0; i < bars; i++) { const tt = t0 + i * beat;
+    if (i % 2 === 0) { const o = a.createOscillator(), g = a.createGain(); o.frequency.setValueAtTime(110, tt); o.frequency.exponentialRampToValueAtTime(45, tt + 0.18); g.gain.setValueAtTime(vol * 2.2, tt); g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.25); o.connect(g); g.connect(MASTER); o.start(tt); o.stop(tt + 0.3); }
+    const n = a.createBufferSource(); n.buffer = NOISE; const f = a.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1500; const g = a.createGain(); g.gain.setValueAtTime(vol * 1.6, tt); g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.09); n.connect(f); f.connect(g); g.connect(MASTER); n.start(tt, Math.random()); n.stop(tt + 0.12); }
+  return t0 + bars * beat;
+}
 function crowdOn(level = 0.35) {
   if (SET.crowd === false || !ac()) return;
-  if (!CROWD) { CROWD = { a: noise(0, 0, level * 0.5, 520, 0.5, 1.5), b: noise(0, 0, level * 0.25, 1400, 0.8, 1.5) }; }
-  else { const t = AC.currentTime; CROWD.a.g.gain.linearRampToValueAtTime(level * 0.5, t + 0.8); CROWD.b.g.gain.linearRampToValueAtTime(level * 0.25, t + 0.8); }
+  if (!CROWD) { CROWD = { b: babble(level * 0.55), lvl: level, next: AC.currentTime + 2, k: Math.floor(Math.random() * 3) };
+    CROWD.tick = setInterval(() => { if (!CROWD || !AC) return; const now = AC.currentTime; if (now > CROWD.next - 0.2) { const end = chant(Math.max(now, CROWD.next), CROWD.k, CROWD.lvl * 0.06); CROWD.reps = (CROWD.reps || 0) + 1; if (CROWD.reps >= 2 + Math.floor(Math.random() * 2)) { CROWD.reps = 0; CROWD.k++; CROWD.next = end + 5 + Math.random() * 6; } else CROWD.next = end; } }, 400); }
+  else { CROWD.lvl = level; CROWD.b.out.gain.linearRampToValueAtTime(level * 0.55, AC.currentTime + 0.8); }
   clearInterval(crowdT); crowdT = setInterval(() => { if (!document.getElementById('live') && !document.querySelector('.mday')) crowdOff(); }, 1500);
 }
-function crowdOff() { clearInterval(crowdT); if (!CROWD || !AC) return; const t = AC.currentTime; for (const k of ['a', 'b']) { try { CROWD[k].g.gain.linearRampToValueAtTime(0.0001, t + 1); CROWD[k].s.stop(t + 1.2); } catch {} } CROWD = null; }
-function roar(mine = true) { if (SET.crowd === false) return; noise(0, mine ? 5 : 2.2, mine ? 0.9 : 0.35, 700, 0.4, 0.25); noise(0.1, mine ? 4.5 : 2, mine ? 0.4 : 0.15, 1800, 0.6, 0.3); if (mine) { tone(392, 0.2, 0.35, 'sawtooth', 0.03); tone(523, 0.55, 0.6, 'sawtooth', 0.03); } }
+function crowdOff() { clearInterval(crowdT); if (!CROWD || !AC) return; clearInterval(CROWD.tick); const t = AC.currentTime; try { CROWD.b.out.gain.linearRampToValueAtTime(0.0001, t + 1); CROWD.b.src.stop(t + 1.2); CROWD.b.vs.forEach((o) => o.stop(t + 1.2)); } catch {} CROWD = null; }
+function roar(mine = true) { if (SET.crowd === false) return; try { if (AC) { const r = babble(mine ? 1.1 : 0.35); const t = AC.currentTime; r.out.gain.setValueAtTime(mine ? 1.1 : 0.35, t + 0.3); r.out.gain.linearRampToValueAtTime(0.0001, t + (mine ? 5 : 2.2)); r.src.stop(t + (mine ? 5.2 : 2.4)); r.vs.forEach((o) => o.stop(t + 5.3)); } } catch {} noise(0, mine ? 5 : 2.2, mine ? 0.9 : 0.35, 700, 0.4, 0.25); noise(0.1, mine ? 4.5 : 2, mine ? 0.4 : 0.15, 1800, 0.6, 0.3); if (mine) { tone(392, 0.2, 0.35, 'sawtooth', 0.03); tone(523, 0.55, 0.6, 'sawtooth', 0.03); } }
 function ooh() { if (SET.crowd === false) return; const n = noise(0, 1.6, 0.5, 420, 1.2, 0.2); if (n) n.f.frequency.linearRampToValueAtTime(300, AC.currentTime + 1.5); }
 export const PAUDIO = {
   crowd: (lvl, secs) => { crowdOn(lvl); if (secs) setTimeout(() => { if (!document.getElementById('live')) crowdOff(); }, secs * 1000); },

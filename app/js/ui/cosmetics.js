@@ -19,62 +19,70 @@ export const EVENTS = {
 // p = preço em Pranfixas (0 = não se compra: ganha jogando/evento); how = como ganhar
 export const CAT = [
   // molduras (evolução de animação do Bronze à Lenda)
-  { id: 'fr_bronze', k: 'fr', n: 'Bronze', ra: 'comum', p: 300 },
-  { id: 'fr_prata', k: 'fr', n: 'Prata', ra: 'raro', p: 700 },
-  { id: 'fr_ouro', k: 'fr', n: 'Ouro', ra: 'epico', p: 1500 },
-  { id: 'fr_diam', k: 'fr', n: 'Diamante', ra: 'epico', p: 3000 },
-  { id: 'fr_neon', k: 'fr', n: 'Neon', ra: 'lendario', p: 5000 },
-  { id: 'fr_lenda', k: 'fr', n: 'Lenda', ra: 'lendario', p: 9000 },
+  { id: 'fr_bronze', k: 'fr', n: 'Bronze', ra: 'comum', p: 150 },
+  { id: 'fr_prata', k: 'fr', n: 'Prata', ra: 'raro', p: 350 },
+  { id: 'fr_ouro', k: 'fr', n: 'Ouro', ra: 'epico', p: 700 },
+  { id: 'fr_diam', k: 'fr', n: 'Diamante', ra: 'epico', p: 1200 },
+  { id: 'fr_neon', k: 'fr', n: 'Neon', ra: 'lendario', p: 2000 },
+  { id: 'fr_lenda', k: 'fr', n: 'Lenda', ra: 'lendario', p: 3000 },
   { id: 'ex_desafio', k: 'fr', n: 'Campeão da Semana', ra: 'exclusivo', p: 0, how: 'Termine em 1º no Desafio da Semana' },
   { id: 'ex_liga', k: 'fr', n: 'Campeão de Liga', ra: 'exclusivo', p: 0, how: 'Seja campeão de uma liga com amigos' },
   { id: 'ex_socio', k: 'fr', n: 'Sócio Prancheta', ra: 'exclusivo', p: 0, how: 'Disponível enquanto for Sócio' },
   { id: 'ex_top10', k: 'fr', n: 'Top 10 da Temporada', ra: 'exclusivo', p: 0, how: 'Termine uma temporada do ranking no top 10' },
   // emblemas
-  ...[['prancheta', 'Prancheta'], ['apito', 'Apito'], ['chuteira', 'Chuteira'], ['bola', 'Bola clássica'], ['bandeira', 'Bandeira'], ['megafone', 'Megafone'], ['tambor', 'Tambor da torcida'], ['cronometro', 'Cronômetro']].map(([id, n]) => ({ id: 'em_' + id, k: 'em', n, ra: 'comum', p: 150 })),
-  ...[['trofeu', 'Taça'], ['sinalizador', 'Sinalizador'], ['lobo', 'Lobo'], ['touro', 'Touro']].map(([id, n]) => ({ id: 'em_' + id, k: 'em', n, ra: 'raro', p: 400 })),
-  ...[['aguia', 'Águia'], ['tubarao', 'Tubarão'], ['leao', 'Leão'], ['bolafogo', 'Bola em chamas'], ['raio', 'Raio']].map(([id, n]) => ({ id: 'em_' + id, k: 'em', n, ra: 'epico', p: 900 })),
-  ...[['dragao', 'Dragão'], ['fenix', 'Fênix'], ['coroa', 'Coroa'], ['estrela', 'Estrela cadente']].map(([id, n]) => ({ id: 'em_' + id, k: 'em', n, ra: 'lendario', p: 2000 })),
+  ...[['prancheta', 'Prancheta'], ['apito', 'Apito'], ['chuteira', 'Chuteira'], ['bola', 'Bola clássica'], ['bandeira', 'Bandeira'], ['megafone', 'Megafone'], ['tambor', 'Tambor da torcida'], ['cronometro', 'Cronômetro']].map(([id, n]) => ({ id: 'em_' + id, k: 'em', n, ra: 'comum', p: 80 })),
+  ...[['trofeu', 'Taça'], ['sinalizador', 'Sinalizador'], ['lobo', 'Lobo'], ['touro', 'Touro']].map(([id, n]) => ({ id: 'em_' + id, k: 'em', n, ra: 'raro', p: 200 })),
+  ...[['aguia', 'Águia'], ['tubarao', 'Tubarão'], ['leao', 'Leão'], ['bolafogo', 'Bola em chamas'], ['raio', 'Raio']].map(([id, n]) => ({ id: 'em_' + id, k: 'em', n, ra: 'epico', p: 450 })),
+  ...[['dragao', 'Dragão'], ['fenix', 'Fênix'], ['coroa', 'Coroa'], ['estrela', 'Estrela cadente']].map(([id, n]) => ({ id: 'em_' + id, k: 'em', n, ra: 'lendario', p: 900 })),
   { id: 'em_medalha', k: 'em', n: 'Medalha de ouro', ra: 'exclusivo', p: 0, how: 'Conquista: vença 25 jogos no Desafio da Semana' },
   { id: 'em_escudo', k: 'em', n: 'Escudo do Sócio', ra: 'exclusivo', p: 0, how: 'Disponível enquanto for Sócio' },
   // faixas (fundo atrás do nome)
-  { id: 'ban_noite', k: 'ban', n: 'Estádio à noite', ra: 'raro', p: 500 },
-  { id: 'ban_torcida', k: 'ban', n: 'Bandeiras da torcida', ra: 'raro', p: 600 },
-  { id: 'ban_papel', k: 'ban', n: 'Papel picado', ra: 'epico', p: 1200 },
-  { id: 'ban_chuva', k: 'ban', n: 'Chuva e raios', ra: 'epico', p: 1400 },
-  { id: 'ban_fogos', k: 'ban', n: 'Fogos de artifício', ra: 'lendario', p: 2500 },
-  { id: 'ban_ouro', k: 'ban', n: 'Ouro puro', ra: 'lendario', p: 3000 },
+  { id: 'ban_noite', k: 'ban', n: 'Estádio à noite', ra: 'raro', p: 250 },
+  { id: 'ban_torcida', k: 'ban', n: 'Bandeiras da torcida', ra: 'raro', p: 300 },
+  { id: 'ban_papel', k: 'ban', n: 'Papel picado', ra: 'epico', p: 550 },
+  { id: 'ban_chuva', k: 'ban', n: 'Chuva e raios', ra: 'epico', p: 650 },
+  { id: 'ban_fogos', k: 'ban', n: 'Fogos de artifício', ra: 'lendario', p: 1000 },
+  { id: 'ban_ouro', k: 'ban', n: 'Ouro puro', ra: 'lendario', p: 1200 },
   // títulos
-  ...[['Professor', 200], ['O Estrategista', 300], ['Retranqueiro', 300], ['Futebol Ofensivo', 300], ['O Moderno', 400], ['Pé Quente', 500], ['Mestre da Base', 600], ['Caçador de Títulos', 800], ['Lenda Viva', 1500]].map(([n, p], i) => ({ id: 'tit_' + i, k: 'tit', n, ra: p >= 800 ? 'epico' : p >= 400 ? 'raro' : 'comum', p })),
+  ...[['Professor', 100], ['O Estrategista', 150], ['Retranqueiro', 150], ['Futebol Ofensivo', 150], ['O Moderno', 200], ['Pé Quente', 250], ['Mestre da Base', 300], ['Caçador de Títulos', 400], ['Lenda Viva', 500]].map(([n, p], i) => ({ id: 'tit_' + i, k: 'tit', n, ra: p >= 400 ? 'epico' : p >= 200 ? 'raro' : 'comum', p })),
   { id: 'tit_campsem', k: 'tit', n: 'Campeão da Semana', ra: 'exclusivo', p: 0, how: 'Termine em 1º no Desafio da Semana' },
   { id: 'tit_campliga', k: 'tit', n: 'Rei da Liga', ra: 'exclusivo', p: 0, how: 'Seja campeão de uma liga com amigos' },
   { id: 'tit_lenda', k: 'tit', n: 'Divisão Lenda', ra: 'exclusivo', p: 0, how: 'Chegue à divisão Lenda numa temporada' },
   // comemorações de gol (partida 3D)
-  { id: 'g_ouro', k: 'gfx', n: 'Chuva de ouro', ra: 'epico', p: 1200 },
-  { id: 'g_fogos', k: 'gfx', n: 'Fogos no estádio', ra: 'epico', p: 1500 },
-  { id: 'g_raio', k: 'gfx', n: 'Tempestade de raios', ra: 'lendario', p: 2200 },
-  { id: 'g_fogo', k: 'gfx', n: 'Estádio em chamas', ra: 'lendario', p: 2500 },
-  { id: 'g_neon', k: 'gfx', n: 'Explosão neon', ra: 'lendario', p: 2500 },
+  { id: 'g_ouro', k: 'gfx', n: 'Chuva de ouro', ra: 'epico', p: 600 },
+  { id: 'g_fogos', k: 'gfx', n: 'Fogos no estádio', ra: 'epico', p: 700 },
+  { id: 'g_raio', k: 'gfx', n: 'Tempestade de raios', ra: 'lendario', p: 1000 },
+  { id: 'g_fogo', k: 'gfx', n: 'Estádio em chamas', ra: 'lendario', p: 1200 },
+  { id: 'g_neon', k: 'gfx', n: 'Explosão neon', ra: 'lendario', p: 1200 },
   // temas da tela inicial
-  { id: 'th_final', k: 'th', n: 'Noite de Final', ra: 'raro', p: 600 },
-  { id: 'th_classico', k: 'th', n: 'Clássico', ra: 'raro', p: 600 },
-  { id: 'th_retro', k: 'th', n: 'Retrô', ra: 'epico', p: 900 },
-  { id: 'th_neon', k: 'th', n: 'Neon', ra: 'epico', p: 1200 },
+  { id: 'th_final', k: 'th', n: 'Noite de Final', ra: 'raro', p: 300 },
+  { id: 'th_classico', k: 'th', n: 'Clássico', ra: 'raro', p: 300 },
+  { id: 'th_retro', k: 'th', n: 'Retrô', ra: 'epico', p: 450 },
+  { id: 'th_neon', k: 'th', n: 'Neon', ra: 'epico', p: 600 },
   // cards de compartilhar
-  { id: 'cd_ouro', k: 'cd', n: 'Card dourado', ra: 'epico', p: 800 },
-  { id: 'cd_holo', k: 'cd', n: 'Card holográfico', ra: 'lendario', p: 1600 },
+  { id: 'cd_ouro', k: 'cd', n: 'Card dourado', ra: 'epico', p: 400 },
+  { id: 'cd_holo', k: 'cd', n: 'Card holográfico', ra: 'lendario', p: 800 },
   // estoque de eventos: moldura + emblema + faixa + título para cada tema
   ...Object.entries(EVENTS).flatMap(([e, E]) => [
-    { id: 'evf_' + e, k: 'fr', n: 'Moldura ' + E.t, ra: 'evento', p: 1200, ev: e },
-    { id: 'eve_' + e, k: 'em', n: 'Emblema ' + E.t, ra: 'evento', p: 700, ev: e },
-    { id: 'evb_' + e, k: 'ban', n: 'Faixa ' + E.t, ra: 'evento', p: 900, ev: e },
-    { id: 'evt_' + e, k: 'tit', n: { natal: 'Bom Velhinho', ano: 'Virada Campeã', carnaval: 'Rei da Folia', saojoao: 'Arraiá FC', copa: 'Rumo ao Hexa', criancas: 'Craque Mirim', halloween: 'Assombração', final: 'Decisivo', classico: 'Dono do Clássico' }[e], ra: 'evento', p: 400, ev: e },
+    { id: 'evf_' + e, k: 'fr', n: 'Moldura ' + E.t, ra: 'evento', p: 600, ev: e },
+    { id: 'eve_' + e, k: 'em', n: 'Emblema ' + E.t, ra: 'evento', p: 350, ev: e },
+    { id: 'evb_' + e, k: 'ban', n: 'Faixa ' + E.t, ra: 'evento', p: 450, ev: e },
+    { id: 'evt_' + e, k: 'tit', n: { natal: 'Bom Velhinho', ano: 'Virada Campeã', carnaval: 'Rei da Folia', saojoao: 'Arraiá FC', copa: 'Rumo ao Hexa', criancas: 'Craque Mirim', halloween: 'Assombração', final: 'Decisivo', classico: 'Dono do Clássico' }[e], ra: 'evento', p: 200, ev: e },
   ]),
 ];
 export const item = (id) => CAT.find((x) => x.id === id);
 export const RA_ORDER = ['comum', 'raro', 'epico', 'lendario', 'exclusivo', 'evento'];
 
 // ---------- emblemas (SVG 64x64) ----------
-const D = (id, body, defs = '') => `<svg class="emb emb-${id}" viewBox="0 0 64 64" aria-hidden="true"><defs>${defs}</defs>${body}</svg>`;
+const EMB_RA = {};
+for (const it of CAT) if (it.k === 'em') EMB_RA[it.id.replace(/^em_/, '').replace(/^eve_/, 'ev_')] = it.ra;
+const PLATE = { comum: ['#3a4a52', '#121a1e', '#8fa3ad'], raro: ['#1d4f7a', '#081a2b', '#6fd0ff'], epico: ['#4b2477', '#150826', '#c79bff'], lendario: ['#7a5410', '#1e1404', '#ffe08a'], exclusivo: ['#145c3a', '#06180f', '#6dfcbc'], evento: ['#7a2a14', '#1e0a04', '#ffb38a'] };
+const D = (id, body, defs = '') => { const ra = EMB_RA[id] || 'comum'; const [a, b, c] = PLATE[ra];
+  return `<svg class="emb emb-${id} ra-${ra}" viewBox="-4 -4 72 72" aria-hidden="true"><defs>${defs}<radialGradient id="pl_${id}" cx="50%" cy="32%" r="75%"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></radialGradient><linearGradient id="rm_${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".35" stop-color="${c}"/><stop offset=".7" stop-color="${b}"/><stop offset="1" stop-color="${c}"/></linearGradient></defs>
+  <circle cx="32" cy="32" r="34" fill="url(#pl_${id})"/><circle cx="32" cy="32" r="33" fill="none" stroke="url(#rm_${id})" stroke-width="2.4"/><circle cx="32" cy="32" r="29.5" fill="none" stroke="${c}" stroke-opacity=".28" stroke-width=".8" stroke-dasharray="2 3"/>
+  ${ra !== 'comum' ? `<g opacity=".18" fill="${c}">${Array.from({ length: 12 }, (_, i) => `<path d="M32 2 L33.6 9 L30.4 9Z" transform="rotate(${i * 30} 32 32)"/>`).join('')}</g>` : ''}
+  <g transform="translate(32 33) scale(.8) translate(-32 -32)"><g transform="translate(1.2 2.2)" opacity=".45" style="filter:none">${body.replace(/fill="[^"]*"/g, 'fill="#000"').replace(/stroke="[^"]*"/g, 'stroke="#000"')}</g>${body}</g>
+  <path d="M8 24 A26 26 0 0 1 56 24 A40 22 0 0 0 8 24Z" fill="#fff" opacity=".13"/></svg>`; };
 const GR = (id, a, b, x2 = 0, y2 = 1) => `<linearGradient id="${id}" x1="0" y1="0" x2="${x2}" y2="${y2}"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`;
 const RG = (id, a, b) => `<radialGradient id="${id}" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></radialGradient>`;
 const GOLD = GR('eg_gold', '#fff1b8', '#c8961a') ;
@@ -160,7 +168,7 @@ export const cosParse = (s) => { const [fr, em, ban, tit] = String(s || '').spli
 export function preview(it, eq = {}, n = 'T', size = 64) {
   if (!it) return '';
   if (it.k === 'fr') return avatar({ fr: it.id, em: eq.em, n }, size);
-  if (it.k === 'em') return avatar({ fr: eq.fr, em: it.id, n }, size);
+  if (it.k === 'em') return `<span class="em-prev" style="--s:${size}px">${emblemSvg(it.id)}</span>`;
   if (it.k === 'ban') return `<span class="ban-prev ${bannerCls(it.id)}" style="${bannerStyle(it.id)}">${bannerFx(it.id)}<b>${esc(n)}</b></span>`;
   if (it.k === 'tit') return `<span class="tit-prev">${titleTag(it.id)}</span>`;
   if (it.k === 'gfx') return `<span class="gfx-prev gfx-${it.id}"><i></i><i></i><i></i><i></i><i></i><i></i><b>GOL!</b></span>`;

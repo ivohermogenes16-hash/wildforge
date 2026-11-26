@@ -22,6 +22,7 @@ import { avatar as cav } from './ui/cosmetics.js';
 import './ui/eventos.js';
 import './ui/online.js';
 import './ui/liga.js';
+import { contaPrompt, logged as gLogged } from './ui/conta.js';
 import { startIcons, stripEmoji } from './ui/icons.js';
 import { initUniverse } from './engine/universe.js';
 import { initBiz } from './engine/business.js';
@@ -52,25 +53,50 @@ async function title() {
     ['tslots', 'Carreiras', 'Até 3 salvas'],
     ['tcomu', 'Comunidade', 'Ideias e bugs'],
     ['tset', 'Configurações', 'Som, 3D, moeda'],
-    ['tnews', 'Novidades', 'Versão 6.1'],
+    ['tnews', 'Novidades', 'Versão 6.2'],
     ['thelp', 'Como jogar', ''],
     ['tpack', 'Pacotes', 'Escudos e times'],
   ].filter(Boolean);
-  app.innerHTML = `<canvas id="bgcv" class="title-bg"></canvas><div class="rc-title ${eq('th') || ''}">
-  <div class="rc-prof" data-a="tonline" data-v="perfil">${cav({ ...myLook(), n: m?.name || 'T' }, 46)}<div><b>${esc(m?.name || 'Novo técnico')}</b><small>${m?.rep != null && !m?.legacy ? `Reputação ${m.rep} · ${m.titles} títulos` : 'Bem-vindo ao Prancheta'}</small></div>${pfChip()}</div>
-  <nav class="rc-menu">${M.map(([a, t, d, cls], i) => `<button class="rc-mi${i === 0 ? ' first' : ''}${cls ? ' ' + cls : ''}" data-a="${a}" style="--d:${i * 0.05}s"><span class="rc-t">${t}${a === 'tloja' && shopIsNew() ? '<i class="shop-new">NOVO</i>' : ''}${a === 'tonline' ? '<i class="live-badge"><i class="live-dot"></i> AO VIVO</i>' : ''}</span>${d ? `<small${a === 'tonline' ? ' id="rclive"' : ''}>${d}</small>` : ''}</button>`).join('')}
-    <button class="rc-mi sm" data-a="fs" style="--d:${M.length * 0.05}s"><span class="rc-t">⛶ Tela cheia</span></button></nav>
-  <div class="rc-panel"><div class="rc-slant"></div><div class="rc-in">
-    <div class="rc-kicker">MANAGER DE FUTEBOL</div>
-    <div class="rc-logo">PRAN<span>CHETA</span></div>
-    <div class="rc-sub">Do sub-20 ao império do futebol.</div>
-    ${window.PEV?.active?.() ? window.PEV.card() : ''}${rcChallenge()}
-    <div class="vid-slot">${videoCard()}</div>
-    ${m ? `<div class="rc-save" data-a="loadsave" style="--c1:${m.c1 || '#1b2a25'};--c2:${m.c2 || '#0b1210'}"><small>Continuar · ${slotName(cur)}</small><b>${esc(m.club)}</b><span>${m.year ? `${m.year}, semana ${m.week + 1}` : ''}</span><i>▶</i></div>` : `<button class="btn pri big rc-cta" data-a="ng">✨ Começar carreira</button>`}
-  </div></div>
-  <div class="rc-ver">Lumbra Games · Versão 6.1${build}</div></div>`;
-  startBg();
+  const ch = window.PONHOMEDATA?.(); const chLeft = ch ? Math.max(0, ch.end - Date.now()) : 0;
+  const kc = (m && m.c1) || '#2fe08a'; const crestM = m && m.club && m.key !== undefined ? crest({ name: m.club, key: m.key, short: m.short, c1: m.c1, c2: m.c2, troph: m.troph }, 84) : '';
+  const nx = m?.nxt; const form = (m?.form || '').slice(-5).split('').filter(Boolean);
+  const news = ['Partida 3D com jogadores novos e movimentos gravados de verdade', 'Placar de TV com o estilo de cada campeonato', 'Desafio da Semana: um clube, cinco jogos, ranking geral', 'Liga com amigos: crie, chame e dispute', 'Loja com molduras, emblemas e faixas'];
+  app.innerHTML = `<div class="t2x" style="--kc:${kc}">
+  <div class="t2-bg"><i class="t2-beam a"></i><i class="t2-beam b"></i><i class="t2-vig"></i></div>
+  <header class="t2-top">
+    <div class="t2-logo">PRAN<span>CHETA</span></div>
+    <div class="t2-tools">
+      <button class="t2-ic" data-a="tnews" title="Novidades"><b>✦</b></button>
+      <button class="t2-ic" data-a="tcomu" title="Comunidade"><b>◎</b></button>
+      <button class="t2-ic" data-a="tset" title="Configurações"><b>⚙</b></button>
+      <button class="t2-ic" data-a="fs" title="Tela cheia"><b>⛶</b></button>${window.PranchetaNative?.googleSignIn ? `<button class="t2-ic t2-g ${gLogged() ? 'ok' : ''}" data-a="gconta" title="Conta Google"><b>${gLogged() ? '✓' : 'G'}</b></button>` : ''}
+      ${pfChip()}
+      <div class="t2-prof" data-a="tonline" data-v="perfil">${cav({ ...myLook(), n: m?.name || 'T' }, 34)}<div><b>${esc(m?.name || 'Novo técnico')}</b><small>${m?.rep != null && !m?.legacy ? `REP ${m.rep} · ${m.titles} títulos` : 'Bem-vindo'}</small></div></div>
+    </div>
+  </header>
+  <main class="t2-main">
+    <section class="t2-left">
+      ${m ? `<div class="t2-kick">${m.year ? `TEMPORADA ${m.year} · SEMANA ${m.week + 1}` : 'CARREIRA'}</div>
+      <div class="t2-club">${crestM ? `<div class="t2-crest">${crestM}</div>` : ''}<div class="t2-cn"><b>${esc(m.club)}</b><small>${m.lg ? `${esc(m.lg)}${m.pos ? ` · ${m.pos}º de ${m.of}` : ''}` : (m.youth ? 'Sub-20' : '')}</small></div></div>
+      ${nx ? `<div class="t2-next"><small>PRÓXIMO JOGO${nx.comp ? ' · ' + esc(nx.comp).toUpperCase() : ''}</small><div>${crest({ name: nx.name, key: nx.key, short: nx.short, c1: nx.c1, c2: nx.c2, troph: nx.troph }, 26)}<b>${esc(nx.name)}</b><em>${nx.home ? 'CASA' : 'FORA'}</em></div></div>` : ''}
+      <div class="t2-cta"><button class="t2-go" data-a="loadsave"><span>▶</span>CONTINUAR<i></i></button><div class="t2-sec2"><button class="t2-sec" data-a="ng">＋ Nova carreira</button><button class="t2-sec" data-a="tslots">☰ Carreiras salvas</button></div></div>`
+      : `<div class="t2-kick">MANAGER DE FUTEBOL</div><div class="t2-hello"><b>Do sub-20 ao<br>império do futebol.</b><small>Treine, compre clubes, crie o seu time e dispute o ranking contra todo mundo.</small></div>
+      <div class="t2-cta"><button class="t2-go" data-a="ng"><span>✦</span>COMEÇAR<i></i></button><div class="t2-sec2"><button class="t2-sec" data-a="tslots">☰ Carreiras salvas</button><button class="t2-sec" data-a="thelp">? Como jogar</button></div></div>`}
+    </section>
+    <section class="t2-hero"><div id="t2hero"></div></section>
+    <section class="t2-right">
+      <button class="t2-tile on" data-a="tonline"><div class="t2-th"><span>ONLINE</span><em class="t2-live"><i></i>AO VIVO</em></div><b>Ranking e liga com amigos</b><small id="rclive">Técnicos do mundo todo</small></button>
+      <button class="t2-tile ch" data-a="tonline" data-v="desafio"><div class="t2-th"><span>DESAFIO DA SEMANA</span><em>${ch ? `${Math.floor(chLeft / 864e5) ? Math.floor(chLeft / 864e5) + 'd ' : ''}${Math.floor((chLeft % 864e5) / 36e5)}h` : 'NOVO'}</em></div><b>${ch ? esc(ch.W.club.name) : 'Um clube, cinco jogos'}</b><small>${ch ? `Prêmio até ${ch.prize} Pranfixas${ch.best ? ` · recorde ${ch.best}` : ''}` : 'Dispute o topo'}</small></button>
+      <button class="t2-tile sh" data-a="tloja"><div class="t2-th"><span>LOJA</span>${shopIsNew() ? '<em>NOVO</em>' : ''}</div><b>Molduras, emblemas e faixas</b><small>Deixe seu perfil único</small></button>
+      ${window.PEV?.active?.() ? `<div class="t2-ev">${window.PEV.card()}</div>` : ''}
+      <div class="vid-slot t2-vid">${videoCard()}</div>
+    </section>
+  </main>
+  <footer class="t2-foot"><span>Lumbra Games · 6.2${build}</span><button data-a="tpack">Pacotes</button><button data-a="thelp">Ajuda</button></footer>
+  </div>`;
+  import('./ui/hero3d.js').then((h) => { const el = document.getElementById('t2hero'); if (el) h.mountHero(el, { c1: m?.c1 || '#1b8f4e', c2: m?.c2 || '#ffffff', rim: '#2fe08a', name: m?.key || m?.club || 'Prancheta', crest: m?.club ? crest({ name: m.club, key: m.key, short: m.short, c1: m.c1, c2: m.c2, troph: m.troph }, 160) : '' }); }).catch((e) => console.warn('hero', e));
   if (!localStorage.getItem('prancheta.intro61')) { setTimeout(intro, 900); } else { firstCommunity(); dailyCheck(); }
+  setTimeout(contaPrompt, 3500);
   videoFirstTime(); musicOn(); pixPending(); adPreload(); liveCount(); window.PNOTIF?.();
 }
 // cartão do Desafio da Semana no painel da direita
@@ -107,7 +133,7 @@ H.tslot = async (v) => {
 H.tset = () => openSheet(setHtml());
 function setHtml() {
   const seg = (k, opts) => `<div class="seg" style="margin:0">${opts.map(([v, l]) => `<button class="${SET[k] === v ? 'on' : ''}" data-a="setv" data-v="${k}:${typeof v === 'boolean' ? (v ? 1 : 0) : v}">${l}</button>`).join('')}</div>`;
-  return `<h2>Configurações</h2>
+  return `<h2>Configurações</h2>${window.PranchetaNative?.googleSignIn ? `<button class="gl-row" data-a="gconta"><span>🛡️</span><span class="grow"><b>Conta Google</b><small>${gLogged() ? "Conectada · backup automático ligado" : "Proteja suas carreiras e itens"}</small></span><i>›</i></button>` : ""}
   <div class="field"><label>Moeda do jogo</label>${seg('cur', [['BRL', 'R$ Real'], ['USD', 'US$ Dólar'], ['EUR', '€ Euro']])}</div>
   <div class="field"><label>Efeitos sonoros (menus e botões)</label>${seg('sfx', [[true, 'Ligados'], [false, 'Desligados']])}</div>
   <div class="field"><label>Música do menu</label>${seg('music', [[true, 'Ligada'], [false, 'Desligada']])}</div>
@@ -133,7 +159,18 @@ function setHtml() {
 H.setv = (v) => { const [k, x] = v.split(':'); SET[k] = typeof DEFV[k] === 'boolean' ? x === '1' : typeof DEFV[k] === 'number' ? +x : x; saveSet(); if (k === 'music') { if (SET.music && !S.G) musicOn(); else musicOff(); } if (k === 'voice' && SET.voice !== 'off') { import('./ui/audio.js').then((a) => a.say('Narração ligada. Bola rolando!', 'teste', true)); } replaceSheet(setHtml()); applyTheme(); if (S.G) render(); };
 const DEFV = DEF;
 H.setnotif = async () => { const ok = await askNotif(); toast(ok ? '🔔 Notificações liberadas' : 'Permissão negada ou indisponível'); };
-H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 6.1</h2><div class="list">${[
+H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 6.2</h2><div class="list">${[
+  ['⚽', 'Partida 3D com jogadores novos, movimentos gravados de pessoas reais e corpos diferentes'],
+  ['👕', 'Uniformes com escudo no peito, número nas costas e patrocinadores de cada clube'],
+  ['📺', 'Partida em tela cheia, placar de TV no estilo de cada campeonato e painel de dados'],
+  ['🎺', 'Entrada pelo túnel, câmeras diferentes, hino e jogadores correndo para as posições'],
+  ['🏟️', 'Festa na arquibancada: mosaico, bandeirões e cantos da torcida'],
+  ['🧠', 'Os atributos da carta valem no jogo: velocidade, finalização, passe e defesa'],
+  ['🎨', 'Tela inicial e carreira com visual novo, tudo cabendo na tela'],
+  ['🛍️', 'Loja nova, mais leve, com emblemas e molduras redesenhados e preços menores'],
+  ['🏆', 'Online com pódio no ranking e visual novo'],
+  ['🛡️', 'Entre com o Google e nunca perca sua carreira'],
+].map(([i, t]) => `<div class="li"><span style="font-size:20px">${i}</span><span class="grow">${t}</span></div>`).join('')}</div><h3 style="margin-top:14px">Versão 6.1</h3><div class="list">${[
   ['🌍', 'Online com tela própria: início com mural, ranking geral, temporada mensal e Desafio da Semana'],
   ['🛡️', 'Divisões do Bronze à Lenda, com selo no perfil no fim de cada temporada'],
   ['🎯', 'Desafio da Semana com lances animados, campeões da semana passada e histórico'],
@@ -179,6 +216,17 @@ H.thelp = () => openSheet(`<h2>Como jogar</h2><div class="list">${[
   ['🌍 Mundo', 'Jornal, temporadas, rivalidades, seleções, federações e história.'],
 ].map(([t, d]) => `<div class="li"><div class="grow"><b>${t}</b><div class="xs mut">${d}</div></div></div>`).join('')}</div>`);
 
+// ---------- tela inicial nova: partículas e brilhos ----------
+function t2Fx() {
+  const cv = document.getElementById('t2fx'); if (!cv) return; const g = cv.getContext('2d'); const dpr = Math.min(1.5, devicePixelRatio || 1);
+  const P = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), z: 0.3 + Math.random() * 0.7, s: Math.random() }));
+  let w = 0, h = 0; const fit = () => { w = cv.width = Math.round(cv.clientWidth * dpr); h = cv.height = Math.round(cv.clientHeight * dpr); }; fit(); addEventListener('resize', fit);
+  const step = (t) => { if (!cv.isConnected) return; g.clearRect(0, 0, w, h);
+    for (const p of P) { p.y -= 0.00025 * p.z; p.x += Math.sin(t / 3000 + p.s * 9) * 0.0002; if (p.y < -0.02) { p.y = 1.02; p.x = Math.random(); }
+      const a = (0.25 + 0.5 * Math.abs(Math.sin(t / 900 + p.s * 20))) * p.z; g.fillStyle = p.s < 0.6 ? `rgba(120,255,200,${a})` : p.s < 0.85 ? `rgba(255,255,255,${a})` : `rgba(255,214,102,${a})`; const r = (0.6 + p.z * 1.6) * dpr; g.beginPath(); g.arc(p.x * w, p.y * h, r, 0, 6.283); g.fill(); }
+    requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
 // ---------- fundo animado: estádio à noite ----------
 let bgRaf = 0;
 function startBg() {

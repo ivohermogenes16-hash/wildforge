@@ -49,6 +49,11 @@ jobs:
           if [ -z "$LUMBRA_KEY_PASS" ]; then echo "Falta o secret LUMBRA_KEY_PASS"; exit 1; fi
           openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in android/lumbra.keystore.enc -out android/lumbra.keystore -pass env:LUMBRA_KEY_PASS
 
+      - name: Digital da chave (SHA-1 para o login com Google no Firebase)
+        env:
+          LUMBRA_KEY_PASS: ${{ secrets.LUMBRA_KEY_PASS }}
+        run: keytool -list -v -keystore android/lumbra.keystore -alias lumbra -storepass "$LUMBRA_KEY_PASS" | grep -E "SHA1|SHA256" > chave-sha.txt; cat chave-sha.txt
+
       - name: Montar o APK
         working-directory: android
         env:
@@ -82,5 +87,6 @@ jobs:
           files: |
             prancheta.apk
             prancheta.aab
+            chave-sha.txt
           make_latest: false
           overwrite_files: true

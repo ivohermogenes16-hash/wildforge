@@ -69,9 +69,9 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // ---------------- configurações ----------------
 const QS = [
-  { pr: 1.1, shadow: 0, crowd: 0.6, bloom: false, aa: true },
-  { pr: 1.5, shadow: 1024, crowd: 0.9, bloom: false, aa: true },
-  { pr: 2, shadow: 2048, crowd: 1, bloom: true, aa: true },
+  { pr: 1.0, shadow: 0, crowd: 0.45, bloom: false, aa: false },
+  { pr: 1.9, shadow: 2048, crowd: 1, bloom: false, aa: true },
+  { pr: 2.4, shadow: 2048, crowd: 1, bloom: true, aa: true },
 ];
 let Q = QS[+(new URLSearchParams(location.search).get('q') ?? 1)] || QS[1];
 const PALETTES = [
@@ -1452,6 +1452,463 @@ function goalFx(kind) {
     if (now - st < 3600) requestAnimationFrame(step); else cv.remove();
   })(performance.now());
 }
+
+// ================= TESTE · JOGADOR 3D (Tripo GLB) no lugar dos bonecos =================
+const GLBX = { ready: false };
+// ---------- uniforme: escudo, patrocinadores inventados (cada clube o seu) e números ----------
+const KITATLAS = [null, null];
+const SPN = ['VÉRTIX', 'NORTEZ', 'KAIRO', 'ZÊNITE', 'FAROL', 'ORBE', 'PULSAR', 'TRÍADE', 'MARÉ', 'LÚMEN', 'NOVARA', 'SOLIS', 'KORVO', 'AURA', 'BRAVA', 'ÍCARO', 'VELOX', 'ALTUS', 'QUANTA', 'RIVA', 'ATLAS', 'NEXA', 'ONDA', 'TAURA', 'CÍRIO', 'DELTA', 'ÉLAN', 'FORZA', 'GAIA', 'HÉLIO'];
+const SPS = ['BANK', 'SEGUROS', 'TELECOM', 'ENERGIA', '', 'PAY', 'MOTORS', 'FOODS', 'TECH', 'AIR', '', 'SAÚDE'];
+const hstr = (s) => { let h = 2166136261; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+function sponsorOf(name, slot) { const h = hstr(name + '#' + slot); return { n: SPN[h % SPN.length], s: SPS[(h >>> 5) % SPS.length], shape: (h >>> 9) % 7, rot: ((h >>> 12) % 360) }; }
+function drawLogo(g, x, y, r, shape, col) {
+  g.save(); g.translate(x, y); g.fillStyle = col; g.strokeStyle = col; g.lineWidth = r * 0.22; g.beginPath();
+  if (shape === 0) { g.arc(0, 0, r, 0, 6.283); g.stroke(); g.beginPath(); g.arc(0, 0, r * 0.4, 0, 6.283); g.fill(); }
+  else if (shape === 1) { g.moveTo(-r, r * 0.5); g.lineTo(0, -r * 0.6); g.lineTo(r, r * 0.5); g.lineTo(r * 0.55, r * 0.5); g.lineTo(0, -r * 0.05); g.lineTo(-r * 0.55, r * 0.5); g.closePath(); g.fill(); }
+  else if (shape === 2) { for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } g.closePath(); g.fill(); }
+  else if (shape === 3) { for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); g.stroke(); }
+  else if (shape === 4) { g.moveTo(-r, 0); g.bezierCurveTo(-r * 0.5, -r, r * 0.5, r, r, 0); g.stroke(); g.beginPath(); g.moveTo(-r, r * 0.45); g.bezierCurveTo(-r * 0.5, -r * 0.55, r * 0.5, r * 1.45, r, r * 0.45); g.stroke(); }
+  else if (shape === 5) { g.moveTo(r * 0.2, -r); g.lineTo(-r * 0.55, r * 0.15); g.lineTo(0, r * 0.15); g.lineTo(-r * 0.2, r); g.lineTo(r * 0.55, -r * 0.15); g.lineTo(0, -r * 0.15); g.closePath(); g.fill(); }
+  else { g.rotate(Math.PI / 4); g.fillRect(-r * 0.7, -r * 0.7, r * 1.4, r * 1.4); g.fillStyle = 'rgba(0,0,0,0)'; }
+  g.restore();
+}
+function buildAtlas(tm, clubName, crestSrc) {
+  const K = KITS[tm]; const c = document.createElement('canvas'); c.width = c.height = 1024; const g = c.getContext('2d');
+  const ink = lum(K.shirt) > 0.55 ? '#141414' : '#ffffff'; const ink2 = lum(K.shorts) > 0.55 ? '#141414' : '#ffffff';
+  const sp = sponsorOf(clubName, 0), sp2 = sponsorOf(clubName, 1), sp3 = sponsorOf(clubName, 2);
+  // frente da camisa (0..512): patrocínio master no centro
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  drawLogo(g, 256, 250, 34, sp.shape, ink);
+  g.fillStyle = ink; g.font = '900 64px system-ui'; g.fillText(sp.n, 256, 318, 400); if (sp.s) { g.font = '700 26px system-ui'; g.fillText(sp.s, 256, 362, 300); }
+  // números das costas (5x5 a partir de x=512)
+  g.font = '900 78px system-ui';
+  for (let n = 1; n <= 25; n++) { const cx = 512 + ((n - 1) % 5) * 102.4 + 51.2, cy = Math.floor((n - 1) / 5) * 102.4 + 56; g.lineWidth = 6; g.strokeStyle = ink === '#ffffff' ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.35)'; g.strokeText(String(n), cx, cy); g.fillStyle = ink; g.fillText(String(n), cx, cy); }
+  // manga (0..256, 512..640) e calção (256..512, 512..640)
+  drawLogo(g, 60, 576, 26, sp2.shape, ink); g.fillStyle = ink; g.font = '900 34px system-ui'; g.textAlign = 'left'; g.fillText(sp2.n, 96, 578, 150);
+  drawLogo(g, 300, 576, 24, sp3.shape, ink2); g.fillStyle = ink2; g.font = '900 30px system-ui'; g.fillText(sp3.n, 332, 578, 170);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; KITATLAS[tm] = tex;
+  // escudo no peito esquerdo
+  if (crestSrc) { const img = new Image(); img.onload = () => { try { g.drawImage(img, 512 * 0.62, 512 * 0.06, 128, 128); tex.needsUpdate = true; } catch {} }; img.src = crestSrc; }
+  return tex;
+}
+function crestToSrc(h) { if (!h) return ''; const m = /<img[^>]*src="([^"]+)"/.exec(h); if (m) return m[1]; if (h.includes('<svg')) { let s = h.slice(h.indexOf('<svg'), h.lastIndexOf('</svg>') + 6); if (!/xmlns=/.test(s)) s = s.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"'); return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s); } return ''; }
+let KITCLUBS = null;
+window.addEventListener('message', (e) => { const d = e.data || {}; if (d.t === 'setup') KITCLUBS = d.clubs || null; });
+function rebuildAtlases() { for (const tm of [0, 1]) { const cl = KITCLUBS && KITCLUBS[tm]; buildAtlas(tm, cl ? cl.key || cl.name : (tm ? 'VIS' : 'CAS'), cl ? crestToSrc(cl.crest) : ''); } }
+
+(async () => {
+  try {
+    const b64 = (await (await fetch('jogador.json')).json()).b; const bin = atob(b64); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); const buf = u8.buffer; const dv = new DataView(buf);
+    const jl = dv.getUint32(12, true); const J = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jl))); const bo = 20 + jl + 8;
+    const CT = { 5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array, 5121: Uint8Array }, NC = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
+    const acc = (i) => { const a = J.accessors[i], v = J.bufferViews[a.bufferView]; const T = CT[a.componentType]; const o = bo + (v.byteOffset || 0) + (a.byteOffset || 0); return new T(buf.slice(o, o + a.count * NC[a.type] * T.BYTES_PER_ELEMENT)); };
+    const pr = J.meshes[0].primitives[0]; const sk = J.skins[0];
+    const base = new THREE.BufferGeometry();
+    base.setAttribute('position', new THREE.BufferAttribute(acc(pr.attributes.POSITION), 3));
+    base.setAttribute('normal', new THREE.BufferAttribute(acc(pr.attributes.NORMAL), 3));
+    const ji = acc(pr.attributes.JOINTS_0); base.setAttribute('skinIndex', new THREE.BufferAttribute(ji instanceof Uint8Array ? new Uint16Array(ji) : ji, 4));
+    base.setAttribute('skinWeight', new THREE.BufferAttribute(acc(pr.attributes.WEIGHTS_0), 4));
+    base.setIndex(new THREE.BufferAttribute(acc(pr.indices), 1));
+    const ibmArr = acc(sk.inverseBindMatrices); const jn = sk.joints.map((j) => (J.nodes[j].name || '').replace('mixamorig:', ''));
+    // regiões por altura/posição (modelo: altura 0..1, frente = +x, braços em z)
+    const P = base.attributes.position, SI = base.attributes.skinIndex, SW = base.attributes.skinWeight; const REG = new Uint8Array(P.count);
+    for (let i = 0; i < P.count; i++) {
+      let bi = 0, bw = 0; for (let k = 0; k < 4; k++) { const w = SW.getComponent(i, k); if (w > bw) { bw = w; bi = SI.getComponent(i, k); } }
+      const b = jn[bi] || '', x = P.getX(i), y = P.getY(i), z = Math.abs(P.getZ(i));
+      let r;
+      if (/Foot|Toe/.test(b) || y < 0.075) r = 4; // chuteira
+      else if (y < 0.235) r = 3; // meião
+      else if (y < 0.252) r = 6; // faixa do meião
+      else if (y < 0.3) r = 0; // joelho
+      else if (y < 0.315) r = 6; // barra do calção
+      else if (y < 0.535) r = (z > 0.12 ? 0 : 2); // calção
+      else if (z > 0.205) r = 0; // antebraço/mão
+      else if (z > 0.188) r = 6; // punho da manga
+      else if (y > 0.842 || /Head|Neck/.test(b)) r = (y > 0.948 || (y > 0.875 && x < -0.03)) ? 5 : 0; // cabeça (cabelo atrás/topo)
+      else if (y > 0.822 && z < 0.06) r = 6; // gola
+      else r = 1; // camisa
+      REG[i] = r;
+    }
+    // referência: braços para baixo (o boneco antigo fica com os braços caídos em repouso)
+    const mkBones = () => {
+      const bones = J.nodes.map((n) => { const o = new THREE.Bone(); o.name = (n.name || '').replace('mixamorig:', ''); if (n.matrix) new THREE.Matrix4().fromArray(n.matrix).decompose(o.position, o.quaternion, o.scale); if (n.translation) o.position.fromArray(n.translation); if (n.rotation) o.quaternion.fromArray(n.rotation); if (n.scale) o.scale.fromArray(n.scale); return o; });
+      J.nodes.forEach((n, i) => (n.children || []).forEach((c) => bones[i].add(bones[c])));
+      return bones;
+    };
+    const MAP = { hips: 'Hips', spine: 'Spine', chest: 'Spine2', neck: 'Neck', shL: 'LeftArm', elL: 'LeftForeArm', hpL: 'LeftUpLeg', knL: 'LeftLeg', anL: 'LeftFoot', shR: 'RightArm', elR: 'RightForeArm', hpR: 'RightUpLeg', knR: 'RightLeg', anR: 'RightFoot' };
+    const S = 15.2; // altura 1 -> ~1,8 m
+    const ref = mkBones(); const refTop = new THREE.Group(); refTop.add(ref[0]); refTop.scale.setScalar(S); refTop.rotation.y = 0;
+    const RB = (n) => ref.find((b) => b.name === n);
+    refTop.updateMatrixWorld(true); const QT = {}; for (const b of ref) if (b.isBone) { const q = new THREE.Quaternion(); b.getWorldQuaternion(q); QT[b.name] = q; }
+    RB('LeftArm').rotation.x += -1.38; RB('RightArm').rotation.x += 1.38; RB('LeftForeArm').rotation.z += 0.15; RB('RightForeArm').rotation.z -= 0.15;
+    refTop.updateMatrixWorld(true);
+    const QREF = {}; for (const k in MAP) { const q = new THREE.Quaternion(); RB(MAP[k]).getWorldQuaternion(q); QREF[k] = q; }
+    // quaternions locais de referência de todos os ossos (para os que não são copiados)
+    const LREF = ref.map((b) => b.quaternion.clone());
+    // cores por região calculadas na tela, pixel a pixel (divisões nítidas, sem "vazar") + escudo, patrocínios e número
+    base.setAttribute('aBind', new THREE.BufferAttribute(new Float32Array(base.attributes.position.array), 3));
+    base.setAttribute('aBN', new THREE.BufferAttribute(new Float32Array(base.attributes.normal.array), 3));
+    const KITFRAG = `
+      float y = vB.y, x = vB.x, az = abs(vB.z); vec3 kc;
+      if (y < 0.075) kc = uBoots; else if (y < 0.232) kc = uSocks; else if (y < 0.252) kc = uTrim; else if (y < 0.302) kc = uSkin; else if (y < 0.316) kc = uTrim;
+      else if (y < 0.538) kc = az > 0.13 ? uSkin : uShorts;
+      else if (az > 0.205) kc = uSkin; else if (az > 0.19) kc = uTrim;
+      else if (y > 0.842) { float hy = uHairCut < 0.5 ? 0.948 : uHairCut < 1.5 ? 0.962 : uHairCut < 2.5 ? 0.93 : 9.0; float hb = uHairCut < 0.5 ? 0.875 : uHairCut < 1.5 ? 0.93 : uHairCut < 2.5 ? 0.858 : 9.0; kc = (y > hy || (y > hb && x < -0.03)) ? uHair : uSkin; }
+      else if (y > 0.82 && az < 0.06) kc = uTrim; else kc = uShirt;
+      if (uDec > 0.5) {
+        vec2 uv = vec2(-1.0); vec4 r = vec4(0.0);
+        if (y > 0.56 && y < 0.82 && az < 0.12 && vBN.x > 0.15) { uv = vec2((-vB.z + 0.12) / 0.24, (y - 0.56) / 0.26); r = vec4(0.0, 0.0, 0.5, 0.5); }
+        else if (y > 0.56 && y < 0.82 && az < 0.12 && vBN.x < -0.15) { uv = vec2((vB.z + 0.12) / 0.24, (y - 0.56) / 0.26); float cx = mod(uCell, 5.0), cy = floor(uCell / 5.0); r = vec4(0.5 + cx * 0.1, cy * 0.1, 0.1, 0.1); }
+        else if (vB.z < -0.125 && vB.z > -0.188 && y > 0.735 && vBN.y > 0.2) { uv = vec2((x + 0.05) / 0.10, (-vB.z - 0.125) / 0.063); r = vec4(0.0, 0.5, 0.25, 0.125); }
+        else if (y > 0.37 && y < 0.47 && vB.z < -0.015 && vB.z > -0.1 && vBN.x > 0.2) { uv = vec2((-vB.z - 0.015) / 0.085, (y - 0.37) / 0.10); r = vec4(0.25, 0.5, 0.25, 0.125); }
+        if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) { vec2 t = vec2(r.x + uv.x * r.z, 1.0 - (r.y + (1.0 - uv.y) * r.w)); vec4 d = texture2D(uAtlas, t); kc = mix(kc, d.rgb, d.a); }
+      }
+      diffuseColor.rgb = kc;`;
+    const TEX0 = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1); TEX0.needsUpdate = true;
+    function mkMat(p) {
+      const u = { uSkin: { value: new THREE.Color() }, uShirt: { value: new THREE.Color() }, uShorts: { value: new THREE.Color() }, uSocks: { value: new THREE.Color() }, uBoots: { value: new THREE.Color() }, uHair: { value: new THREE.Color() }, uTrim: { value: new THREE.Color() }, uAtlas: { value: TEX0 }, uCell: { value: 0 }, uDec: { value: 0 }, uHairCut: { value: 0 } };
+      const m = new THREE.MeshStandardMaterial({ roughness: 0.58, metalness: 0.03 });
+      m.onBeforeCompile = (sh) => { Object.assign(sh.uniforms, u);
+        sh.vertexShader = 'attribute vec3 aBind; attribute vec3 aBN; varying vec3 vB; varying vec3 vBN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vB = aBind; vBN = aBN;');
+        sh.fragmentShader = 'varying vec3 vB; varying vec3 vBN; uniform vec3 uSkin, uShirt, uShorts, uSocks, uBoots, uHair, uTrim; uniform sampler2D uAtlas; uniform float uCell, uDec, uHairCut;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n' + KITFRAG); };
+      m.customProgramCacheKey = () => 'kitglb2'; m.userData.u = u; return m;
+    }
+    function colorFor(p) {
+      const u = p.gx ? p.gx.mat.userData.u : null; if (!u) return; const K = p.k;
+      u.uSkin.value.set(p.skin); u.uShirt.value.set(K.shirt); u.uShorts.value.set(K.shorts); u.uSocks.value.set(K.socks); u.uBoots.value.set(p.boots); u.uHair.value.set(p.hair); u.uTrim.value.set(K.trim || K.shorts);
+      u.uHairCut.value = BODYX[p.pid]?.hc ?? ((p.i * 7) % 4 === 3 ? 1 : (p.i * 5) % 4); u.uDec.value = p.ref || p.team < 0 ? 0 : 1; u.uAtlas.value = (p.team >= 0 && KITATLAS[p.team]) || TEX0; u.uCell.value = clamp((p.num || 1) - 1, 0, 24);
+    }
+    GLBX.colorFor = colorFor;
+    function build(p) {
+      const bones = mkBones(); const top = new THREE.Group(); top.add(bones[0]); top.scale.setScalar(S * (p.scale || 1)); top.userData.S = S;
+      const g = new THREE.BufferGeometry(); for (const k of ['position', 'normal', 'skinIndex', 'skinWeight']) g.setAttribute(k, base.getAttribute(k)); g.setIndex(base.getIndex()); for (const k of ['aBind', 'aBN']) g.setAttribute(k, base.getAttribute(k));
+      const mat = mkMat(p); const m = new THREE.SkinnedMesh(g, mat); m.frustumCulled = false; top.add(m);
+      const bl = sk.joints.map((j) => bones[j]); const ibm = sk.joints.map((_, k) => new THREE.Matrix4().fromArray(ibmArr, k * 16));
+      top.updateMatrixWorld(true); m.bind(new THREE.Skeleton(bl, ibm), new THREE.Matrix4());
+      bones.forEach((b, i) => b.quaternion.copy(LREF[i]));
+      const by = (n) => bones.find((b) => b.name === n);
+      const ord = []; const seen = new Set(); const walk = (b) => { if (b.isBone) ord.push(b); b.children.forEach(walk); }; walk(bones[0]);
+      const key = {}; for (const k in MAP) key[MAP[k]] = k;
+      playerGroup.add(top);
+      const L0 = {}; for (const b of ord) L0[b.name] = b.quaternion.clone(); const byN = {}; for (const b of ord) byN[b.name] = b;
+      const fing = new Set(ord.filter((b) => /Hand(Index|Middle|Ring|Pinky|Thumb)|_End|Eye/.test(b.name)));
+      return { top, mesh: m, bones, ord, key, hips: by('Hips'), arm: bones[0], g, L0, by: byN, fing, mat };
+    }
+    rebuildAtlases(); for (const p of players) { p.gx = build(p); colorFor(p); if (p.mesh) p.mesh.visible = false; }
+    GLBX.recolor = () => { for (const p of players) if (p.gx) colorFor(p); }; try { numMesh.visible = false; } catch {}
+    GLBX.QREF = QREF; GLBX.QT = QT;
+    try { const L = await (await fetch('loco.json')).json(); const cl = {}; for (const k in L.clips) { const c = L.clips[k]; cl[k] = { dur: c.dur, n: c.f.length, f: c.f.map((r) => { const o = []; for (let i = 0; i < r.length; i += 4) o.push(new THREE.Quaternion(r[i], r[i + 1], r[i + 2], r[i + 3])); return o; }), hy: c.hy }; } GLBX.loco = { bones: L.bones, cl }; } catch (e) { console.warn('loco', e); }
+    GLBX.ready = true;
+    window.__glbOk = true;
+  } catch (e) { console.warn('GLB', e); window.__glbErr = String(e); }
+})();
+const _ql = new THREE.Quaternion(), _rv2 = new THREE.Vector3(); const BODYX = {};
+window.addEventListener('message', (e) => { const d = e.data || {}; if (d.t === 'setup' && d.body) Object.assign(BODYX, d.body); });
+const _rq = new THREE.Quaternion(), _rv = new THREE.Vector3(), _rm = new THREE.Matrix4(), _qh = new THREE.Quaternion(), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _Y = new THREE.Vector3(0, 1, 0), _fw = new THREE.Vector3();
+let _lastT = performance.now();
+function sampleClip(c, ph, bi, out) { const x = ((ph % 1) + 1) % 1 * c.n; const i = Math.floor(x) % c.n, j = (i + 1) % c.n, u = x - Math.floor(x); return out.copy(c.f[i][bi]).slerp(c.f[j][bi], u); }
+function hyClip(c, ph) { const x = ((ph % 1) + 1) % 1 * c.n; const i = Math.floor(x) % c.n, j = (i + 1) % c.n, u = x - Math.floor(x); return c.hy[i] * (1 - u) + c.hy[j] * u; }
+function glbSync() {
+  if (!GLBX.ready) return;
+  const now = performance.now(); let dt = Math.min(0.1, (now - _lastT) / 1000); _lastT = now; if (window.__pause) dt = 0;
+  const LO = GLBX.loco;
+  for (const p of players) {
+    const X = p.gx; if (!X) continue; const r = p.rig;
+    r.root.getWorldPosition(_rv); X.top.position.set(_rv.x, 0, _rv.z); { const B = BODYX[p.pid]; const S0 = X.top.userData.S || 15.2; const h = B ? B.h : (p.scale || 1), w = B ? B.w : 1; if (X.bh !== h || X.bw !== w) { X.bh = h; X.bw = w; X.top.scale.set(S0 * h * w, S0 * h, S0 * h * w); } } X.top.updateMatrixWorld(false);
+    // 1) pose do boneco antigo (ações: chute, cabeceio, goleiro, comemoração...)
+    const WP = X.WP || (X.WP = new Map());
+    for (const b of X.ord) {
+      const par = b.parent; let pq = WP.get(par); if (!pq) { pq = (X.PQ || (X.PQ = new THREE.Quaternion())); par.getWorldQuaternion(pq); }
+      const k = X.key[b.name]; const w = WP.get(b) || new THREE.Quaternion();
+      if (k) { r[k].getWorldQuaternion(w); w.multiply(GLBX.QREF[k]); } else { w.copy(pq).multiply(X.L0[b.name]); }
+      WP.set(b, w);
+    }
+    // 2) movimento gravado (parado / andar / correr)
+    const _px = X.lpx ?? p.pos.x, _pz = X.lpz ?? p.pos.z; X.lpx = p.pos.x; X.lpz = p.pos.z; const spd = dt > 0 ? Math.min(11, Math.hypot(p.pos.x - _px, p.pos.z - _pz) / dt) : (X.spS || 0); X.spS = (X.spS ?? spd) + (spd - (X.spS ?? spd)) * (1 - Math.exp(-10 * dt));
+    const sp = X.spS; const actOn = !!((p.act && p.act.t >= 0) || (p.mood && p.mood !== 'hino') || (p.gk && p.ready) || p.off);
+    X.mw = (X.mw ?? 1) + ((actOn || !LO ? 0 : 1) - (X.mw ?? 1)) * (1 - Math.exp(-12 * dt));
+    let hyR = 1;
+    const AT = p.act && p.act.t >= 0 ? p.act.type : ''; const kickA = /^(chapa|lanc|chute|passe|cabeceio)$/.test(AT); const armW = kickA ? 0.45 : 0;
+    if (LO && (X.mw > 0.01 || armW > 0)) {
+      const wW = sp < 1.6 ? clamp(sp / 1.6, 0, 1) : 1, wR = clamp((sp - 1.8) / 3.2, 0, 1);
+      const stride = lerp(1.35, 3.0, wR); X.ph = (X.ph || Math.random()) + dt * Math.max(0.6, sp / stride); X.ik ||= 0.75 + Math.random() * 0.5; X.sw ||= Math.random() * 6.28; X.ip = (X.ip || Math.random() * 3) + dt / LO.cl.idle.dur * X.ik; X.tt = (X.tt || 0) + dt;
+      r.root.getWorldQuaternion(_qh); _fw.set(0, 0, 1).applyQuaternion(_qh); _qh.setFromAxisAngle(_Y, Math.atan2(_fw.x, _fw.z) + (p.mood === 'hino' || sp < 0.3 ? Math.sin(X.tt * 0.32 * X.ik + X.sw) * 0.22 : 0));
+      const WM = X.WM || (X.WM = {}); const bones = LO.bones;
+      for (let i = 0; i < bones.length; i++) {
+        const bn = bones[i];
+        sampleClip(LO.cl.walk, X.ph, i, _qa); sampleClip(LO.cl.run, X.ph, i, _qb); _qa.slerp(_qb, wR);
+        if (wW < 1) { const qi = sampleClip(LO.cl.idle, X.ip, i, WM[bn] || (WM[bn] = new THREE.Quaternion())); _qa.copy(qi.slerp(_qa, wW)); }
+        const m = WM[bn] || (WM[bn] = new THREE.Quaternion()); m.copy(_qh).multiply(_qa).multiply(GLBX.QT[bn]);
+        const pw = WP.get(X.by[bn]); if (pw) pw.slerp(m, /Arm|Shoulder|Hand/.test(bn) ? Math.max(X.mw, armW) : X.mw);
+      }
+      const hW = hyClip(LO.cl.walk, X.ph) * (1 - wR) + hyClip(LO.cl.run, X.ph) * wR; const hI = hyClip(LO.cl.idle, X.ip);
+      hyR = lerp(1, (hI * (1 - wW) + hW * wW) / 0.99, X.mw);
+    }
+    // inclinação leve do tronco no passe e no chute (como jogador de verdade)
+    if (kickA) { const k = clamp(p.act.t / (p.act.dur || 0.7), 0, 1); const ang = (AT === 'cabeceio' ? 0.22 : AT === 'chute' ? 0.16 : 0.1) * Math.sin(Math.PI * k);
+      r.root.getWorldQuaternion(_qh); _fw.set(0, 0, 1).applyQuaternion(_qh); const yaw = Math.atan2(_fw.x, _fw.z); const ax = _rv2.set(Math.cos(yaw), 0, -Math.sin(yaw));
+      X.up ||= X.ord.filter((b) => { for (let q = b; q; q = q.parent) if (q.name === 'Spine2') return true; return false; });
+      for (const [bn, f] of [['Spine', 0.35], ['Spine1', 0.7]]) { const w = WP.get(X.by[bn]); if (w) w.premultiply(_ql.setFromAxisAngle(ax, ang * f)); }
+      _ql.setFromAxisAngle(ax, ang); for (const b of X.up) { const w = WP.get(b); if (w && !X.fing.has(b)) w.premultiply(_ql); } }
+    // 3) aplica: local = inverso(pai) * mundo
+    const WF = X.WF || (X.WF = new Map());
+    for (const b of X.ord) {
+      const par = b.parent; let pq = WF.get(par); if (!pq) { pq = (X.PQ2 || (X.PQ2 = new THREE.Quaternion())); par.getWorldQuaternion(pq); }
+      const w = WP.get(b); if (X.fing.has(b)) { const f = WF.get(b) || new THREE.Quaternion(); f.copy(pq).multiply(b.quaternion); WF.set(b, f); continue; }
+      b.quaternion.copy(pq).invert().multiply(w); WF.set(b, w);
+    }
+    // quadril: altura do boneco antigo (agachar, pular, cair) ou do movimento gravado
+    r.hips.getWorldPosition(_rv); if (X.mw > 0.01) { const hg = 0.92 * (X.bh || p.scale || 1) * hyR; _rv.y = lerp(_rv.y, hg, X.mw); }
+    _rm.copy(X.hips.parent.matrixWorld).invert(); _rv.applyMatrix4(_rm); X.hips.position.copy(_rv);
+  }
+}
+const _syncOrig = syncInstances;
+syncInstances = function () { _syncOrig(); glbSync(); };
+const _relookOrig = relook;
+relook = function () { _relookOrig(); try { rebuildAtlases(); GLBX.recolor?.(); for (const p of players) if (p.gx && p.mesh) p.mesh.visible = false; } catch {} };
+window.__glbVis = (v) => { for (const p of players) { if (p.gx) p.gx.top.visible = v; if (p.mesh) p.mesh.visible = !v; } };
+
+{ const _sm6 = setupMatch; setupMatch = function (d) { KITCLUBS = d.clubs || null; if (d.body) Object.assign(BODYX, d.body); _sm6(d); }; }
+
+// ================= TESTE · velocidade da carta, atacante sozinho, entrada dos times nova =================
+// --- 1) Ritmo da carta vale no 3D: quem tem 90 de velocidade corre bem mais que quem tem 60 ---
+const PACE = {};
+window.addEventListener('message', (e) => { const d = e.data || {}; if (d.t === 'setup' && d.pace) Object.assign(PACE, d.pace); });
+const paceK = (p) => { if (p.ref || p.gk) return 1; const r = PACE[p.pid]; if (r == null) return 1; return clamp(1 + (r - 70) * 0.0045, 0.9, 1.1); };
+// goleiro saindo nos pés do atacante sozinho
+const GKOUT = { gk: null, o: null, t: 0 };
+const _stepP = stepPlayer;
+stepPlayer = function (p, dt, t) {
+  if (GKOUT.gk === p && G.phase === 'play' && G.owner === GKOUT.o) { p.ready = false; p.target.set(ball.pos.x, 0, ball.pos.z); p.spd = 7.2;
+    if (p.pos.distanceTo(ball.pos) < 1.7 && !p.act) { startAct(p, 'caida', { dur: 0.9 }); const o = GKOUT.o; take(p); ball.held = 'hands'; o.cool = 1; GKOUT.gk = null; banner('Saída do goleiro!', p.team, true); } }
+  else if (GKOUT.gk === p) GKOUT.gk = null;
+  const s0 = p.spd; p.spd = s0 * paceK(p); _stepP(p, dt, t); p.spd = s0;
+};
+// --- 2) atacante com o caminho livre não toca para trás ---
+function aloneAhead(o) {
+  const d = o.dir; for (const e of players) { if (e.team === o.team || e.ref || e.off || e.gk) continue; const ax = (e.pos.x - o.pos.x) * d; if (ax > -1.5 && ax < 13 && Math.abs(e.pos.z - o.pos.z) < 7.5) return false; } return true;
+}
+const _cp = choosePass;
+choosePass = function (p) {
+  const b = _cp(p); if (!b || p.gk) return b;
+  const back = (b.t.x - p.pos.x) * p.dir;
+  if (p.pos.x * p.dir > 0 && back < -2 && aloneAhead(p)) return null; // segue conduzindo
+  if (p.pos.x * p.dir > 8 && back < -6 && b.type !== 'cruz') b.score -= 10;
+  return b;
+};
+const _ea = endAttack;
+endAttack = function (o, dg) {
+  if (aloneAhead(o)) {
+    o.plan = null; o.spd = 7; o.target.set(o.dir * (L / 2 - 4), 0, o.pos.z * 0.6);
+    // de cara pro gol: finaliza (como no jogo de verdade). Quem decide se é gol é o motor do jogo;
+    // aqui o chute sai e o goleiro defende, vai para fora ou explode na trave
+    if (dg < 22 && Math.abs(o.pos.z) < 16 && !o.act && o.cool <= 0) { shoot(o); return; }
+    return;
+  }
+  _ea(o, dg);
+};
+
+// --- 3) entrada dos times: fila sem atravessar ninguém, cada jogo de um jeito, e depois espalham pelo campo ---
+const LZ = W / 2 - 7;
+const WK = { v: 0, cam: 0, home1st: false };
+startWalk = function (final) {
+  CER.on = true; CER.t = 0; CER.final = !!final; G.phase = 'walk'; G.owner = null; G.pass = null; G.shot = null; ball.held = null; CER.dis = false;
+  WK.v = (Math.random() * 3) | 0; WK.cam = (Math.random() * 3) | 0; WK.home1st = WK.v === 1;
+  PED.visible = TROPHY.visible = CER.final; if (CER.final) TROPHY.position.set(0, 1.12, LZ + 3.4);
+  const order = [0, 1].map((tm) => players.filter((p) => p.team === tm && !p.off).sort((a, b) => (a.gk ? -1 : 0) - (b.gk ? -1 : 0) || a.num - b.num));
+  for (const p of players) { p.act = null; p.mood = null; p.pend = null; p.vel.set(0, 0, 0); p.snap = true; p.wp = null; }
+  const gap = 1.2, sp = 2.9;
+  order.forEach((list, tm) => { const s = tm === 0 ? -1 : 1; const n = list.length; const fileX = s * 1.7;
+    list.forEach((p, k) => {
+      // o primeiro da fila vai até a ponta; quem vem atrás para antes: ninguém cruza o caminho de ninguém
+      const slot = n - 1 - k; p.cer = V(s * (1.5 + slot * 1.08), 0, LZ);
+      p.pos.set(fileX, 0, W / 2 + 3 + k * gap); p.target.copy(p.pos); p.head = p.headT = Math.PI;
+      p.wp = [V(fileX, 0, LZ + 0.02), p.cer.clone()]; p.wi = 0;
+      p.delay = 0.4 + k * (gap / sp) + (WK.home1st && tm === 1 ? 2.4 : 0); p.spd = sp;
+    }); });
+  const refs = [REF, ...ASTS]; refs.forEach((r, k) => { r.cer = V((k - 1) * 0.95, 0, LZ); r.pos.set((k - 1) * 0.95, 0, W / 2 + 1.6); r.target.copy(r.pos); r.wp = [r.cer.clone()]; r.wi = 0; r.delay = 0; r.spd = 2.2; r.snap = true; });
+  ball.pos.set(0, CER.final ? -4 : 1.17, LZ + 3.4); ball.vel.set(0, 0, 0); PED.visible = true; PED.position.set(0, 0.525, LZ + 3.4);
+};
+walkLogic = function (dt) {
+  CER.t += dt;
+  if (CER.dis) return disperseLogic(dt);
+  let done = 0, tot = 0;
+  for (const p of players) { if (!p.cer) continue; tot++;
+    if (CER.t < p.delay) { p.target.copy(p.pos); continue; }
+    const w = p.wp && p.wp[p.wi]; if (w) { p.target.copy(w); p.spd = p.ref ? 2.4 : 2.9; if (p.pos.distanceTo(w) < 0.3) p.wi++; }
+    else { p.target.copy(p.cer); if (p.pos.distanceTo(p.cer) < 0.25) { p.target.copy(p.pos); p.vel.set(0, 0, 0); if (!p.mood) p.mood = 'hino'; done++; } }
+  }
+  ball.pos.set(0, CER.final ? -4 : 1.17, LZ + 3.4); ball.vel.set(0, 0, 0);
+  if (done >= tot && !CER.allIn) CER.allIn = CER.t;
+  if ((CER.allIn && CER.t > CER.allIn + 2.6) || CER.t > 21) startDisperse();
+  if (CER.skip) endWalk();
+};
+// depois do hino: cumprimentam a torcida e correm cada um para a sua posição
+function startDisperse() {
+  CER.dis = true; CER.dt = 0; CER.allIn = 0; PED.visible = false; TROPHY.visible = false;
+  const keep = players.map((p) => p.pos.clone());
+  kickoff(0); const ko = players.map((p) => p.pos.clone());
+  players.forEach((p, i) => { p.pos.copy(keep[i]); p.ko = ko[i]; p.mood = null; p.cer = null; p.wp = null; p.target.copy(p.pos); p.snap = true; p.go = 0.4 + Math.random() * 1.4; });
+  G.phase = 'walk'; ball.pos.set(0, ball.r, 0); ball.vel.set(0, 0, 0); G.owner = null;
+}
+function disperseLogic(dt) {
+  CER.dt += dt; let far = 0;
+  for (const p of players) { if (!p.ko) continue; if (CER.dt < p.go) { p.target.copy(p.pos); continue; } p.target.copy(p.ko); p.spd = p.ast ? 4 : 5.2; if (p.pos.distanceTo(p.ko) > 0.6) far++; }
+  ball.pos.set(0, ball.r, 0); ball.vel.set(0, 0, 0);
+  if ((far === 0 && CER.dt > 2.5) || CER.dt > 11 || CER.skip) { for (const p of players) p.ko = null; CER.dis = false; endWalk(); }
+}
+endWalk = function () { if (!CER.on) return; CER.on = false; CER.skip = false; CER.dis = false; CER.allIn = 0; PED.visible = false; TROPHY.visible = false; for (const p of players) { p.cer = null; p.mood = null; p.wp = null; p.ko = null; } kickoff(0); post({ t: 'ready' }); };
+// câmeras da entrada (muda de jogo para jogo)
+{ const _ct2 = camTarget; camTarget = function (t) {
+  if (G.phase === 'walk') {
+    camFov = 40;
+    if (CER.dis) { const k = clamp(CER.dt / 6, 0, 1); camT.p.set(lerp(0, -6, k), lerp(9, 24, k), lerp(LZ + 12, W / 2 + 30, k)); camT.l.set(0, 0, lerp(LZ - 4, 0, k)); return; }
+    const lead = players.filter((p) => p.cer && !p.ref).sort((a, b) => a.delay - b.delay)[0]; const lp = lead ? lead.pos : V(0, 0, LZ);
+    let ln = 0, lx = 0; for (const p of players) if (p.cer && Math.abs(p.pos.z - LZ) < 0.8) { ln++; lx += p.pos.x; } const mx = ln ? lx / ln : 0;
+    const sweep = CER.allIn ? Math.sin((CER.t - CER.allIn) * 0.45) * 10 : mx;
+    if (WK.cam === 0) { // frente, acompanhando a fila
+      if (CER.t < 4.5) { camT.p.set(5, 1.8, LZ + 1.5); camT.l.set(1.2, 1.2, W / 2 + 3); }
+      else { camT.p.set(sweep * 0.8, 2.2, LZ + 6); camT.l.set(sweep, 1.2, LZ); } }
+    else if (WK.cam === 1) { // de trás, saindo do túnel junto com os times
+      if (CER.t < 7) { camT.p.set(lp.x * 0.3, 3.4, clamp(lp.z + 5, LZ + 6, W / 2 + 3.5)); camT.l.set(lp.x * 0.5, 1, lp.z - 7); }
+      else { camT.p.set(sweep * 0.8 + 3, 2.4, LZ + 6.5); camT.l.set(sweep, 1.1, LZ); } }
+    else { // grua alta descendo até a linha dos jogadores
+      const k = clamp(CER.t / 14, 0, 1); camT.p.set(lerp(-10, 6, k), lerp(16, 2.2, ease(k)), lerp(LZ - 18, LZ + 6, ease(k))); camT.l.set(lerp(0, 4, k), lerp(0, 1.3, k), LZ); }
+    return;
+  }
+  _ct2(t);
+}; }
+
+// chute "livre" (sem gol marcado pelo motor): defesa, para fora ou na trave — e conta nas estatísticas
+const _ls = launchShot;
+launchShot = function (p, sp, dg, head) {
+  if (!EMBED || (G.force && G.force.side === p.team)) return _ls(p, sp, dg, head);
+  const prev = G.force; const r = Math.random(); const out = r < 0.52 ? 'def' : r < 0.9 ? 'fora' : 'trave';
+  G.force = { side: p.team, out, fake: true, t: 0, sent: true };
+  try { _ls(p, sp, dg, head); } finally { G.force = prev; }
+  post({ t: 'xshot', side: p.team, slot: p.slot, ont: out === 'def', out, xg: Math.round(clamp(0.5 - dg * 0.018, 0.05, 0.45) * 100) / 100 });
+};
+
+// placa de publicidade com abertura na saída do túnel (ninguém atravessa a placa)
+(function boardGap() {
+  let found = null; scene.traverse((o) => { if (!found && o.isMesh && o.geometry && o.geometry.parameters && Math.abs(o.geometry.parameters.width - (L + 6)) < 0.01 && o.position.z > W / 2 + 3.5) found = o; });
+  if (!found) return; const par = found.parent; const len = L + 6, gap = 5.2, seg = (len - gap) / 2;
+  for (const sgn of [-1, 1]) { const gg = new THREE.BoxGeometry(seg, 0.9, 0.12); const uv = gg.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * seg / 30); const b = new THREE.Mesh(gg, found.material); b.position.set(sgn * (gap / 2 + seg / 2), found.position.y, found.position.z); b.rotation.copy(found.rotation); par.add(b); }
+  par.remove(found);
+})();
+// impedimento: com chance marcada pelo motor, ninguém recebe em posição irregular — o atacante volta e se oferece de novo
+const _dp = doPass;
+doPass = function (p, o) {
+  const q = o && (o.q || o);
+  if (EMBED && G.force && G.force.side === p.team && q && q.isBone !== true && !q.gk && G.rsTaker !== p && isOffside(q)) {
+    q.target.set(q.dir * (offLine(q.team) - 1.5), 0, q.pos.z); q.spd = 7; p.decide = 0.45; return;
+  }
+  return _dp(p, o);
+};
+
+// ninguém atravessa o pedestal da bola: desvia em volta
+{ const _sp9 = stepPlayer; stepPlayer = function (p, dt, t) { _sp9(p, dt, t);
+  if (G.phase !== 'walk' || !PED.visible) return; const cx = PED.position.x, cz = PED.position.z; const dx = p.pos.x - cx, dz = p.pos.z - cz, d = Math.hypot(dx, dz), R = 0.85;
+  if (d < R && d > 1e-4) { p.pos.x = cx + dx / d * R; p.pos.z = cz + dz / d * R; } else if (d <= 1e-4) p.pos.x = cx + R; }; }
+
+// ================= 6.2: luz, avisos, túnel, festa da torcida, linha defensiva, chutes =================
+// --- luz: fim de tarde e noite claros (sem campo escuro) ---
+{ const _st = setTime; setTime = function (m) { _st(m);
+  const night = m === 'noite', dusk = m === 'tarde';
+  if (dusk) { sun.position.set(-70, 95, 55); sun.intensity = 2.5; sun.color.set('#ffd2a6'); hemi.intensity = 1.05; hemi.color.set('#ffe6cc'); fill.intensity = 0.75; renderer.toneMappingExposure = 1.08; crowdUniforms.uLight.value = 0.9; }
+  else if (night) { hemi.intensity = 0.42; fill.intensity = 0.9; sun.intensity = 3.1; renderer.toneMappingExposure = 1.05; crowdUniforms.uLight.value = 0.72; }
+  else { hemi.intensity = 1.0; renderer.toneMappingExposure = 1.05; }
+  renderer.shadowMap.needsUpdate = true;
+}; try { setTime(mode); } catch {} }
+// --- avisos na tela: só os lances importantes ---
+{ const _bn = banner; banner = function (txt, tm, small) { if (!/GOO|IMPEDIMENTO|VERMELHO|INTERVALO|FIM DE JOGO|CAMPE|PÊNALTI|Pênalti|TRAVE|machucado/i.test(String(txt))) return; _bn(txt, tm, small); }; }
+// --- túnel de verdade de onde os times saem ---
+const TUNNEL = (() => {
+  const g = new THREE.Group(); const z0 = W / 2 + 4.35, z1 = W / 2 + 8.05, wd = 4.4, h = 2.7;
+  const shell = new THREE.MeshStandardMaterial({ color: '#1d2328', roughness: 0.55, metalness: 0.25, side: THREE.DoubleSide });
+  const stripeC = document.createElement('canvas'); stripeC.width = 256; stripeC.height = 64; const sg = stripeC.getContext('2d');
+  const stripeT = new THREE.CanvasTexture(stripeC); stripeT.colorSpace = THREE.SRGBColorSpace;
+  const skin = new THREE.MeshStandardMaterial({ map: stripeT, roughness: 0.5, side: THREE.DoubleSide });
+  const len = z1 - z0;
+  for (const s of [-1, 1]) { const wall = new THREE.Mesh(new THREE.PlaneGeometry(len, h), skin); wall.rotation.y = Math.PI / 2; wall.position.set(s * wd / 2, h / 2, (z0 + z1) / 2); g.add(wall); }
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(wd / 2, wd / 2, len, 20, 1, true, -Math.PI / 2, Math.PI), skin); roof.rotation.x = Math.PI / 2; roof.rotation.z = Math.PI / 2; roof.scale.set(1, 1, 0.45); roof.position.set(0, h, (z0 + z1) / 2); g.add(roof);
+  const hole = new THREE.Mesh(new THREE.PlaneGeometry(wd, h + 0.9), new THREE.MeshBasicMaterial({ color: '#020304' })); hole.position.set(0, (h + 0.9) / 2, z1 - 0.02); hole.rotation.y = Math.PI; g.add(hole);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(wd, len), new THREE.MeshStandardMaterial({ color: '#2b3a2f', roughness: 0.9 })); floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0.012, (z0 + z1) / 2); g.add(floor);
+  const lamp = new THREE.PointLight('#fff2d6', 6, 7, 1.6); lamp.position.set(0, h - 0.3, z1 - 1); g.add(lamp);
+  scene.add(g);
+  return { g, paint(c1, c2) { sg.fillStyle = c1; sg.fillRect(0, 0, 256, 64); sg.fillStyle = c2; for (let i = -2; i < 12; i++) { sg.beginPath(); sg.moveTo(i * 28, 64); sg.lineTo(i * 28 + 14, 64); sg.lineTo(i * 28 + 40, 0); sg.lineTo(i * 28 + 26, 0); sg.fill(); } sg.fillStyle = '#0008'; sg.fillRect(0, 54, 256, 10); stripeT.needsUpdate = true; } };
+})();
+// --- festa da torcida: mosaico (antes do jogo), bandeirões e bandeirinhas na arquibancada do outro lado ---
+const FESTA = (() => {
+  const zA = -(HB + 0.4), zB = -(HB + 0.4 + 16.6), yA = 1.2 + 1.05, yB = 1.2 + 19.5 * 0.42 + 1.05;
+  const mk = (x0, x1) => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute([x0, yA, zA, x1, yA, zA, x1, yB, zB, x0, yB, zB], 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2)); geo.setIndex([0, 2, 1, 0, 3, 2]); geo.computeVertexNormals(); return geo; };
+  const mc = document.createElement('canvas'); mc.width = 1024; mc.height = 512; const mg = mc.getContext('2d'); const mt = new THREE.CanvasTexture(mc); mt.colorSpace = THREE.SRGBColorSpace; mt.anisotropy = 4;
+  const U = { uMap: { value: mt }, uRev: { value: 0 }, uT: { value: 0 }, uL: crowdUniforms.uLight };
+  const mos = new THREE.Mesh(mk(-24, 24), new THREE.ShaderMaterial({ uniforms: U, side: THREE.DoubleSide, transparent: true,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform sampler2D uMap; uniform float uRev, uT, uL; varying vec2 vUv; float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }\n void main(){ vec2 c = floor(vUv * vec2(120.0, 40.0)); float r = h(c); float d = abs(vUv.x - 0.5) * 0.7 + (1.0 - vUv.y) * 0.3; if (r * 0.35 + d * 0.65 > uRev) discard; vec3 col = texture2D(uMap, (c + 0.5) / vec2(120.0, 40.0)).rgb; vec2 f = fract(vUv * vec2(120.0, 40.0)); float edge = step(0.08, f.x) * step(0.08, f.y); col *= mix(0.55, 1.0, edge) * (0.92 + 0.08 * sin(uT * 3.0 + r * 30.0)); gl_FragColor = vec4(col * (0.55 + 0.6 * uL), 1.0); }' }));
+  mos.visible = false; scene.add(mos);
+  // bandeirões: tecido ondulando sobre a torcida
+  const flags = []; const fgeo = new THREE.PlaneGeometry(13, 7, 26, 14);
+  const fc = document.createElement('canvas'); fc.width = 512; fc.height = 256; const fg = fc.getContext('2d'); const ft = new THREE.CanvasTexture(fc); ft.colorSpace = THREE.SRGBColorSpace;
+  const FU = { uMap: { value: ft }, uT: { value: 0 }, uAmp: { value: 0.5 }, uL: crowdUniforms.uLight };
+  const fmat = new THREE.ShaderMaterial({ uniforms: FU, side: THREE.DoubleSide,
+    vertexShader: 'uniform float uT, uAmp; varying vec2 vUv; varying float vS; void main(){ vUv = uv; vec3 p = position; float w = sin(p.x * 0.9 + uT * 2.6) * 0.5 + sin(p.y * 1.3 + p.x * 0.4 + uT * 1.9) * 0.4; p.z += w * uAmp; vS = w; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }',
+    fragmentShader: 'uniform sampler2D uMap; uniform float uL; varying vec2 vUv; varying float vS; void main(){ vec3 c = texture2D(uMap, vUv).rgb * (0.82 + 0.25 * vS); gl_FragColor = vec4(c * (0.55 + 0.6 * uL), 1.0); }' });
+  for (const x of [-34, 34]) { const f = new THREE.Mesh(fgeo, fmat); f.position.set(x, 6.3, -(HB + 8.5)); f.rotation.x = -Math.atan2(19.5 * 0.42, 16.6) * 0.95 - Math.PI / 2 + Math.PI / 2; f.rotation.x = -0.46; f.visible = false; scene.add(f); flags.push(f); }
+  // bandeirinhas nos degraus
+  const smallG = new THREE.PlaneGeometry(1.1, 0.7, 4, 2); const sc = document.createElement('canvas'); sc.width = 64; sc.height = 32; const sgc = sc.getContext('2d'); const st = new THREE.CanvasTexture(sc); st.colorSpace = THREE.SRGBColorSpace;
+  const SU = { uMap: { value: st }, uT: { value: 0 }, uL: crowdUniforms.uLight };
+  const smat = new THREE.ShaderMaterial({ uniforms: SU, side: THREE.DoubleSide,
+    vertexShader: 'attribute float aPh; uniform float uT; varying vec2 vUv; void main(){ vUv = uv; vec3 p = position; float k = uv.x; p.z += sin(uT * 7.0 + aPh + p.x * 3.0) * 0.18 * k; p.y += sin(uT * 4.0 + aPh) * 0.06; vec4 w = instanceMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * modelViewMatrix * w; }',
+    fragmentShader: 'uniform sampler2D uMap; uniform float uL; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(uMap, vUv).rgb * (0.55 + 0.6 * uL), 1.0); }' });
+  const NS = 46; const small = new THREE.InstancedMesh(smallG, smat, NS); const ph = new Float32Array(NS); const _o = new THREE.Object3D();
+  for (let i = 0; i < NS; i++) { const x = -44 + Math.random() * 88; const row = 1 + Math.floor(Math.random() * 16); _o.position.set(x, 1.2 + row * 0.42 + 2.1, -(HB + 0.4 + row * 0.85)); _o.rotation.set(0, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.4); _o.updateMatrix(); small.setMatrixAt(i, _o.matrix); ph[i] = Math.random() * 6.28; }
+  smallG.setAttribute('aPh', new THREE.InstancedBufferAttribute(ph, 1)); small.visible = false; scene.add(small);
+  let rev = 0, revT = 0, on = false;
+  function paint(c1, c2, name, crestSrc) {
+    const ink = lum(c1) > 0.55 ? '#111' : '#fff';
+    mg.fillStyle = c1; mg.fillRect(0, 0, 1024, 512); const st2 = (hstr(name) % 3);
+    mg.fillStyle = c2; if (st2 === 0) for (let i = 0; i < 1024; i += 128) mg.fillRect(i, 0, 64, 512); else if (st2 === 1) { mg.beginPath(); mg.moveTo(0, 512); mg.lineTo(1024, 0); mg.lineTo(1024, 160); mg.lineTo(160, 512); mg.fill(); } else { mg.fillRect(0, 0, 1024, 90); mg.fillRect(0, 422, 1024, 90); }
+    mg.fillStyle = ink === '#fff' ? c2 : c1; mg.textAlign = 'center'; mg.textBaseline = 'middle'; mg.font = '900 150px system-ui'; mg.lineWidth = 16; mg.strokeStyle = ink === '#fff' ? '#000' : '#fff';
+    const word = String(name || '').toUpperCase().split(' ').filter((w) => w.length > 2)[0] || String(name || '').toUpperCase(); mg.strokeText(word.slice(0, 11), 512, 380, 960); mg.fillStyle = ink; mg.fillText(word.slice(0, 11), 512, 380, 960);
+    mt.needsUpdate = true;
+    if (crestSrc) { const im = new Image(); im.onload = () => { try { mg.drawImage(im, 512 - 120, 40, 240, 240); mt.needsUpdate = true; } catch {} }; im.src = crestSrc; }
+    fg.fillStyle = c1; fg.fillRect(0, 0, 512, 256); fg.fillStyle = c2; fg.fillRect(0, 85, 512, 86); fg.fillStyle = ink; fg.font = '900 54px system-ui'; fg.textAlign = 'center'; fg.textBaseline = 'middle'; fg.fillText(word.slice(0, 12), 256, 128, 480); ft.needsUpdate = true;
+    sgc.fillStyle = c1; sgc.fillRect(0, 0, 64, 32); sgc.fillStyle = c2; sgc.fillRect(0, 11, 64, 10); st.needsUpdate = true;
+  }
+  return { paint, show(v) { on = v; for (const f of flags) f.visible = v; small.visible = v; },
+    mosaic(v) { if (v && !mos.visible) { rev = 0; mos.visible = true; } revT = v ? 1 : 0; },
+    step(dt, t) { U.uT.value = t; FU.uT.value = t; SU.uT.value = t; rev += (revT - rev) * Math.min(1, dt * (revT ? 0.55 : 1.2)); U.uRev.value = rev * 1.15; if (!revT && rev < 0.01) mos.visible = false; FU.uAmp.value = 0.35 + (crowdUniforms.uExcite.value || 0) * 0.6; } };
+})();
+{ const _sm8 = setupMatch; setupMatch = function (d) { _sm8(d);
+  try { const h = d.home || {}; const cl = d.clubs && d.clubs[0]; TUNNEL.paint(h.c1 || '#1b8f4e', h.c2 && h.c2 !== h.c1 ? h.c2 : '#ffffff');
+    FESTA.paint(h.c1 || '#1b8f4e', h.c2 && h.c2.toLowerCase() !== (h.c1 || '').toLowerCase() ? h.c2 : (lum(h.c1 || '#000') > 0.5 ? '#111111' : '#ffffff'), cl ? cl.name : h.name, cl ? crestToSrc(cl.crest) : '');
+    const light = Q === QS[0]; FESTA.show(!light); if (!light) FESTA.mosaic(true); } catch (e) { console.warn('festa', e); } }; }
+{ const _ug8 = updateGame; updateGame = function (dt, t) { _ug8(dt, t); try { FESTA.step(dt, t);
+  if (G.phase === 'play' && CER && !CER.on && FESTA._m !== 1) { FESTA._m = 1; setTimeout(() => FESTA.mosaic(false), 4000); } } catch {} }; }
+// --- linha defensiva alinhada e time compacto conforme a tática ---
+function alignLines() {
+  for (const tm of [0, 1]) {
+    const d = tm === 0 ? 1 : -1; const own = G.poss === tm && G.owner && G.owner.team === tm;
+    const defs = players.filter((p) => p.team === tm && !p.off && !p.ref && (p.role === 'ZAG' || p.role === 'LD' || p.role === 'LE') && !(p.act && p.act.lock));
+    if (defs.length < 2) continue;
+    const free = defs.filter((p) => p.pos.distanceTo(ball.pos) > 7 && p !== G.owner);
+    const core = free.filter((p) => p.role === 'ZAG' || !own); if (core.length < 2) continue;
+    const xs = core.map((p) => p.target.x * d).sort((a, b) => a - b); const line = xs[Math.floor(xs.length / 2)];
+    for (const p of core) { const tx = p.target.x * d; p.target.x = d * lerp(tx, line, 0.75); }
+    // meio-campo acompanha (mais solto)
+    const mids = players.filter((p) => p.team === tm && !p.off && (p.role === 'VOL' || p.role === 'MC') && p.pos.distanceTo(ball.pos) > 9 && p !== G.owner && !(p.act && p.act.lock));
+    if (mids.length > 1) { const mx = mids.reduce((s, p) => s + p.target.x * d, 0) / mids.length; for (const p of mids) p.target.x = d * lerp(p.target.x * d, Math.max(mx, line + 7), 0.35); }
+  }
+}
+{ const _pl = playLogic; playLogic = function (dt) { _pl(dt); try { alignLines(); } catch {} }; }
+// --- finalizações: umas de dentro, outras de fora da área ---
+{ const _sh8 = shoot; shoot = function (p) {
+  const F = G.force; const dg = Math.hypot(p.dir * L / 2 - p.pos.x, p.pos.z);
+  if (EMBED && F && F.side === p.team && !F.fake) { F.maxD ??= Math.random() < 0.62 ? 11 + Math.random() * 6 : 17 + Math.random() * 8;
+    if (dg > F.maxD && (F.t || 0) < 10.5) { p.target.set(p.dir * (L / 2 - 9), 0, p.pos.z * 0.6); p.spd = 6.8; return; } }
+  return _sh8(p); }; }
 
 $('#gMode').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; for (const x of $('#gMode').children) x.classList.toggle('on', x === b); const v = b.dataset.m === 'vit'; $('#gAnim').style.display = v ? '' : 'none'; hud.style.display = v ? 'none' : ''; setVit(v); };
 $('#gAnim').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; for (const x of $('#gAnim').children) x.classList.toggle('on', x === b); VIT.anim = b.dataset.a; VIT.t = 0; VIT.cyc = -1; for (const p of players) { p.act = null; p.mood = null; } };

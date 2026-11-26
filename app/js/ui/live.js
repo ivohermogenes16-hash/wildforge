@@ -142,17 +142,18 @@ export function launchLive(f, m, side, hc, ac, done) {
   const G = S.G;
   try { window.LumbraAnalytics?.event('partida_inicio', { modo: m || '', base: G.me.job?.youth ? 1 : 0 }); } catch {}
   try { PAUDIO.crowd(0.35); setTimeout(() => PAUDIO.whistle(1), 900); } catch {}
-  const wrap = document.createElement('div'); wrap.className = 'live-wrap'; wrap.id = 'live';
+  const wrap = document.createElement('div'); const _cp = G.comps[f.c] || {}; const _cid = f.c || ''; const sbs = _cid === 'LIB' ? 'lib' : _cid === 'UCL' ? 'ucl' : _cid === 'SUD' ? 'sud' : _cid === 'UEL' ? 'uel' : _cp.kind === 'youth' ? 'yth' : _cp.kind === 'state' ? 'est' : _cp.kind === 'cup' && _cp.country === 'BR' ? 'cdb' : _cp.kind === 'cup' ? 'cup' : /^BR[A-D]$/.test(_cid) ? 'bra' : /^ENG/.test(_cid) ? 'eng' : /^ESP/.test(_cid) ? 'esp' : /^ITA/.test(_cid) ? 'ita' : /^GER/.test(_cid) ? 'ger' : /^FRA/.test(_cid) ? 'fra' : /^POR/.test(_cid) ? 'por' : /^(ARG|URU|COL)/.test(_cid) ? 'arg' : _cp.kind === 'cont' ? 'cont' : (_cp.nat || f.nat) ? 'nat' : 'def';
+  wrap.className = 'live-wrap fcx-live sb-' + sbs; wrap.id = 'live'; wrap.dataset.comp = (_cp.short || _cp.name || '').toUpperCase(); const lumx = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(h || ''); if (!m) return 0; const n = parseInt(m[1], 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; }; const vis = (c, d) => [c.c1, c.c2, d].find((x) => x && lumx(x) > 0.22) || d; let hcc = vis(hc, '#2fe08a'), acc2 = vis(ac, '#4aa8ff'); if (hcc === acc2) acc2 = '#4aa8ff'; wrap.style.setProperty('--hc', hcc); wrap.style.setProperty('--ac', acc2);
   wrap.innerHTML = `<div class="lv">
    <div class="lv-top">
-     <div class="lv-team">${crest(hc, 30)}<span class="b ell">${esc(hc.name)}</span></div>
-     <div class="lv-score"><span id="lsc">0 – 0</span><span class="lv-min" id="lmin">0'</span></div>
-     <div class="lv-team r"><span class="b ell">${esc(ac.name)}</span>${crest(ac, 30)}</div>
-     <div class="lv-btns"><button class="btn sm" data-a="lnames" title="Nomes">Aa</button><button class="btn sm" data-a="lrep" id="lrp" title="Replays">🎬</button><button class="btn sm qs-btn" data-a="lqs" id="lqsb" title="Trocas rápidas">🔄<i id="lqsn"></i></button><button class="btn sm" data-a="lpause" id="lpb">⏸</button><button class="btn sm" data-a="lspeed" id="lsp">2x</button><button class="btn sm pri" data-a="ltact">Tática</button><button class="btn sm" data-a="lskip">⏭</button></div>
+     <div class="lv-team">${crest(hc, 30)}<span class="b ell nm-l">${esc(hc.name)}</span><span class="nm-s">${esc((x => (x.tla || x.name.normalize('NFD').replace(/[^A-Za-z ]/g, '').split(' ').filter((w) => w.length > 2 && !/^(de|do|da|dos|das)$/i.test(w))[0] || x.name).slice(0, 3).toUpperCase())(hc))}</span></div>
+     <div class="lv-score"><span id="lsc">0 – 0</span><span class="lv-min" id="lmin">0'</span></div><div class="lv-ctag">${esc((G.comps[f.c]?.short || G.comps[f.c]?.name || '').toUpperCase())}</div>
+     <div class="lv-team r"><span class="b ell nm-l">${esc(ac.name)}</span><span class="nm-s">${esc((x => (x.tla || x.name.normalize('NFD').replace(/[^A-Za-z ]/g, '').split(' ').filter((w) => w.length > 2 && !/^(de|do|da|dos|das)$/i.test(w))[0] || x.name).slice(0, 3).toUpperCase())(ac))}</span>${crest(ac, 30)}</div>
+     <div class="lv-btns"><button class="btn sm" data-a="lnames" title="Nomes">Aa</button><button class="btn sm" data-a="lrep" id="lrp" title="Replays">🎬</button><button class="btn sm qs-btn" data-a="lqs" id="lqsb" title="Trocas rápidas">🔄<i id="lqsn"></i></button><button class="btn sm" data-a="lpause" id="lpb">⏸</button><button class="btn sm" data-a="lspeed" id="lsp">2x</button><button class="btn sm drw-b" data-a="ldrawer" id="ldrb">Dados</button><button class="btn sm pri" data-a="ltact">Tática</button><button class="btn sm" data-a="lskip">⏭</button></div>
    </div>
    <div class="lv-tl"><i id="ltlp"></i><span style="left:50%" class="ht"></span><div id="ltlm"></div></div>
    <div class="lv-main"><div class="lv-pitch"><canvas id="lcv"></canvas><div class="lv-nar" id="lnar"></div></div>
-     <div class="lv-side"><div id="lstats"></div><div class="feed" id="lfeed"></div><div id="lend"></div></div></div>
+     <div class="lv-side"><button class="drw-x" data-a="ldrawer">✕</button><div id="lstats"></div><div class="feed" id="lfeed"></div><div id="lend"></div></div></div>
   </div>`;
   document.body.appendChild(wrap);
   const cv = wrap.querySelector('#lcv');
@@ -281,15 +282,26 @@ function onEv(e, quiet) {
 }
 function stats() {
   const st = L.m.st; const tot = st.pos[0] + st.pos[1] || 1; const p0 = Math.round(st.pos[0] / tot * 100);
-  const row = (l, a, b) => { const t = a + b || 1; return `<div class="lv-stat"><b>${a}</b><div class="lv-bar"><i style="width:${a / t * 100}%"></i></div><span>${l}</span><div class="lv-bar r"><i style="width:${b / t * 100}%"></i></div><b>${b}</b></div>`; };
-  const tabs = `<div class="lv-tabs"><span class="${L.stTab !== 'en' ? 'on' : ''}" data-a="lsttab" data-v="st">📊 Estatísticas</span><span class="${L.stTab === 'en' ? 'on' : ''}" data-a="lsttab" data-v="en">⚡ Energia</span></div>`;
-  if (L.stTab === 'en') {
-    const m = L.m, sd = m.s[L.side], form = m.form(L.side), G = S.G;
-    document.getElementById('lstats').innerHTML = tabs + `<div class="en-list">${sd.xi.map((id, k) => { const p = G.players[id]; if (!p || m.sent[L.side].has(id)) return ''; const e = Math.round(m.en[id] ?? p.fit); return `<div class="en-row"><span class="xs mut">${form[k][0]}</span><span class="ell">${esc(shortName(p.n))}</span><div class="en-bar"><i style="width:${e}%;background:${enCol(e)}"></i></div><b style="color:${enCol(e)}">${e}</b></div>`; }).join('')}</div>`;
-    return;
+  const side = document.querySelector('.lv-side'); const tab = L.stTab || 'st'; if (side) side.dataset.tab = tab;
+  const row = (l, a, b, fmt = (x) => x) => { const t = (+a) + (+b) || 1; return `<div class="fx-st"><div class="fx-st-h"><b>${fmt(a)}</b><span>${l}</span><b>${fmt(b)}</b></div><div class="fx-st-b"><i class="h" style="width:${a / t * 100}%"></i><i class="a" style="width:${b / t * 100}%"></i></div></div>`; };
+  const G = S.G, m = L.m; const hc = G.clubs[L.f.h], ac = G.clubs[L.f.a];
+  const tabs = `<div class="fx-tabs">${[['st', 'Estatísticas'], ['lc', 'Lances'], ['en', 'Jogadores']].map(([k, l]) => `<span class="${tab === k ? 'on' : ''}" data-a="lsttab" data-v="${k}">${l}</span>`).join('')}</div>`;
+  const head = `<div class="fx-hd"><span>${crest(hc, 20)}<b>${esc(hc.short || hc.name)}</b></span><em>${L.viz.score[0]} – ${L.viz.score[1]}</em><span><b>${esc(ac.short || ac.name)}</b>${crest(ac, 20)}</span></div>`;
+  let body = '';
+  if (tab === 'en') {
+    const sd = m.s[L.side], form = m.form(L.side);
+    body = `<div class="fx-pl">${sd.xi.map((id, k) => { const p = G.players[id]; if (!p || m.sent[L.side].has(id)) return ''; const e = Math.round(m.en[id] ?? p.fit); const ev = m.ev.filter((x) => x.p === id || x.as === id); const g = ev.filter((x) => x.t === 'gol' && x.p === id).length, a = ev.filter((x) => x.t === 'gol' && x.as === id).length; const nt = Math.min(10, 6.2 + g * 1.1 + a * 0.6 - (ev.some((x) => x.t === 'am' && x.p === id) ? 0.3 : 0)); return `<div class="fx-pr" data-a="lpinfo" data-v="${id}"><span class="fx-pos">${form[k][0]}</span><span class="ell">${esc(shortName(p.n))}${g ? ' <i class="fx-g">⚽' + (g > 1 ? g : '') + '</i>' : ''}</span><div class="fx-en"><i style="width:${e}%;background:${enCol(e)}"></i></div><b style="color:${enCol(e)}">${e}</b><em class="${nt >= 7 ? 'hi' : nt < 6 ? 'lo' : ''}">${nt.toFixed(1)}</em></div>`; }).join('')}</div>`;
+  } else if (tab === 'lc') {
+    body = '';
+  } else {
+    const xg = st.xg || [0, 0], pas = st.pas || [0, 0], pok = st.pok || [0, 0];
+    body = row('Posse de bola', p0, 100 - p0, (x) => x + '%') + row('Finalizações', st.sh[0], st.sh[1]) + row('No gol', st.ont[0], st.ont[1]) + row('Gols esperados (xG)', +(+xg[0]).toFixed(2), +(+xg[1]).toFixed(2), (x) => (+x).toFixed(2)) + row('Escanteios', st.cor[0], st.cor[1]) + row('Faltas', st.fal[0], st.fal[1]) + (pas[0] + pas[1] ? row('Passes certos', pas[0] ? Math.round(pok[0] / pas[0] * 100) : 0, pas[1] ? Math.round(pok[1] / pas[1] * 100) : 0, (x) => x + '%') : '');
   }
-  document.getElementById('lstats').innerHTML = tabs + row('Posse %', p0, 100 - p0) + row('Finalizações', st.sh[0], st.sh[1]) + row('No gol', st.ont[0], st.ont[1]) + row('Faltas', st.fal[0], st.fal[1]);
+  document.getElementById('lstats').innerHTML = head + tabs + body;
 }
+window.PXSHOT = (d, m) => { if (!L || !m || m !== L.m) return; const st = m.st; st.sh[d.side]++; if (d.ont) st.ont[d.side]++; if (st.xg) st.xg[d.side] = Math.round((st.xg[d.side] + (d.xg || 0.1)) * 100) / 100;
+  const sd = m.s[d.side]; const id = sd.xi[d.slot]; const p = S.G.players[id]; if (p) addFeed({ m: m.min, t: 'nar', side: d.side, txt: d.out === 'def' ? `${esc(shortName(p.n))} sai cara a cara e o goleiro faz grande defesa!` : d.out === 'trave' ? `${esc(shortName(p.n))} bate e a bola explode na trave!` : `${esc(shortName(p.n))} fica de frente para o gol e manda para fora!` }); stats(); };
+H.ldrawer = () => { const w = document.getElementById('live'); if (!w) return; w.classList.toggle('drw'); stats(); };
 const enCol = (e) => (e >= 75 ? '#2fe08a' : e >= 60 ? '#f4c542' : e >= 45 ? '#ff9f43' : '#ff5a5f');
 const enTag = (e) => `<span class="xs b" style="color:${enCol(e)};width:34px;text-align:right">⚡${Math.round(e)}</span>`;
 H.lsttab = (v) => { L.stTab = v; stats(); };

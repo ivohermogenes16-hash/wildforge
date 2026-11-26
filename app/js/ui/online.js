@@ -75,7 +75,7 @@ export function careerScore(G) {
 function myProfile() {
   const G = S.G; const c = G?.me.job ? G.clubs[G.me.job.cid] : null; const sc = Math.max(O.best || 0, careerScore(G));
   const top = (G?.me.titles || []).slice().sort((a, b) => (b.w || 0) - (a.w || 0)).slice(0, 4).map((t) => `${t.c} ${t.y}`).join('|').slice(0, 160);
-  return { n: nickOf() || 'Técnico', cl: (c?.name || O.cl || 'Sem clube').slice(0, 30), c1: (c?.c1 || O.c1 || '#1f6f4a').slice(0, 9), c2: (c?.c2 || O.c2 || '#ffffff').slice(0, 9), sc, rep: Math.round(G?.me.rep || O.rep || 0), ti: (G?.me.titles || []).length || O.ti || 0, se: G ? Math.max(0, G.year - 2026) : O.se || 0, fr: (myLook().fr || '').slice(0, 10), cos: cosStr(myLook()), vip: isVip(), tt: top || O.tt || '', lg: O.lgw || 0, chb: O.chb || 0, sp: mySp(), t: { '.sv': 'timestamp' }, v: '6.1' };
+  return { n: nickOf() || 'Técnico', cl: (c?.name || O.cl || 'Sem clube').slice(0, 30), c1: (c?.c1 || O.c1 || '#1f6f4a').slice(0, 9), c2: (c?.c2 || O.c2 || '#ffffff').slice(0, 9), sc, rep: Math.round(G?.me.rep || O.rep || 0), ti: (G?.me.titles || []).length || O.ti || 0, se: G ? Math.max(0, G.year - 2026) : O.se || 0, fr: (myLook().fr || '').slice(0, 10), cos: cosStr(myLook()), vip: isVip(), tt: top || O.tt || '', lg: O.lgw || 0, chb: O.chb || 0, sp: mySp(), t: { '.sv': 'timestamp' }, v: '6.2' };
 }
 let lastSync = 0;
 export async function syncProfile(force) {
@@ -168,6 +168,7 @@ let RANK = [];
 function rankShell() { return `<div class="seg sm on-rt">${[['geral', 'Geral (carreira)'], ['sea', 'Temporada'], ['ch', 'Desafio da semana']].map(([k, t]) => `<button class="${RT === k ? 'on' : ''}" data-a="onrt" data-v="${k}">${t}</button>`).join('')}</div><div id="onrk"><div class="pf-spin"></div></div>`; }
 H.onrt = (v) => { RT = v; setBody(rankShell()); loadRank(); };
 const rowHtml = (r, i, score, sub) => { const c = r.cos ? cosParse(r.cos) : {}; return `<button class="on-row ${r.u === me() ? 'me' : ''} ${i < 3 ? 'top' + (i + 1) : ''} ${bannerCls(c.ban)}" style="--d:${Math.min(i, 20) * 0.03}s;${bannerStyle(c.ban)}" data-a="onprof" data-v="${i}">${bannerFx(c.ban)}<span class="on-p">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span>${av(r, 36, i > 12)}<span class="grow ell"><b>${esc(r.n)}</b> ${titleTag(c.tit)}<small>${sub}</small></span><span class="on-sc">${score}</span></button>`; };
+const podium = (R, sc) => R.length < 3 ? '' : `<div class="on-pod">${[1, 0, 2].map((i) => { const r = R[i]; const c = r.cos ? cosParse(r.cos) : {}; return `<button class="pod p${i + 1} ${r.u === me() ? 'me' : ''}" data-a="onprof" data-v="${i}"><span class="pod-av">${av(r, i ? 54 : 70)}</span><b class="ell">${esc(r.n)}</b>${titleTag(c.tit)}<em>${sc(r)}</em><i class="pod-base">${i + 1}º</i></button>`; }).join('')}</div>`;
 async function loadRank() {
   const el = () => document.getElementById('onrk');
   try {
@@ -180,16 +181,16 @@ async function loadRank() {
       try { const all = await api('GET', 'pr/prof', undefined, 'shallow=true'); total = Object.keys(all || {}).length; O.total = total; osave(); } catch {}
       if (RT !== 'geral' || !el()) return;
       el().innerHTML = `<div class="on-mypos"><div><small>Sua posição</small><b>${pos ? pos + 'º' : '—'}</b></div><div><small>Técnicos</small><b>${total || RANK.length}</b></div><div><small>Seus pontos</small><b>${Math.max(O.best || 0, careerScore(S.G))}</b></div><button class="btn sm" data-a="onshare">Compartilhar</button></div>
-      <div class="xs mut" style="margin:4px 0 8px">Pontos da carreira: títulos (os grandes valem mais), reputação, vitórias e temporadas.</div><div class="on-rank">${RANK.map((r, i) => rowHtml(r, i, r.sc, `<i class="on-cl" style="--c1:${esc(r.c1 || '#333')};--c2:${esc(r.c2 || '#fff')}"></i>${esc(r.cl || '')} · ${r.ti || 0} títulos`)).join('') || '<div class="hint">Ninguém ainda. Seja o primeiro!</div>'}</div>`;
+      <div class="xs mut" style="margin:4px 0 8px">Pontos da carreira: títulos (os grandes valem mais), reputação, vitórias e temporadas.</div>${podium(RANK, (r) => r.sc)}<div class="on-rank">${RANK.map((r, i) => rowHtml(r, i, r.sc, `<i class="on-cl" style="--c1:${esc(r.c1 || '#333')};--c2:${esc(r.c2 || '#fff')}"></i>${esc(r.cl || '')} · ${r.ti || 0} títulos`)).join('') || '<div class="hint">Ninguém ainda. Seja o primeiro!</div>'}</div>`;
     } else if (RT === 'sea') {
       const k = seaKey(); const j = await api('GET', `pr/sea/${k}`, undefined, q({ orderBy: 'sp', limitToLast: 100 }));
       RANK = Object.entries(j || {}).map(([u, p]) => ({ u, ...p })).sort((a, b) => b.sp - a.sp); if (RT !== 'sea' || !el()) return;
       el().innerHTML = `<div class="sea-divs">${DIVS.map((d) => `<div class="${divOf(mySp()) === d ? 'on' : ''}">${divBadge(d, 34)}<small>${d.t}</small><i>${d.min}+</i></div>`).join('')}</div>
-      <div class="xs mut" style="margin:4px 0 8px">Temporada de ${seaName(k)} · acaba em ${cd(seaEnd().getTime())}. Prêmio no fim do mês para cada divisão, e moldura exclusiva para o top 10.</div><div class="on-rank">${RANK.map((r, i) => { const d = divOf(r.sp); return rowHtml(r, i, `${r.sp}`, `${divBadge(d, 14)} ${d.t}`); }).join('') || '<div class="hint">A temporada acabou de começar. Jogue para aparecer aqui!</div>'}</div>`;
+      <div class="xs mut" style="margin:4px 0 8px">Temporada de ${seaName(k)} · acaba em ${cd(seaEnd().getTime())}. Prêmio no fim do mês para cada divisão, e moldura exclusiva para o top 10.</div>${podium(RANK, (r) => r.sp)}<div class="on-rank">${RANK.map((r, i) => { const d = divOf(r.sp); return rowHtml(r, i, `${r.sp}`, `${divBadge(d, 14)} ${d.t}`); }).join('') || '<div class="hint">A temporada acabou de começar. Jogue para aparecer aqui!</div>'}</div>`;
     } else {
       const n = weekNo(); const j = await api('GET', `pr/ch/w${n}`, undefined, q({ orderBy: 'sc', limitToLast: 100 }));
       RANK = Object.entries(j || {}).map(([u, r]) => ({ u, ...r })).sort((a, b) => b.sc - a.sc); if (RT !== 'ch' || !el()) return;
-      el().innerHTML = `<div class="xs mut" style="margin:4px 0 8px">Desafio ${n + 1}: ${esc(weekly().club.name)}. Termina em ${cd(weekEnd(n).getTime())}.</div><div class="on-rank">${RANK.map((r, i) => rowHtml(r, i, r.sc, esc(r.r || ''))).join('') || '<div class="hint">Ninguém jogou ainda. Seja o primeiro!</div>'}</div>`;
+      el().innerHTML = `<div class="xs mut" style="margin:4px 0 8px">Desafio ${n + 1}: ${esc(weekly().club.name)}. Termina em ${cd(weekEnd(n).getTime())}.</div>${podium(RANK, (r) => r.sc)}<div class="on-rank">${RANK.map((r, i) => rowHtml(r, i, r.sc, esc(r.r || ''))).join('') || '<div class="hint">Ninguém jogou ainda. Seja o primeiro!</div>'}</div>`;
     }
   } catch (e) { if (el()) el().innerHTML = offline(e); }
 }

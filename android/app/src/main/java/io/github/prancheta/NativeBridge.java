@@ -23,6 +23,18 @@ import java.util.Locale;
 import android.webkit.WebView;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import androidx.credentials.Credential;
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.CustomCredential;
+import androidx.credentials.GetCredentialRequest;
+import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.GetCredentialCancellationException;
+import androidx.credentials.exceptions.GetCredentialException;
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
+import org.json.JSONObject;
+import java.util.concurrent.Executors;
 import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
@@ -177,5 +189,34 @@ public class NativeBridge {
                 return f.getAbsolutePath();
             }
         } catch (Throwable t) { return ""; }
+    }
+
+    /* ---------- 6.2: entrar com Google (opcional) ---------- */
+    private void gReply(String st, String tok, String name) {
+        if (web == null) return;
+        final String js = "window.onPranchetaGoogle&&window.onPranchetaGoogle(" + JSONObject.quote(st) + "," + JSONObject.quote(tok == null ? "" : tok) + "," + JSONObject.quote(name == null ? "" : name) + ")";
+        web.post(() -> web.evaluateJavascript(js, null));
+    }
+    @JavascriptInterface
+    public void googleSignIn(String clientId) {
+        act.runOnUiThread(() -> {
+            try {
+                CredentialManager cm = CredentialManager.create(act);
+                GetSignInWithGoogleOption opt = new GetSignInWithGoogleOption.Builder(clientId).build();
+                GetCredentialRequest req = new GetCredentialRequest.Builder().addCredentialOption(opt).build();
+                cm.getCredentialAsync(act, req, null, Executors.newSingleThreadExecutor(), new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                    @Override public void onResult(GetCredentialResponse r) {
+                        try {
+                            Credential c = r.getCredential();
+                            if (c instanceof CustomCredential && GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(c.getType())) {
+                                GoogleIdTokenCredential g = GoogleIdTokenCredential.createFrom(((CustomCredential) c).getData());
+                                gReply("ok", g.getIdToken(), g.getDisplayName());
+                            } else gReply("fail", "", "tipo");
+                        } catch (Throwable t) { gReply("fail", "", String.valueOf(t.getMessage())); }
+                    }
+                    @Override public void onError(GetCredentialException e) { gReply(e instanceof GetCredentialCancellationException ? "cancel" : "fail", "", String.valueOf(e.getMessage())); }
+                });
+            } catch (Throwable t) { gReply("fail", "", String.valueOf(t.getMessage())); }
+        });
     }
 }

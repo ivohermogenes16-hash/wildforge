@@ -1,5 +1,6 @@
 import { setPieceChance } from './coach.js';
 import { aiInMatch } from './universe.js';
+import { attrs } from './youth.js';
 import { clamp, rnd, ri, poisson, weighted, posFit, avg, pick } from '../util.js';
 
 // Formações: posição + coordenadas (x 0..1 largura, y 0..1 do próprio gol ao ataque)
@@ -98,6 +99,14 @@ export function validLineup(G, club, lu, youth) {
   return true;
 }
 
+// teste: atributos da carta valem no jogo (Ritmo, Finalização, Passe, Drible, Defesa, Físico)
+const _AT = new WeakMap();
+export function atOf(p) { let c = _AT.get(p); if (!c || c.o !== p.ovr || c.p !== p.pos) { const a = attrs(p); c = { o: p.ovr, p: p.pos, v: Object.fromEntries(a.map(([k, v]) => [k, v])) }; _AT.set(p, c); } return c.v; }
+function lineVal(p, L, e) {
+  const a = atOf(p); if (L === 'G') return e;
+  const comp = L === 'A' ? 0.4 * a['Finalização'] + 0.32 * a['Ritmo'] + 0.28 * a['Drible'] : L === 'M' ? 0.45 * a['Passe'] + 0.25 * a['Drible'] + 0.15 * a['Ritmo'] + 0.15 * a['Defesa'] : 0.55 * a['Defesa'] + 0.25 * a['Físico'] + 0.2 * a['Ritmo'];
+  return e + (comp - p.ovr) * 0.45 * (e / Math.max(1, p.ovr));
+}
 export function ratings(G, club, xi, minute = 0, tact = club.tact, extra = 0, bon = null, en = null) {
   const form = formOf(tact);
   const lines = { G: [], D: [], M: [], A: [] };
@@ -106,7 +115,7 @@ export function ratings(G, club, xi, minute = 0, tact = club.tact, extra = 0, bo
     const slot = form[i][0];
     const e = effAt(p, slot, minute, en ? en[id] : null);
     const L = slot === 'GOL' ? 'G' : ['LD', 'LE', 'ZAG'].includes(slot) ? 'D' : ['VOL', 'MC', 'MEI'].includes(slot) ? 'M' : 'A';
-    lines[L].push(e);
+    lines[L].push(lineVal(p, L, e));
   });
   const missing = 11 - xi.filter((id) => G.players[id]).length;
   const g = avg(lines.G) || 30, d = avg(lines.D) || 30, m = avg(lines.M) || 30, a = avg(lines.A) || avg(lines.M) || 30;
@@ -126,8 +135,8 @@ export function lambdas(Rh, Ra, neutral) {
   const ctl = Math.exp((Rh.ctl - Ra.ctl) / 40);
   // diferenças muito grandes são amortecidas (gigante x pequeno dá 3, 4 a 0 — não 11)
   const soft = (d) => (d > 10 ? 10 + (d - 10) * 0.35 : d < -10 ? -10 + (d + 10) * 0.6 : d);
-  const lh = clamp(1.16 * Math.exp(soft(Rh.att - Ra.def) / 17) * Math.sqrt(ctl) * (neutral ? 0.92 : 1.08), 0.08, 3.0);
-  const la = clamp(1.16 * Math.exp(soft(Ra.att - Rh.def) / 17) / Math.sqrt(ctl) * (neutral ? 0.92 : 0.86), 0.08, 3.0);
+  const lh = clamp(1.16 * Math.exp(soft(Rh.att - Ra.def) / 15) * Math.sqrt(ctl) * (neutral ? 0.92 : 1.08), 0.08, 3.0);
+  const la = clamp(1.16 * Math.exp(soft(Ra.att - Rh.def) / 15) / Math.sqrt(ctl) * (neutral ? 0.92 : 0.86), 0.08, 3.0);
   return [lh, la];
 }
 
@@ -136,7 +145,7 @@ const AW = { ATA: 1.8, PE: 2.8, PD: 2.8, MEI: 3.4, MC: 2, VOL: 0.9, LD: 1.5, LE:
 export function pickScorer(G, xi, form, w = GW, excl = -1) {
   const opts = xi.map((id, i) => ({ id, slot: form[i][0] })).filter((o) => G.players[o.id] && o.id !== excl);
   if (!opts.length) return -1;
-  return weighted(opts, (o) => w[o.slot] * Math.pow(G.players[o.id].ovr / 70, 2)).id;
+  return weighted(opts, (o) => { const p = G.players[o.id]; const k = w === GW ? (p.pos === 'GOL' ? p.ovr : atOf(p)['Finalização']) : w === AW ? (p.pos === 'GOL' ? p.ovr : atOf(p)['Passe']) : p.ovr; return w[o.slot] * Math.pow(k / 70, 2.4); }).id;
 }
 
 // Simulação rápida (Poisson) para jogos da IA

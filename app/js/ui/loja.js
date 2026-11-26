@@ -92,7 +92,7 @@ export function watchAd() {
 export function adPreload() { try { if (adOk()) window.PranchetaNative.loadAd(adUnit()); } catch {} }
 H.pfad = async (v) => {
   const r = await watchAd(); if (!r) return;
-  if (v === 'pf' || !v) { pfAdd(AD_PF, 'Anúncio assistido'); if (document.querySelector('.pf-shop')) replaceSheet(shopHtml()); return; }
+  if (v === 'pf' || !v) { pfAdd(AD_PF, 'Anúncio assistido'); if (document.querySelector('.pf-shop')) shopRender(); return; }
   try { window.PADREWARD?.(v); } catch {}
 };
 
@@ -146,13 +146,20 @@ const RAS = ['comum', 'raro', 'epico', 'lendario', 'exclusivo', 'evento'];
 // ---------- tela da loja ----------
 let TAB = 'dest';
 const TABS = [['dest', 'Destaques'], ['fr', 'Molduras'], ['em', 'Emblemas'], ['ban', 'Faixas'], ['tit', 'Títulos'], ['mais', 'Gol, temas e cards'], ['col', 'Minha coleção'], ['car', 'Itens de carreira'], ['comprar', 'Pranfixas'], ['socio', 'Sócio'], ['ganhar', 'Ganhar grátis']];
-export const SHOP_VER = 61;
+export const SHOP_VER = 62;
 export const shopIsNew = () => (W.seenShop || 0) < SHOP_VER || !!(evNow() && W.seenEv !== evNow().id);
 H.tloja = (v) => {
   if (v) TAB = v === 'visual' ? 'fr' : v; W.seenShop = SHOP_VER; if (evNow()) W.seenEv = evNow().id; wsave(); document.querySelectorAll('.shop-new').forEach((e) => e.remove());
-  if (document.querySelector('.pf-shop')) replaceSheet(shopHtml()); else openSheet(shopHtml()).parentElement.classList.add('wide', 'shop-bg');
+  shopRender();
 };
-H.pftab = (v) => { TAB = v; replaceSheet(shopHtml()); document.querySelector('.pf-tabs .on')?.scrollIntoView({ inline: 'center', block: 'nearest' }); };
+export function shopRender() {
+  let el = document.getElementById('shoppage');
+  if (!el) { el = document.createElement('div'); el.id = 'shoppage'; el.className = 'shoppage'; document.body.appendChild(el); try { window.PSFX?.('pop'); } catch {} }
+  const sc = el.querySelector('.pf-body')?.scrollTop || 0; const same = el.dataset.tab === TAB; el.dataset.tab = TAB;
+  el.innerHTML = shopHtml(); if (same) { const b = el.querySelector('.pf-body'); if (b) b.scrollTop = sc; }
+}
+H.shopclose = () => { const el = document.getElementById('shoppage'); if (el) { el.classList.add('out'); setTimeout(() => el.remove(), 220); } };
+H.pftab = (v) => { TAB = v; shopRender(); };
 const lookNow = () => myLook();
 function card(it, i = 0) {
   const o = has(it.id), on = W.eq[it.k] === it.id, R = RARITY[it.ra];
@@ -195,8 +202,8 @@ function shopHtml() {
     <div class="li"><span class="grow"><b>Conquistas na carreira</b><div class="xs mut">Títulos e temporadas completas dão Pranfixas</div></span></div>
     <div class="li"><span class="grow"><b>Liga com amigos</b><div class="xs mut">Vitórias e título da liga online</div></span><button class="btn sm" data-a="tonline" data-v="liga">Abrir</button></div></div>
     <h3 style="margin-top:10px">Histórico</h3><div class="list">${W.log.slice(0, 12).map((l) => `<div class="li sm"><span class="grow xs">${esc(l.why)}</span><b class="${l.n > 0 ? 'good' : 'bad'}">${l.n > 0 ? '+' : ''}${l.n}</b></div>`).join('') || '<div class="xs mut">Nada ainda.</div>'}</div>`;
-  return `<div class="pf-shop"><div class="pf-hd"><div class="pf-bal">${PF_SVG}<div><b class="pf-n">${pf()}</b><small>Pranfixas</small></div></div>${isVip() ? '<span class="pf-vipb">SÓCIO</span>' : ''}<button class="btn sm pri" data-a="pftab" data-v="comprar">+ Pranfixas</button></div>
-  <div class="pf-tabs">${TABS.map(([k, t]) => `<button class="${TAB === k ? 'on' : ''}" data-a="pftab" data-v="${k}">${t}${k === 'dest' && ev ? ' <i class="dot"></i>' : ''}</button>`).join('')}</div><div class="pf-body">${body}</div></div>`;
+  return `<div class="pf-shop"><div class="pf-hd"><button class="sh-x" data-a="shopclose">‹</button><div class="sh-t"><b>LOJA</b><small>${esc((TABS.find((t) => t[0] === TAB) || [])[1] || '')}</small></div><span class="grow"></span><div class="pf-bal">${PF_SVG}<div><b class="pf-n">${pf()}</b><small>Pranfixas</small></div></div>${isVip() ? '<span class="pf-vipb">SÓCIO</span>' : ''}<button class="btn sm pri" data-a="pftab" data-v="comprar">+ Pranfixas</button></div>
+  <div class="sh-wrap"><nav class="pf-tabs">${TABS.map(([k, t]) => `<button class="${TAB === k ? 'on' : ''}" data-a="pftab" data-v="${k}"><i class="sh-ic sh-ic-${k}"></i><span>${t}</span>${k === 'dest' && ev ? ' <i class="dot"></i>' : ''}</button>`).join('')}</nav><div class="pf-body">${body}</div></div></div>`;
 }
 // detalhe do item com prévia grande
 H.itopen = (id) => {
@@ -210,16 +217,16 @@ H.itopen = (id) => {
 };
 H.itbuy = (id) => {
   const it = item(id); if (!it || has(id) || !buyable(it)) return; if (!pfSpend(priceOf(it), it.n)) return;
-  W.own.push(id); W.eq[it.k] = id; wsave(); closeSheet(); afterEquip(it.k); itemFx(it, 'Agora é seu!'); if (document.querySelector('.pf-shop')) replaceSheet(shopHtml());
+  W.own.push(id); W.eq[it.k] = id; wsave(); closeSheet(); afterEquip(it.k); itemFx(it, 'Agora é seu!'); if (document.querySelector('.pf-shop')) shopRender();
 };
-H.itequip = (v) => { const [k, id] = v.split(':'); if (id && !has(id)) return; W.eq[k] = id || ''; wsave(); closeSheet(); afterEquip(k); if (document.querySelector('.pf-shop')) replaceSheet(shopHtml()); centerNote(id ? 'Visual atualizado!' : 'Item retirado.', 1300); };
+H.itequip = (v) => { const [k, id] = v.split(':'); if (id && !has(id)) return; W.eq[k] = id || ''; wsave(); closeSheet(); afterEquip(k); if (document.querySelector('.pf-shop')) shopRender(); centerNote(id ? 'Visual atualizado!' : 'Item retirado.', 1300); };
 function afterEquip(k) { try { window.PONLINE_SYNC?.(); } catch {} if (k === 'th') { const t = document.querySelector('.rc-title'); if (t) t.className = 'rc-title ' + (eq('th') || ''); } if (S.G) render(); }
 H.pfdailyo = () => replaceSheet(dailyHtml());
 H.pfitem = (id) => {
   const it = ITEMS.find((x) => x.id === id); if (!it || !it.ok()) return; const price = isVip() && id === 'verba' ? it.p / 2 : it.p;
-  if (!pfSpend(price, it.t)) return; const r = it.go(); wsave(); if (S.G) { save(true); render(); } replaceSheet(shopHtml()); centerNote(r, 2200);
+  if (!pfSpend(price, it.t)) return; const r = it.go(); wsave(); if (S.G) { save(true); render(); } shopRender(); centerNote(r, 2200);
 };
-H.pfvip = () => { if (!pfSpend(VIP_PACK.pf, 'Sócio Prancheta (30 dias)')) return; giveVip(30); replaceSheet(shopHtml()); };
+H.pfvip = () => { if (!pfSpend(VIP_PACK.pf, 'Sócio Prancheta (30 dias)')) return; giveVip(30); shopRender(); };
 function giveVip(days) { W.vip = Math.max(Date.now(), W.vip || 0) + days * 864e5; wsave(); for (const s of ['slot4', 'slot5']) if (!SLOTS.includes(s)) SLOTS.push(s); centerNote('Agora você é Sócio Prancheta!', 2600); }
 
 // ---------- compra no Pix (servidor da Lumbra no Cloudflare + Mercado Pago) ----------

@@ -1,6 +1,7 @@
 // Partida em 3D: o motor (LiveMatch) decide tudo; a cena 3D (m3d/index.html, num iframe) encena cada lance.
 import { SET } from '../settings.js';
-import { formOf } from '../engine/match.js';
+import { formOf, atOf } from '../engine/match.js';
+import { crest } from './art.js';
 
 const SHOT = ['gol', 'def', 'trave', 'fora'];
 const NUM = { GOL: 1, LD: 2, ZAG: 4, LE: 6, VOL: 5, MC: 8, MEI: 10, PD: 7, PE: 11, ATA: 9, ALD: 2, ALE: 6, SA: 10 };
@@ -34,7 +35,7 @@ export class Match3D {
   team(s) {
     const sd = this.m.s[s], form = formOf(sd.tact), used = new Set();
     return sd.xi.map((id, i) => { const p = this.G.players[id]; const [pos, fx, fy] = form[i] || ['MC', 0.5, 0.5]; let n = NUM[pos] || 8; while (used.has(n)) n += n < 12 ? 11 : 1; used.add(n);
-      return { id: id ?? i, name: short(p?.n || '—'), num: n, pos, fx, fy: pos === 'GOL' ? 0 : fy }; });
+      const at = p ? atOf(p) : {}; return { id: id ?? i, name: short(p?.n || '—'), num: n, pos, fx, fy: pos === 'GOL' ? 0 : fy, rit: at['Ritmo'] ?? p?.ovr ?? 60, fin: at['Finalização'] ?? 60, ovr: p?.ovr ?? 60 }; });
   }
   tactOf(i) { const t = this.m.s[i].tact || {}; return { ment: t.ment ?? 1, press: t.press ?? 1, linha: t.linha ?? 1, larg: t.larg ?? 1, arrows: t.arrows || {} }; }
   setTact(side) { this.post({ t: 'tact', side, tact: this.tactOf(side) }); this.post({ t: 'lineup', side, team: this.team(side) }); }
@@ -42,11 +43,12 @@ export class Match3D {
     switch (d.t) {
       case 'loaded': {
         const hc = this.m.s[0].club; const f = this.m.f; const night = (f && f.s === 1) || Math.random() < 0.35;
-        this.post({ t: 'setup', home: { name: hc.name, c1: hc.c1, c2: hc.c2 }, stadium: hc.stadium || `Estádio ${hc.city || hc.name}`, kits: this.kits(), teams: [this.team(0), this.team(1)],
+        this.post({ t: 'setup', body: (() => { const o = {}; for (const sd of this.m.s) for (const id of [...sd.xi, ...(sd.bench || [])]) { const p = this.G.players[id]; if (!p) continue; let h = 2166136261; for (const ch of String(p.key || p.n || id)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } h >>>= 0; const r = (k) => ((h >>> k) % 1000) / 1000; const fis = atOf(p)['Físico'] ?? p.ovr; const base = p.pos === 'GOL' ? 1.035 : p.pos === 'ZAG' ? 1.025 : p.pos === 'VOL' || p.pos === 'ATA' ? 1.0 : 0.985; o[id] = { h: Math.round((base + (r(3) - 0.5) * 0.07) * 1000) / 1000, w: Math.round(Math.max(0.94, Math.min(1.07, 0.97 + (fis - 65) / 30 * 0.06 + (r(11) - 0.5) * 0.03)) * 1000) / 1000, hc: r(17) < 0.08 ? 3 : Math.floor(r(23) * 3) }; } return o; })(), pace: (() => { const o = {}; for (const sd of this.m.s) for (const id of [...sd.xi, ...(sd.bench || [])]) { const p = this.G.players[id]; if (p) o[id] = atOf(p)['Ritmo'] ?? p.ovr; } return o; })(), home: { name: hc.name, c1: hc.c1, c2: hc.c2 }, clubs: this.m.s.map((sd) => ({ name: sd.club.name, key: sd.club.key || sd.club.name, crest: (() => { try { return crest(sd.club, 160); } catch { return ''; } })() })), stadium: hc.stadium || `Estádio ${hc.city || hc.name}`, kits: this.kits(), teams: [this.team(0), this.team(1)],
           time: this.opt.time || (night ? 'noite' : Math.random() < 0.5 ? 'dia' : 'tarde'), rain: !!this.opt.rain, replays: this._replays, names: this._names, ts: this.ts(), tact: [this.tactOf(0), this.tactOf(1)], final: !!this.opt.final, gfx: (window.PCOS && window.PCOS.eq('gfx')) || '', uside: typeof this.us === 'number' ? this.us : -1 });
         break; }
       case 'walk': clearTimeout(this.loadT); this.walkBtn(); break;
       case 'ready': this.ready = true; clearTimeout(this.loadT); this.sk?.remove(); this.sk = null; this.h.onReady?.(); break;
+      case 'xshot': try { window.PXSHOT?.(d, this.m); } catch {} break;
       case 'shotDone': if (this.wait && this.wait.id === d.id) this.resolve(); break;
       case 'resume': if (this.wait && this.wait.resolved) this.wait = null; break;
     }
