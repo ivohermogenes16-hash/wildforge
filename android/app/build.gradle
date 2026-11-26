@@ -18,6 +18,8 @@ android {
         targetSdk tsdk
         versionCode vcode
         versionName "1." + vcode
+        // código do app no AdMob (anúncios com recompensa)
+        manifestPlaceholders = [admobAppId: (System.getenv("ADMOB_APP_ID") ?: "ca-app-pub-8449786356389316~5311009644")]
     }
 
     signingConfigs {
@@ -51,4 +53,5 @@ android {
 dependencies {
     implementation 'androidx.webkit:webkit:1.11.0'
     implementation 'androidx.work:work-runtime:2.9.1'
+    implementation 'com.google.android.gms:play-services-ads:23.6.0'
 }

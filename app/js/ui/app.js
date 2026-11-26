@@ -23,12 +23,14 @@ export function toast(t, ms = 2200, kind) {
   try { window.PSFX?.(kind === 'bad' ? 'bad' : 'pop'); } catch {}
   setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 320); }, ms);
 }
-export function centerNote(t, ms = 2000) {
-  document.querySelectorAll('.pcenter').forEach((x) => x.remove());
-  const d = document.createElement('div'); d.className = 'pcenter'; d.innerHTML = `<div class="pc-card"><div class="pc-ring"><span>✓</span></div><div class="pc-t"></div></div>`; d.querySelector('.pc-t').textContent = t.replace(/^[^\p{L}\p{N}]+/u, '');
+const WARN_RE = /^(erro|não|nao|sem |falt|o apelido|o código|essa liga|esse clube|escreva|você não|você já|seu elenco|o elenco|elenco cheio|caixa insuf|alguém|toque de novo|nenhum|os anúncios|liga não|ninguém)/i;
+export function centerNote(t, ms = 2000, kind) {
+  document.querySelectorAll('.pcenter').forEach((x) => x.remove()); t = String(t ?? '');
+  const bad = kind === 'bad' || (!kind && WARN_RE.test(t.replace(/^[^\p{L}\p{N}]+/u, '')));
+  const d = document.createElement('div'); d.className = 'pcenter' + (bad ? ' bad' : ''); d.innerHTML = `<div class="pc-card"><div class="pc-ring"><span>${bad ? '!' : '✓'}</span></div><div class="pc-t"></div></div>`; d.querySelector('.pc-t').textContent = t.replace(/^[^\p{L}\p{N}]+/u, '');
   d.onclick = () => { d.classList.add('out'); setTimeout(() => d.remove(), 300); }; document.body.appendChild(d);
-  try { window.PSFX?.('ok'); } catch {}
-  setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 300); }, ms);
+  try { window.PSFX?.(bad ? 'bad' : 'ok'); } catch {}
+  setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 300); }, bad ? Math.max(ms, 2400) : ms);
 }
 window.PBANNER = (t, k) => toast(t, 2200, k === 'ok' ? 'ok' : k);
 const sheetStack = [];
@@ -60,7 +62,7 @@ export function clubStars(rep) { return Math.max(0.5, Math.min(5, Math.round(((r
 export function compName(id) { return S.G.comps[id]?.short || id; }
 export function wk(w) { return dateStr(w); }
 export function shortName(n) { const s = n.split(' '); return s.length > 1 && n.length > 12 ? s[s.length - 1] : n; }
-export function potRange(p, mine) { if (mine || S.G.me.job?.cid === p.club) return p.pot; const lo = Math.max(p.ovr, p.pot - 4), hi = Math.min(95, p.pot + 3); return lo === hi ? lo : `${lo}–${hi}`; }
+export function potRange(p, mine) { if (mine || S.G.me.job?.cid === p.club || S.G._pfScout === S.G.year) return p.pot; const lo = Math.max(p.ovr, p.pot - 4), hi = Math.min(95, p.pot + 3); return lo === hi ? lo : `${lo}–${hi}`; }
 export const delta = (p) => { const d = p.ovr - (p.s0 ?? p.ovr); return d > 0 ? `<span class="dl up">▲${d}</span>` : d < 0 ? `<span class="dl dn">▼${-d}</span>` : '<span class="dl">–</span>'; };
 export const potStars = (p) => { const n = clamp(Math.round((p.pot - 45) / 10), 1, 5); return `<span class="gold xs">${'★'.repeat(n)}</span>`; };
 
@@ -91,12 +93,13 @@ export function render() {
   <div class="right"><header class="top">${S.page ? `<button class="btn sm" data-a="back">‹ Voltar</button>` : c ? crest(c, 32) : '<span class="logo" style="font-size:20px">P<span>.</span></span>'}
     <div class="grow"><div class="t1 ell">${esc(S.page ? (PAGES_T[S.page] || '') : title)}</div><div class="t2">${dateStr(Math.min(G.week, SEASON_WEEKS - 1), true)} de ${G.year} ${G.me.job && !G.me.job.youth ? (inWindow(G) ? '<span class="mk-pill open">Mercado aberto</span>' : '<span class="mk-pill">Mercado fechado</span>') : `· sem. ${Math.min(G.week, SEASON_WEEKS - 1) + 1}/${SEASON_WEEKS}`}${c && G.me.obj ? ` · 🎯 ${esc(G.me.obj.text)}` : ''}</div></div>
     <button class="icon-btn" data-a="search" title="Buscar">🔎</button><button class="icon-btn" data-a="go" data-v="inbox">📩${unread ? `<span class="badge">${unread}</span>` : ''}</button>
-    <span class="money-pill dual" data-a="moneyinfo">${c && G.me.job && !G.me.job.youth ? `<span title="Caixa do clube"><i>🏟️</i>${money(c.money)}</span>` : ''}<span title="Seu dinheiro pessoal"><i>👤</i>${money(G.me.money)}</span></span>
+    ${window.PPF ? window.PPFCHIP() : ''}<span class="money-pill dual" data-a="moneyinfo">${c && G.me.job && !G.me.job.youth ? `<span title="Caixa do clube"><i>🏟️</i>${money(c.money)}</span>` : ''}<span title="Seu dinheiro pessoal"><i>👤</i>${money(G.me.money)}</span></span>
     <button class="btn sim-hd" data-a="simper" title="Simular período">⏩</button><button class="btn pri cont" data-a="continue">${now ? '▶ Jogo' : 'Continuar'} ›</button></header>
   <main class="${same ? '' : 'enter'}">${body}</main></div>`;
   app.dataset.view = vk;
   if (same) app.querySelector('main').scrollTop = sc;
   try { S.afterRender?.(); } catch (e) { console.warn(e); }
+  try { window.PCAREER?.(G); } catch {}
 }
 H.moneyinfo = () => {
   const G = S.G, c = myClub(G); const fr = G.me.freeze && G.me.freeze >= G.t; const ffp = G.uv?.regs?.ffp && c && c.money < 0;

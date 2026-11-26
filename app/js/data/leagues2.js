@@ -17,6 +17,8 @@ export const COUNTRIES2 = {
   CO: { name: 'Colômbia', flag: '🇨🇴', fed: 'FCF', conf: 'CONMEBOL' },
   MA: { name: 'Marrocos', flag: '🇲🇦', fed: 'FRMF', conf: 'CAF' },
   ZA: { name: 'África do Sul', flag: '🇿🇦', fed: 'SAFA', conf: 'CAF' },
+  RU: { name: 'Rússia', flag: '🇷🇺', fed: 'RFU', conf: 'UEFA' },
+  UA: { name: 'Ucrânia', flag: '🇺🇦', fed: 'UAF', conf: 'UEFA' },
 };
 // Federações e confederações dos países que já existiam
 export const FED_OLD = { BR: ['CBF', 'CONMEBOL'], AR: ['AFA', 'CONMEBOL'], EN: ['The FA', 'UEFA'], ES: ['RFEF', 'UEFA'], IT: ['FIGC', 'UEFA'] };
@@ -39,6 +41,9 @@ export const LEAGUES2 = [
   { id: 'COL1', country: 'CO', name: 'Liga BetPlay DIMAYOR', short: 'Liga DIMAYOR', tier: 1, format: 'double', up: 0, down: 0, tv: 5e6, org: 'DIMAYOR' },
   { id: 'MAR1', country: 'MA', name: 'Botola Pro', short: 'Botola Pro', tier: 1, format: 'double', up: 0, down: 0, tv: 3e6, org: 'LNFP' },
   { id: 'RSA1', country: 'ZA', name: 'Betway Premiership', short: 'Premiership', tier: 1, format: 'double', up: 0, down: 0, tv: 4e6, org: 'PSL' },
+  // 6.0: pedido da comunidade (Rússia fora das copas da UEFA desde 2022)
+  { id: 'RUS1', country: 'RU', name: 'Premier League Russa', short: 'RPL', tier: 1, format: 'double', up: 0, down: 0, tv: 30e6, org: 'RPL' },
+  { id: 'UKR1', country: 'UA', name: 'Premier League Ucraniana', short: 'UPL', tier: 1, format: 'double', up: 0, down: 0, tv: 4e6, org: 'UPL' },
 ];
 
 export const CLUBS2 = {
@@ -221,6 +226,27 @@ export const CLUBS2 = {
     ['Durban City', 'DUR', 'Durban', '#0a3f86', '#ffffff', 47, 'Chatsworth Stadium', 22], ['Siwelele', 'SIW', 'Bloemfontein', '#6caddf', '#ffffff', 46, 'Dr Molemela Stadium', 23],
     ['Kruger United', 'KRU', 'Mbombela', '#0b7a3b', '#fde100', 44, 'Mbombela Stadium', 40], ['Milford FC', 'MIL', 'Durban', '#0a3f86', '#ffffff', 43, 'Chatsworth Stadium', 22],
   ],
+  // temporada 2026/27 (composição conferida em nov/2026)
+  RUS1: [
+    ['Zenit', 'ZEN', 'São Petersburgo', '#0091d2', '#ffffff', 78, 'Gazprom Arena', 68], ['Krasnodar', 'KRA', 'Krasnodar', '#000000', '#1c9b4a', 75, 'Ozon Arena', 35],
+    ['Spartak Moscou', 'SPA', 'Moscou', '#d50000', '#ffffff', 74, 'Lukoil Arena', 45], ['CSKA Moscou', 'CSK', 'Moscou', '#d50000', '#0d2a6b', 73, 'VEB Arena', 30],
+    ['Lokomotiv Moscou', 'LOK', 'Moscou', '#d50000', '#1c8a3c', 72, 'RZD Arena', 27], ['Dínamo Moscou', 'DIN', 'Moscou', '#0d47a1', '#ffffff', 70, 'VTB Arena', 26],
+    ['Rubin Kazan', 'RUB', 'Kazan', '#7a0019', '#1c8a3c', 63, 'Ak Bars Arena', 45], ['Rostov', 'ROS', 'Rostov do Don', '#ffd200', '#0d47a1', 62, 'Rostov Arena', 45],
+    ['Akhmat Grozny', 'AKH', 'Grozny', '#1c8a3c', '#ffffff', 60, 'Akhmat Arena', 30], ['Baltika Kaliningrado', 'BAL', 'Kaliningrado', '#0d47a1', '#ffffff', 61, 'Rostec Arena', 35],
+    ['Krylia Sovetov', 'KRY', 'Samara', '#0d47a1', '#ffffff', 59, 'Solidarnost Arena', 44], ['Dínamo Makhachkala', 'DMK', 'Makhachkala', '#0d47a1', '#ffffff', 58, 'Anzhi Arena', 26],
+    ['Akron Tolyatti', 'AKR', 'Tolyatti', '#e65100', '#111111', 57, 'Solidarnost Arena', 44], ['Orenburg', 'ORE', 'Orenburg', '#0091d2', '#ffffff', 55, 'Gazovik', 10],
+    ['Fakel Voronezh', 'FAK', 'Voronezh', '#0d47a1', '#d50000', 54, 'Fakel', 32], ['Rodina Moscou', 'ROD', 'Moscou', '#0d47a1', '#d50000', 54, 'Arena Khimki', 18],
+  ],
+  UKR1: [
+    ['Shakhtar Donetsk', 'SHA', 'Donetsk', '#f57c00', '#111111', 76, 'Arena Lviv', 34], ['Dínamo de Kiev', 'DYN', 'Kiev', '#ffffff', '#0d47a1', 74, 'Estádio Olímpico', 70],
+    ['Polissya Zhytomyr', 'POL', 'Zhytomyr', '#ffd200', '#1c8a3c', 62, 'Tsentralnyi', 5], ['LNZ Cherkasy', 'LNZ', 'Cherkasy', '#ffffff', '#111111', 58, 'Tsentralnyi', 10],
+    ['Kryvbas Kryvyi Rih', 'KRY', 'Kryvyi Rih', '#d50000', '#ffffff', 59, 'Hirnyk', 2], ['Metalist 1925', 'MET', 'Kharkiv', '#ffd200', '#0d47a1', 57, 'Metalist', 40],
+    ['Karpaty Lviv', 'KAR', 'Lviv', '#1c8a3c', '#ffffff', 57, 'Ukraina', 28], ['Zorya Luhansk', 'ZOR', 'Luhansk', '#111111', '#ffffff', 57, 'Slavutych Arena', 12],
+    ['Kolos Kovalivka', 'KOL', 'Kovalivka', '#ffd200', '#1c8a3c', 55, 'Kolos', 5], ['Obolon Kiev', 'OBO', 'Kiev', '#0d47a1', '#ffffff', 53, 'Obolon Arena', 5],
+    ['Veres Rivne', 'VER', 'Rivne', '#1c8a3c', '#111111', 53, 'Avanhard', 4], ['Epitsentr', 'EPI', 'Kamianets-Podilskyi', '#d50000', '#ffd200', 52, 'Tonkocheiev', 4],
+    ['Kudrivka', 'KUD', 'Kudrivka', '#d50000', '#ffffff', 50, 'Kolos', 5], ['Livyi Bereh', 'LBE', 'Kiev', '#111111', '#ffffff', 50, 'Obolon Arena', 5],
+    ['Bukovyna Chernivtsi', 'BUK', 'Chernivtsi', '#111111', '#ffffff', 50, 'Bukovyna', 12], ['Chornomorets Odessa', 'CHO', 'Odessa', '#0d47a1', '#111111', 52, 'Chornomorets', 34],
+  ],
 };
 
 // Copas nacionais reais (com os clubes das divisões incluídas no jogo)
@@ -237,6 +263,8 @@ export const CUPS2 = [
   { id: 'CCO', name: 'Copa Colombia', short: 'Copa Colombia', country: 'CO', from: ['COL1'], prize: 0.8e6 },
   { id: 'TRO', name: 'Coupe du Trône', short: 'Coupe du Trône', country: 'MA', from: ['MAR1'], prize: 0.6e6 },
   { id: 'NBC', name: 'Nedbank Cup', short: 'Nedbank Cup', country: 'ZA', from: ['RSA1'], prize: 0.8e6 },
+  { id: 'RUC', name: 'Copa da Rússia', short: 'Copa da Rússia', country: 'RU', from: ['RUS1'], prize: 3e6 },
+  { id: 'UKC', name: 'Copa da Ucrânia', short: 'Copa da Ucrânia', country: 'UA', from: ['UKR1'], prize: 0.5e6 },
 ];
 
 // Continentais: vagas por liga (adaptado a 16 clubes) e ordem de prioridade (principal antes da secundária)
@@ -244,20 +272,22 @@ export const CONTS_ALL = [
   { id: 'LIB', name: 'Copa Libertadores', short: 'Libertadores', country: 'SA', org: 'CONMEBOL', prize: 125e6, slots: [['BRA', 6], ['ARG1', 5], ['URU1', 2], ['COL1', 3]], cups: ['CDB', 'CAR'] },
   { id: 'UCL', name: 'Liga dos Campeões', short: 'Champions', country: 'EU', org: 'UEFA', prize: 150e6, slots: [['ENG1', 4], ['ESP1', 4], ['ITA1', 3], ['GER1', 3], ['FRA1', 1], ['POR1', 1]], cups: [] },
   { id: 'SUD', name: 'Copa Sul-Americana', short: 'Sul-Americana', country: 'SA', org: 'CONMEBOL', prize: 35e6, slots: [['BRA', 5], ['ARG1', 5], ['URU1', 3], ['COL1', 3]], cups: [] },
-  { id: 'UEL', name: 'Liga Europa', short: 'Liga Europa', country: 'EU', org: 'UEFA', prize: 55e6, slots: [['ENG1', 2], ['ESP1', 2], ['ITA1', 2], ['GER1', 2], ['FRA1', 3], ['POR1', 2], ['NED1', 3]], cups: ['FAC', 'CDR', 'CIT', 'DFB', 'CDF'] },
+  { id: 'UEL', name: 'Liga Europa', short: 'Liga Europa', country: 'EU', org: 'UEFA', prize: 55e6, slots: [['ENG1', 2], ['ESP1', 2], ['ITA1', 2], ['GER1', 2], ['FRA1', 3], ['POR1', 2], ['NED1', 3], ['UKR1', 1]], cups: ['FAC', 'CDR', 'CIT', 'DFB', 'CDF'] },
   { id: 'CCC', name: 'Copa dos Campeões da Concacaf', short: 'Concacaf', country: 'NA', org: 'CONCACAF', prize: 15e6, slots: [['MEX1', 8], ['USA1', 8]], cups: ['USO'] },
   { id: 'ACL', name: 'Liga dos Campeões da AFC Elite', short: 'AFC Elite', country: 'AS', org: 'AFC', prize: 20e6, slots: [['KSA1', 6], ['JPN1', 6], ['AUS1', 4]], cups: ['KGC', 'EMP'] },
   { id: 'CAF', name: 'Liga dos Campeões da CAF', short: 'CAF Champions', country: 'AF', org: 'CAF', prize: 8e6, slots: [['MAR1', 8], ['RSA1', 8]], cups: ['TRO', 'NBC'] },
 ];
 
 export const ECON2 = {
-  WAGE: { DE: 1.3, FR: 1.1, PT: 0.7, NL: 0.8, MX: 0.8, US: 1.0, JP: 0.7, SA: 1.6, AU: 0.5, UY: 0.3, CO: 0.3, MA: 0.25, ZA: 0.25 },
-  TICKET: { DE: 180, FR: 150, PT: 80, NL: 120, MX: 60, US: 160, JP: 100, SA: 40, AU: 90, UY: 15, CO: 15, MA: 10, ZA: 10 },
-  BRAND: { DE: 2.2, FR: 2, PT: 1.4, NL: 1.4, MX: 1.2, US: 1.6, JP: 1, SA: 1.4, AU: 0.7, UY: 0.4, CO: 0.4, MA: 0.3, ZA: 0.3 },
+  WAGE: { DE: 1.3, FR: 1.1, PT: 0.7, NL: 0.8, MX: 0.8, US: 1.0, JP: 0.7, SA: 1.6, AU: 0.5, UY: 0.3, CO: 0.3, MA: 0.25, ZA: 0.25, RU: 0.9, UA: 0.3 },
+  TICKET: { DE: 180, FR: 150, PT: 80, NL: 120, MX: 60, US: 160, JP: 100, SA: 40, AU: 90, UY: 15, CO: 15, MA: 10, ZA: 10, RU: 60, UA: 15 },
+  BRAND: { DE: 2.2, FR: 2, PT: 1.4, NL: 1.4, MX: 1.2, US: 1.6, JP: 1, SA: 1.4, AU: 0.7, UY: 0.4, CO: 0.4, MA: 0.3, ZA: 0.3, RU: 0.8, UA: 0.4 },
   LVL: { DE: 2, FR: 1, SA: 1 },
-  FOREIGN: { DE: ['FR', 'NL', 'PT', 'BR'], FR: ['SN', 'MA', 'PT', 'BR'], PT: ['BR', 'ES', 'UY'], NL: ['DE', 'MA', 'BE'], MX: ['AR', 'CO', 'UY', 'BR'], US: ['MX', 'AR', 'CO', 'EN'], JP: ['BR', 'KR'], SA: ['BR', 'PT', 'FR', 'MA'], AU: ['EN', 'JP'], UY: ['AR', 'BR'], CO: ['AR', 'UY'], MA: ['SN', 'FR'], ZA: ['ZA'] },
+  FOREIGN: { DE: ['FR', 'NL', 'PT', 'BR'], FR: ['SN', 'MA', 'PT', 'BR'], PT: ['BR', 'ES', 'UY'], NL: ['DE', 'MA', 'BE'], MX: ['AR', 'CO', 'UY', 'BR'], US: ['MX', 'AR', 'CO', 'EN'], JP: ['BR', 'KR'], SA: ['BR', 'PT', 'FR', 'MA'], AU: ['EN', 'JP'], UY: ['AR', 'BR'], CO: ['AR', 'UY'], MA: ['SN', 'FR'], ZA: ['ZA'], RU: ['BR', 'CO', 'RS', 'AR'], UA: ['BR', 'UA'] },
 };
 export const NAMES2 = {
+  RU: { first: 'Aleksandr Dmitri Sergey Andrey Maksim Ivan Nikita Artem Daniil Kirill Igor Matvey Ilya Pavel Egor Vladislav'.split(' '), last: 'Ivanov Smirnov Kuznetsov Popov Sokolov Petrov Volkov Morozov Lebedev Kozlov Novikov Fedorov Orlov Zaitsev Belov Medvedev'.split(' ') },
+  UA: { first: 'Oleksandr Andriy Mykola Vitaliy Dmytro Yevhen Volodymyr Serhiy Bohdan Taras Yaroslav Artem Roman Denys Maksym Vladyslav'.split(' '), last: 'Shevchenko Kovalenko Bondarenko Tkachenko Kravchenko Oliynyk Melnyk Boyko Moroz Lysenko Marchenko Rudenko Savchenko Petrenko Klymenko Ponomarenko'.split(' ') },
   SA: { first: 'Mohammed Abdullah Salem Fahad Saud Nawaf Yasser Turki Sultan Faisal Hassan Ali Abdulrahman Saleh Khalid'.split(' '), last: 'Al-Dawsari Al-Shahrani Al-Ghannam Al-Bulaihi Al-Malki Al-Faraj Al-Amri Al-Owais Kanno Al-Breik Al-Shehri Al-Najei Al-Hamdan Al-Tambakti'.split(' ') },
   ZA: { first: 'Thabo Sipho Themba Lebo Teboho Mandla Bongani Siyabonga Kagiso Thulani Ronwen Relebohile Mihlali Percy'.split(' '), last: 'Mokoena Dlamini Nkosi Ndlovu Zwane Mabaso Mofokeng Williams Shabalala Mthethwa Sithole Maseko Hlongwane Tau'.split(' ') },
 };

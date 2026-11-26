@@ -1,8 +1,8 @@
 // Comunidade do Prancheta no WhatsApp: ideias, bugs e novidades
-import { S, H, openSheet, closeSheet, replaceSheet } from './app.js';
+import { S, H, openSheet, closeSheet, replaceSheet, centerNote } from './app.js';
 import { esc } from '../util.js';
 export const WA = 'https://chat.whatsapp.com/C44zXTaeoOcJqcsTmjMAwX';
-export const VER = '5.1';
+export const VER = '6.0';
 export function openLink(u) { try { if (window.PranchetaNative?.openUrl) { window.PranchetaNative.openUrl(u); return; } } catch {} window.open(u, '_blank'); }
 function device() { const ua = navigator.userAgent; const a = ua.match(/Android [\d.]+/)?.[0] || (/(iPhone|iPad)/.test(ua) ? 'iOS' : 'Navegador'); const mdl = ua.match(/; ([^;)]+) Build/)?.[1] || ''; let b = ''; try { b = window.PranchetaNative?.versionCode ? ' build ' + window.PranchetaNative.versionCode() : ''; } catch {} return `${a}${mdl ? ' · ' + mdl : ''} · Prancheta ${VER}${b}`; }
 export function comuHtml() {
@@ -10,19 +10,20 @@ export function comuHtml() {
   <p class="sm" style="margin:8px 0 12px">Entra na comunidade pra mandar <b>ideias</b>, avisar de <b>bugs</b>, ver as <b>novidades</b> antes de todo mundo e trocar ideia com outros técnicos. Tudo que for sugerido lá é lido e muita coisa entra nas próximas atualizações!</p>
   <div class="cm-grid">
     <button class="cm-b main" data-a="cmjoin"><span>🤝</span><b>Entrar na comunidade</b><small>Abre o WhatsApp</small></button>
-    <button class="cm-b" data-a="cmsend" data-v="ideia"><span>💡</span><b>Mandar uma ideia</b><small>Já vai com o texto pronto</small></button>
+    <button class="cm-b" data-a="cmsend" data-v="ideia"><span>💡</span><b>Mandar uma ideia</b><small>Escreva abaixo e toque aqui</small></button>
     <button class="cm-b" data-a="cmsend" data-v="bug"><span>🐞</span><b>Avisar de um bug</b><small>Já vai com seu aparelho e versão</small></button>
   </div>
-  <div class="field" style="margin-top:12px"><label>Escreva aqui (opcional)</label><textarea id="cmtxt" rows="3" placeholder="Ex.: queria poder escolher o uniforme na final…" style="width:100%"></textarea></div>
+  <div class="field" style="margin-top:12px"><label>Escreva aqui antes de enviar</label><textarea id="cmtxt" rows="3" placeholder="Ex.: queria poder escolher o uniforme na final…" style="width:100%"></textarea></div>
   <div class="xs mut">Na hora de enviar, escolha o grupo da comunidade no WhatsApp.</div>`;
 }
 H.tcomu = () => openSheet(comuHtml());
 H.cmjoin = () => { try { localStorage.setItem('prancheta.comu', '2'); } catch {} openLink(WA); };
 H.cmsend = (v) => {
   const t = (document.getElementById('cmtxt')?.value || '').trim();
+  if (t.length < 5) { const el = document.getElementById('cmtxt'); el?.classList.add('need'); el?.focus(); centerNote(v === 'bug' ? 'Escreva primeiro o que aconteceu e onde.' : 'Escreva sua ideia primeiro.', 2200); return; }
   const head = v === 'bug' ? '🐞 *BUG no Prancheta*' : '💡 *IDEIA para o Prancheta*';
   const extra = v === 'bug' ? `\n\n📱 ${device()}${S.G ? `\n⚽ ${S.G.clubs[S.G.me.job?.cid]?.name || ''} · ${S.G.year}, semana ${S.G.week + 1}` : ''}` : '';
-  const body = `${head}\n\n${t || (v === 'bug' ? '(descreva o que aconteceu e onde)' : '(escreva sua ideia)')}${extra}`;
+  const body = `${head}\n\n${t || ''}${extra}`;
   openLink('https://wa.me/?text=' + encodeURIComponent(body));
 };
 // card na primeira abertura

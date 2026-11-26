@@ -67,6 +67,7 @@ function ctl() {
   el.innerHTML = `<div class="ng-row"><span class="xs mut">Proposta na mesa</span><b class="gold">${money(m.fee)}</b><span class="xs mut grow" style="text-align:right">${pat <= 0 ? '<b class="bad">⚠️ Última chance — ele pode desistir</b>' : `Paciência: ${'🟢'.repeat(pat)}`}</span></div>
   <div class="field" style="margin:4px 0"><label>Pedir: <b id="ngask">${money(N.ask)}</b> <span class="xs mut">(${Math.round((N.ask / m.fee - 1) * 100)}% a mais)</span></label><input type="range" min="${lo}" max="${hi}" step="${Math.max(1000, Math.round(m.fee / 200 / 1000) * 1000)}" value="${N.ask}" data-in="ngask"></div>
   <div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap"><span class="xs mut">Revenda futura:</span>${[0, 10, 20, 30].map((x) => `<span class="chip ${N.sell === x ? 'on' : ''}" data-a="ngsell" data-v="${x}">${x ? x + '%' : 'sem'}</span>`).join('')}</div>
+  ${m.swap != null && S.G.players[m.swap] ? `<div class="ng-swap"><span class="grow xs">Na troca: <b>${esc(S.G.players[m.swap].n)}</b> (${S.G.players[m.swap].pos}, ${S.G.players[m.swap].ovr})</span><button class="btn sm" data-a="ngnoswap">Tirar da troca e pedir em dinheiro</button></div>` : ''}
   <div class="row" style="gap:6px"><button class="btn red" data-a="ngno">Recusar</button><button class="btn grow" data-a="ngcounter">💬 Pedir mais</button><button class="btn pri grow" data-a="ngyes">✅ Aceitar ${money(m.fee)}</button></div>`;
 }
 H.ngask = (v) => { if (!N) return; N.ask = +v; const e = document.getElementById('ngask'); if (e) e.textContent = money(N.ask); const pct = e?.nextElementSibling; if (pct) pct.textContent = `(${Math.round((N.ask / N.m.fee - 1) * 100)}% a mais)`; };
@@ -82,6 +83,17 @@ H.ngcounter = async () => {
   else if (r.r === 'counter') { bubble('r', `Não chegamos a tanto. Podemos subir para <b class="gold">${money(r.fee)}</b>${sell ? ` (aceitando os ${sell}%)` : ''}.`); docVal(r.fee, 'slideL'); N.ask = Math.round(r.fee * 1.1 / 1000) * 1000; }
   else if (r.r === 'no') { bubble('r', `Muito alto para nós. O máximo agora é <b class="gold">${money(r.fee)}</b>.`); docVal(r.fee, 'slideL'); }
   else { bubble('r', 'Assim não dá. Vamos procurar outras opções. Boa sorte.', 'bad'); stamp('ENCERRADO', 'bad'); }
+  N.busy = false; ctl(); save();
+};
+// 6.0: tirar o jogador oferecido na troca e pedir o valor dele em dinheiro
+H.ngnoswap = async () => {
+  if (!N || N.busy) return; const G = S.G, m = N.m; const sw = G.players[m.swap]; if (!sw) return; N.busy = true; const b = G.clubs[m.from];
+  document.getElementById('ngctl').innerHTML = '<div class="ng-res">⏳ Negociando…</div>';
+  bubble('l', `Não queremos o <b>${esc(sw.n)}</b>. Tira ele da troca e coloca o valor em dinheiro.`);
+  await typing('r', 1200 + Math.random() * 500);
+  const add = Math.round(playerValue(sw) * (0.7 + Math.random() * 0.2) / 1000) * 1000; const n = m.neg;
+  if (b.money >= m.fee + add && Math.random() < 0.72) { m.swap = null; m.fee += add; n.max += add; N.ask = Math.max(N.ask, Math.round(m.fee * 1.1 / 1000) * 1000); bubble('r', `Tudo bem, ficamos com o ${esc(sw.n)}. A proposta passa para <b class="gold">${money(m.fee)}</b> só em dinheiro.`); docVal(m.fee, 'slideL'); }
+  else { n.pat--; bubble('r', `Sem o ${esc(sw.n)} na negociação não conseguimos. A proposta continua como está.`); }
   N.busy = false; ctl(); save();
 };
 function stamp(t, cls) { const s = document.getElementById('ngstamp'); if (!s) return; s.textContent = t; s.className = `ng-stamp on ${cls}`; }

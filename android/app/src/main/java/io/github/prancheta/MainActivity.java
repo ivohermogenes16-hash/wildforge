@@ -84,7 +84,7 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        web.addJavascriptInterface(new NativeBridge(this), "PranchetaNative");
+        NativeBridge nb = new NativeBridge(this); nb.web = web; web.addJavascriptInterface(nb, "PranchetaNative");
         NotifReceiver.channel(this);
         setContentView(web);
         hideBars();

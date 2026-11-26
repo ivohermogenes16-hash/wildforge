@@ -20,7 +20,7 @@ export const SEGS = {
   tec: { n: 'Tecnologia esportiva', mkt: 1.5e9 }, nut: { n: 'Alimentação esportiva', mkt: 2e9 },
   equ: { n: 'Equipamentos de treino', mkt: 1.2e9 }, mid: { n: 'Comunicação e marketing', mkt: 1.5e9 }, beb: { n: 'Bebidas esportivas', mkt: 2.5e9 },
 };
-export const MKT_W = { BR: 0.14, AR: 0.04, EN: 0.14, ES: 0.09, IT: 0.08, DE: 0.11, FR: 0.08, PT: 0.03, NL: 0.03, MX: 0.05, US: 0.12, JP: 0.05, SA: 0.04, AU: 0.02, UY: 0.01, CO: 0.02, MA: 0.01, ZA: 0.01 };
+export const MKT_W = { BR: 0.14, AR: 0.04, EN: 0.14, ES: 0.09, IT: 0.08, DE: 0.11, FR: 0.08, PT: 0.03, NL: 0.03, MX: 0.05, US: 0.12, JP: 0.05, SA: 0.04, AU: 0.02, UY: 0.01, CO: 0.02, MA: 0.01, ZA: 0.01, RU: 0.03, UA: 0.01 };
 export const SLOTS = { Master: { n: 'Patrocínio principal da camisa', sh: 0.6, vis: 1 }, Manga: { n: 'Patrocínio secundário (manga)', sh: 0.22, vis: 0.45 }, Fornecedor: { n: 'Fornecedor de material', sh: 0.18, vis: 0.6, kit: true }, Treino: { n: 'Patrocínio de treino', sh: 0.08, vis: 0.25 }, Estadio: { n: 'Naming rights do estádio', sh: 0.25, vis: 0.7 }, Base: { n: 'Patrocínio das categorias de base', sh: 0.04, vis: 0.12 }, Parceria: { n: 'Parceria comercial', sh: 0.05, vis: 0.15 } };
 export const DEPTS = { mkt: 'Marketing', prod: 'Produção', dist: 'Distribuição', rd: 'Pesquisa e produtos', adm: 'Administração' };
 const NAMES_A = ['Vértix', 'Arena', 'Pulso', 'Dínamo', 'Vento', 'Kappa Sul', 'Ímpeto', 'Faro', 'Linha', 'Trave', 'Gol de Placa', 'Craque', 'Rumo', 'Tático', 'Alvo', 'Fôlego', 'Ritmo', 'Pódio', 'Atlas', 'Zênite', 'Garra', 'Aurora'];

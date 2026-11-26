@@ -20,11 +20,67 @@ import java.io.FileOutputStream;
 import java.io.OutputStream;
 import android.speech.tts.TextToSpeech;
 import java.util.Locale;
+import android.webkit.WebView;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import com.google.android.gms.ads.AdError;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.FullScreenContentCallback;
+import com.google.android.gms.ads.LoadAdError;
+import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.ads.rewarded.RewardedAd;
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
 /* Ponte chamada pelo jogo (window.PranchetaNative) para agendar lembretes no Android. */
 public class NativeBridge {
     private final Activity act;
     NativeBridge(Activity a) { act = a; }
+    WebView web;
+
+    /* ---------- anúncio com recompensa (AdMob) ---------- */
+    private RewardedAd ad; private boolean adLoading = false, adInit = false, showWhenReady = false; private String adUnitId = "";
+    private void js(final String st) { act.runOnUiThread(() -> { try { if (web != null) web.evaluateJavascript("window.onPranchetaAd && window.onPranchetaAd('" + st + "')", null); } catch (Throwable ignored) {} }); }
+    private void adLoad(String unit) {
+        if (unit != null && !unit.isEmpty()) adUnitId = unit;
+        if (ad != null || adLoading || adUnitId.isEmpty()) return;
+        adLoading = true;
+        act.runOnUiThread(() -> {
+            try {
+                if (!adInit) { MobileAds.initialize(act.getApplicationContext(), st -> {}); adInit = true; }
+                RewardedAd.load(act, adUnitId, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
+                    @Override public void onAdLoaded(RewardedAd r) { ad = r; adLoading = false; if (showWhenReady) { showWhenReady = false; adShowNow(); } }
+                    @Override public void onAdFailedToLoad(LoadAdError e) { ad = null; adLoading = false; if (showWhenReady) { showWhenReady = false; js("fail"); } }
+                });
+            } catch (Throwable t) { adLoading = false; if (showWhenReady) { showWhenReady = false; js("fail"); } }
+        });
+    }
+    private void adShowNow() {
+        act.runOnUiThread(() -> {
+            final RewardedAd r = ad; if (r == null) { js("fail"); return; }
+            ad = null; final boolean[] got = { false };
+            r.setFullScreenContentCallback(new FullScreenContentCallback() {
+                @Override public void onAdDismissedFullScreenContent() { js(got[0] ? "ok" : "closed"); adLoad(null); }
+                @Override public void onAdFailedToShowFullScreenContent(AdError e) { js("fail"); adLoad(null); }
+            });
+            try { r.show(act, item -> got[0] = true); } catch (Throwable t) { js("fail"); }
+        });
+    }
+    @JavascriptInterface
+    public void loadAd(String unit) { adLoad(unit); }
+    @JavascriptInterface
+    public void showAd(String unit) {
+        if (ad != null) { adShowNow(); return; }
+        showWhenReady = true; adLoad(unit);
+        act.getWindow().getDecorView().postDelayed(() -> { if (showWhenReady) { showWhenReady = false; js("fail"); } }, 20000);
+    }
+    @JavascriptInterface
+    public boolean adReady() { return ad != null; }
+
+    /* copiar texto (código do Pix) */
+    @JavascriptInterface
+    public void copy(String text) {
+        act.runOnUiThread(() -> { try { ClipboardManager cm = (ClipboardManager) act.getSystemService(Context.CLIPBOARD_SERVICE); cm.setPrimaryClip(ClipData.newPlainText("Pix", text)); } catch (Throwable ignored) {} });
+    }
 
     /* voz do narrador: usa o motor de voz do próprio celular (a WebView não tem speechSynthesis) */
     private TextToSpeech tts; private boolean ttsOk = false;

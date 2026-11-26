@@ -34,6 +34,8 @@ export const WINDOWS = {
   CO: { w: [['01-05', '03-06'], ['06-22', '08-28']], ap: 1 },
   MA: { w: [['01-01', '01-31'], ['07-01', '09-30']], ap: 1 },
   ZA: { w: [['01-01', '02-02'], ['07-01', '09-15']], ap: 1 },
+  RU: { w: [['01-19', '02-20'], ['06-22', '09-06']] },
+  UA: { w: [['01-19', '03-01'], ['06-22', '09-06']] },
 };
 export function windowsOf(country) { const W = WINDOWS[country] || WINDOWS.BR; return W.w.map(([a, b]) => ({ a: wOf(a), b: wOf(b), da: a, db: b })); }
 export function winOpen(G, country, wk = G.week) { const ext = G.uv?.regs?.window ? 2 : 0; return windowsOf(country).some((x, i) => wk >= Math.floor(x.a) && wk <= Math.floor(x.b) + (i === 1 ? ext : 0)); }

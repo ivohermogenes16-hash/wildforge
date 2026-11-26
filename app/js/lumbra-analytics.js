@@ -297,6 +297,15 @@
     event: function (name, params) { try { push(name, params); if (queue.length >= 20) flush(); } catch (e) {} },
     optOut: function () { try { endSession(); store.optout = 1; save(); } catch (e) {} },
     get id() { return store && store.uid || null; },
+    // acesso ao banco (usado pelas partes online do jogo: ranking, desafio, liga)
+    api: function (method, path, body, query) {
+      if (!cfg || !store) return Promise.reject(new Error("offline"));
+      return auth().then(function () {
+        var url = cfg.databaseURL.replace(/\/$/, "") + "/" + path + ".json?auth=" + store.tok + (query ? "&" + query : "");
+        return fetch(url, { method: method, body: body === undefined ? undefined : JSON.stringify(body) });
+      }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(r.status + " " + t.slice(0, 120)); }); return r.json(); });
+    },
+    get uid() { return store && store.uid || null; },
     // configuração remota publicada no Lumbra Control (avisos, evento ativo, versão mínima)
     get remote() { return remote; },
     onRemote: function (cb) { if (typeof cb === "function") { remoteCbs.push(cb); if (remote) try { cb(remote); } catch (e) {} } },

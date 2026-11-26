@@ -17,6 +17,9 @@ import './ui/presidente.js';
 import { musicOn, musicOff } from './ui/audio.js';
 import { firstCommunity, videoCard, videoFirstTime } from './ui/comunidade.js';
 import { checkUpdate } from './ui/pacotes.js';
+import { pfChip, dailyCheck, pixPending, adPreload, turboUse } from './ui/loja.js';
+import './ui/online.js';
+import './ui/liga.js';
 import { startIcons, stripEmoji } from './ui/icons.js';
 import { initUniverse } from './engine/universe.js';
 import { initBiz } from './engine/business.js';
@@ -43,27 +46,29 @@ async function title() {
     m ? ['loadsave', 'Continuar', `${esc(m.club)}${m.year ? ' · ' + m.year : ''}`] : null,
     ['ng', 'Nova carreira', 'Do sub-20 ao topo'],
     ['tslots', 'Carreiras', 'Até 3 salvas'],
+    ['tonline', 'Online', 'Ranking, desafio e liga'],
+    ['tloja', 'Loja', 'Pranfixas e Sócio'],
     ['tcomu', 'Comunidade', 'Ideias e bugs'],
     ['tset', 'Configurações', 'Som, 3D, moeda'],
-    ['tnews', 'Novidades', 'Versão 5.1'],
+    ['tnews', 'Novidades', 'Versão 6.0'],
     ['thelp', 'Como jogar', ''],
     ['tpack', 'Pacotes', 'Escudos e times'],
   ].filter(Boolean);
   app.innerHTML = `<canvas id="bgcv" class="title-bg"></canvas><div class="rc-title">
-  <div class="rc-prof"><span class="rc-av">${esc((m?.name || 'T')[0] || 'T').toUpperCase()}</span><div><b>${esc(m?.name || 'Novo técnico')}</b><small>${m?.rep != null && !m?.legacy ? `Reputação ${m.rep} · ${m.titles} títulos` : 'Bem-vindo ao Prancheta'}</small></div></div>
+  <div class="rc-prof"><span class="rc-av">${esc((m?.name || 'T')[0] || 'T').toUpperCase()}</span><div><b>${esc(m?.name || 'Novo técnico')}</b><small>${m?.rep != null && !m?.legacy ? `Reputação ${m.rep} · ${m.titles} títulos` : 'Bem-vindo ao Prancheta'}</small></div>${pfChip()}</div>
   <nav class="rc-menu">${M.map(([a, t, d], i) => `<button class="rc-mi${i === 0 ? ' first' : ''}" data-a="${a}" style="--d:${i * 0.05}s"><span class="rc-t">${t}</span>${d ? `<small>${d}</small>` : ''}</button>`).join('')}
     <button class="rc-mi sm" data-a="fs" style="--d:${M.length * 0.05}s"><span class="rc-t">⛶ Tela cheia</span></button></nav>
   <div class="rc-panel"><div class="rc-slant"></div><div class="rc-in">
     <div class="rc-kicker">MANAGER DE FUTEBOL</div>
     <div class="rc-logo">PRAN<span>CHETA</span></div>
     <div class="rc-sub">Do sub-20 ao império do futebol.</div>
-    <div class="rc-stats"><div><b>960+</b><span>clubes reais</span></div><div><b>28</b><span>ligas</span></div><div><b>18</b><span>países</span></div></div>
+    <div class="rc-stats"><div><b>990+</b><span>clubes reais</span></div><div><b>30</b><span>ligas</span></div><div><b>20</b><span>países</span></div></div>
     <div class="vid-slot">${videoCard()}</div>
     ${m ? `<div class="rc-save" data-a="loadsave" style="--c1:${m.c1 || '#1b2a25'};--c2:${m.c2 || '#0b1210'}"><small>Continuar · ${slotName(cur)}</small><b>${esc(m.club)}</b><span>${m.year ? `${m.year}, semana ${m.week + 1}` : ''}</span><i>▶</i></div>` : `<button class="btn pri big rc-cta" data-a="ng">✨ Começar carreira</button>`}
   </div></div>
-  <div class="rc-ver">Lumbra Games · Versão 5.1${build}</div></div>`;
+  <div class="rc-ver">Lumbra Games · Versão 6.0${build}</div></div>`;
   startBg();
-  firstCommunity(); videoFirstTime(); musicOn();
+  firstCommunity(); videoFirstTime(); musicOn(); dailyCheck(); pixPending(); adPreload();
 }
 const slotName = (s) => 'Espaço ' + s.slice(-1);
 H.tslots = () => {
@@ -103,7 +108,16 @@ function setHtml() {
 H.setv = (v) => { const [k, x] = v.split(':'); SET[k] = typeof DEFV[k] === 'boolean' ? x === '1' : typeof DEFV[k] === 'number' ? +x : x; saveSet(); if (k === 'music') { if (SET.music && !S.G) musicOn(); else musicOff(); } if (k === 'voice' && SET.voice !== 'off') { import('./ui/audio.js').then((a) => a.say('Narração ligada. Bola rolando!', 'teste', true)); } replaceSheet(setHtml()); applyTheme(); if (S.G) render(); };
 const DEFV = DEF;
 H.setnotif = async () => { const ok = await askNotif(); toast(ok ? '🔔 Notificações liberadas' : 'Permissão negada ou indisponível'); };
-H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 5.1</h2><div class="list">${[
+H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 6.0</h2><div class="list">${[
+  ['🌐', 'Prancheta Online: ranking geral com todos os técnicos, perfil público e card para compartilhar'],
+  ['🎯', 'Desafio da Semana: a mesma situação para todo mundo, ranking e prêmios'],
+  ['🤝', 'Liga com amigos: código de convite, rodadas em horário fixo, escalação, tática e mercado entre vocês'],
+  ['💰', 'Pranfixas: bônus diário, conquistas, loja, molduras e Sócio Prancheta'],
+  ['🎉', 'Premiação de fim de temporada nova: cerimônia com palco, luzes e suspense, sem travar'],
+  ['🇷🇺', 'Novas ligas: Rússia e Ucrânia'],
+  ['🔁', 'Proposta com jogador na troca: dá para tirar o jogador e pedir em dinheiro'],
+  ['💬', 'Comunidade: ideias e bugs só são enviados depois de escrever'],
+].map(([i, t]) => `<div class="li"><span style="font-size:20px">${i}</span><span class="grow">${t}</span></div>`).join('')}</div><h3 style="margin-top:14px">Versão 5.1</h3><div class="list">${[
   ['🏆', 'Final com taça: ela aparece no pedestal na entrada e o campeão levanta e comemora'],
   ['🎺', 'No 3D os times entram em campo e ficam perfilados para o hino'],
   ['👔', 'Dono de clube: propostas de patrocínio, preço do ingresso com público estimado e jogos do clube'],
@@ -280,6 +294,7 @@ H.w3 = () => {
     S.G.me.diff = o.dif ?? 1; if (o.press === false) S.G.me.pressOn = false;
     { const D = DIFS[S.G.me.diff]; S.G.me.money = Math.round(S.G.me.money * D.money); const jc = S.G.clubs[S.G.me.job.cid]; jc.board.conf = Math.max(20, Math.min(95, jc.board.conf + D.conf)); }
     if (n.origin === 'exjog') S.G.me.rep = Math.min(99, S.G.me.rep + 2);
+    { const tb = turboUse(); if (tb) { S.G.me.money += tb.money; S.G.me.rep = Math.min(99, S.G.me.rep + tb.rep); S.G.news.unshift({ t: 0, txt: '🚀 Começo turbinado: +R$ 500 mil e mais reputação.' }); } }
     { const jc = S.G.clubs[S.G.me.job.cid]; const t = S.G.me.job.youth ? (S.G.me.u20tact ||= { ...jc.tact }) : jc.tact; const M = { ofens: { ment: 2, press: 2 }, equil: { ment: 1, press: 1 }, defens: { ment: 0, press: 1 }, posse: { ment: 1, press: 1, tempo: 0 }, contra: { ment: 0, press: 0, tempo: 2 } }[n.style]; if (M) Object.assign(t, M); }
     S.tab = 'home'; S.page = null; S.comp = null;
     await save(true); hasSave = true;

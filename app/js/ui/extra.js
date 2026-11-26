@@ -72,21 +72,34 @@ PAGES.estadio = () => {
 H.socprice = (v) => { const c = myClub(S.G); socioOf(S.G, c).price = +v; const el = document.getElementById('socv'); if (el) el.textContent = money(+v); save(); };
 H.socplan = (v) => { const c = myClub(S.G); socioOf(S.G, c).plan = v; render(); save(); };
 
-// ---------------- premiações animadas ----------------
+// ---------------- premiações animadas (cerimônia) ----------------
+const CUP_SVG = `<svg class="aw-cup" viewBox="0 0 120 140"><defs><linearGradient id="awg" x1="0" x2="1"><stop offset="0" stop-color="#a87412"/><stop offset=".35" stop-color="#ffe9a3"/><stop offset=".6" stop-color="#f4c542"/><stop offset="1" stop-color="#8a5d0c"/></linearGradient></defs><path d="M28 10h64v18c0 26-14 44-32 48C42 72 28 54 28 28z" fill="url(#awg)"/><path d="M28 20H12c0 18 8 28 20 30M92 20h16c0 18-8 28-20 30" fill="none" stroke="url(#awg)" stroke-width="7" stroke-linecap="round"/><rect x="54" y="76" width="12" height="22" fill="url(#awg)"/><path d="M36 98h48l6 14H30z" fill="url(#awg)"/><rect x="26" y="112" width="68" height="16" rx="3" fill="#3a2a10"/><rect x="34" y="116" width="52" height="8" rx="2" fill="url(#awg)" opacity=".7"/><ellipse cx="48" cy="30" rx="6" ry="14" fill="#fff" opacity=".35"/></svg>`;
+const MEDAL_SVG = `<svg class="aw-cup sm" viewBox="0 0 100 120"><defs><linearGradient id="awm" x1="0" x2="1"><stop offset="0" stop-color="#a87412"/><stop offset=".35" stop-color="#ffe9a3"/><stop offset=".6" stop-color="#f4c542"/><stop offset="1" stop-color="#8a5d0c"/></linearGradient></defs><path d="M30 0h16l10 40H40zM70 0H54L44 40h16z" fill="#c8202f"/><circle cx="50" cy="76" r="34" fill="url(#awm)"/><circle cx="50" cy="76" r="25" fill="none" stroke="#fff6" stroke-width="3"/><path d="M50 60l5 10 11 2-8 8 2 11-10-5-10 5 2-11-8-8 11-2z" fill="#fff8"/></svg>`;
 export function showAwards(G, onDone) {
   const A = G.awardsShow; if (!A) { onDone?.(); return; }
   const el = document.createElement('div'); el.className = 'awards';
-  const b = A.ballon; const steps = [];
-  steps.push(`<div class="aw-step"><div class="aw-kicker">PRÊMIOS DO FUTEBOL ${A.y}</div><div class="aw-title">A grande noite</div><div class="aw-sub">Os melhores da temporada</div></div>`);
-  for (const a of (A.lgAw || []).slice(0, 4)) if (a.best) steps.push(`<div class="aw-step"><div class="aw-kicker">${esc(a.lg)} · MELHOR JOGADOR</div><div class="aw-trophy">🏅</div><div class="aw-name">${esc(a.best.n)}</div><div class="aw-sub">${esc(a.best.club)} · nota ${a.best.v}${a.top ? ` · artilheiro: ${esc(a.top.n)} (${a.top.g} gols)` : ''}</div></div>`);
-  if (A.team.length) steps.push(`<div class="aw-step"><div class="aw-kicker">SELEÇÃO DO CAMPEONATO · ${esc(A.lg)}</div><div class="aw-team">${A.team.map((p) => `<span style="--k:${p.c1 || '#2fe08a'}"><b>${esc(shortName(p.n))}</b><small>${esc(p.pos)} · ${esc(p.club)}</small></span>`).join('')}</div></div>`);
-  if (b.length) steps.push(`<div class="aw-step"><div class="aw-kicker">BOLA DE OURO · FINALISTAS</div><div class="aw-list">${b.slice(1).reverse().map((p, i) => `<div style="animation-delay:${i * 0.45}s"><span>${5 - i}º</span><b>${esc(p.n)}</b><small>${esc(p.club)}</small></div>`).join('')}</div></div>`,
-    `<div class="aw-step gold"><div class="aw-kicker">E A BOLA DE OURO ${A.y} VAI PARA…</div><div class="aw-ball"></div><div class="aw-name big">${esc(b[0].n)}</div><div class="aw-sub">${esc(b[0].club)} · ${b[0].g} gols · ${b[0].a} assistências · nota ${b[0].nota}</div><div class="confetti">${Array.from({ length: 40 }, (_, i) => `<i style="--x:${(i * 37) % 100};--d:${(i % 7) * 0.3}s;--c:${['#f4c542', '#2fe08a', '#ffffff', '#ff5a5f'][i % 4]}"></i>`).join('')}</div></div>`);
-  if (A.mine.length) steps.push(`<div class="aw-step"><div class="aw-kicker">DO SEU CLUBE</div><div class="aw-list">${A.mine.map((t) => `<div><b>⭐ ${esc(t)}</b></div>`).join('')}</div></div>`);
-  el.innerHTML = `<div class="aw-stage">${steps[0]}</div><div class="aw-nav"><span class="xs mut" id="awn">1/${steps.length}</span><button class="btn pri" id="awb">Próximo ›</button><button class="btn sm ghost" id="awx">Pular</button></div>`;
+  const b = A.ballon || []; const steps = [];
+  steps.push(`<div class="aw-step aw-open"><div class="aw-kicker">PRÊMIOS DO FUTEBOL ${A.y}</div><div class="aw-title">A GRANDE<br>NOITE</div><div class="aw-sub">Os melhores da temporada sobem ao palco</div></div>`);
+  for (const a of (A.lgAw || []).slice(0, 4)) if (a.best) steps.push(`<div class="aw-step"><div class="aw-kicker">${esc(a.lg)}</div>${MEDAL_SVG}<div class="aw-cap">MELHOR JOGADOR</div><div class="aw-name reveal">${esc(a.best.n)}</div><div class="aw-sub">${esc(a.best.club)} · nota ${a.best.v}</div>${a.top ? `<div class="aw-mini"><span>ARTILHEIRO</span><b>${esc(a.top.n)}</b><i>${a.top.g} gols</i></div>` : ''}</div>`);
+  if (A.team.length) {
+    const row = (ps) => `<div class="aw-row">${ps.map((p, i) => `<span style="--k:${p.c1 || '#2fe08a'};--i:${i}"><b>${esc(shortName(p.n))}</b><small>${esc(p.pos)} · ${esc(p.club)}</small></span>`).join('')}</div>`;
+    const L = (k) => A.team.filter((p) => k.includes(p.pos));
+    steps.push(`<div class="aw-step"><div class="aw-kicker">SELEÇÃO DO CAMPEONATO · ${esc(A.lg)}</div><div class="aw-pitch">${row(L(['PE', 'ATA', 'PD']))}${row(L(['MEI', 'MC', 'VOL']))}${row(L(['LE', 'ZAG', 'LD']))}${row(L(['GOL']))}</div></div>`);
+  }
+  if (b.length) steps.push(`<div class="aw-step"><div class="aw-kicker">BOLA DE OURO · FINALISTAS</div><div class="aw-pod">${b.slice(1, 5).reverse().map((p, i) => `<div style="--i:${i}"><span>${b.slice(1, 5).length + 1 - i}º</span><b>${esc(p.n)}</b><small>${esc(p.club)}</small></div>`).join('')}</div></div>`,
+    `<div class="aw-step gold"><div class="aw-kicker">E A BOLA DE OURO ${A.y} VAI PARA…</div><div class="aw-ball"></div><div class="aw-suspense"><i></i><i></i><i></i></div><div class="aw-final"><div class="aw-name big">${esc(b[0].n)}</div><div class="aw-sub">${esc(b[0].club)} · ${b[0].g} gols · ${b[0].a} assistências · nota ${b[0].nota}</div></div><div class="confetti late">${Array.from({ length: 50 }, (_, i) => `<i style="--x:${(i * 37) % 100};--d:${2.2 + (i % 7) * 0.25}s;--c:${['#f4c542', '#2fe08a', '#ffffff', '#ff5a5f'][i % 4]}"></i>`).join('')}</div></div>`);
+  if (A.mine.length) steps.push(`<div class="aw-step"><div class="aw-kicker">DO SEU CLUBE</div>${CUP_SVG}<div class="aw-chips">${A.mine.map((t, i) => `<span style="--i:${Math.min(i, 20)}">⭐ ${esc(t)}</span>`).join('')}</div></div>`);
+  el.innerHTML = `<div class="aw-lights"><i></i><i></i><i></i></div><div class="aw-dust">${Array.from({ length: 24 }, (_, i) => `<i style="--x:${(i * 41) % 100};--d:${(i % 8) * 0.7}s;--s:${6 + (i % 5) * 2}s"></i>`).join('')}</div>
+  <div class="aw-dots">${steps.map((_, k) => `<i class="${k ? '' : 'on'}"></i>`).join('')}</div><div class="aw-stage">${steps[0]}</div>
+  <div class="aw-nav"><button class="btn sm ghost" id="awx">Pular tudo</button><span class="xs mut" id="awn">1/${steps.length}</span><button class="btn pri" id="awb">Próximo ›</button></div>`;
   document.body.appendChild(el); let i = 0;
-  const go = () => { i++; if (i >= steps.length) { el.classList.add('out'); setTimeout(() => { el.remove(); onDone?.(); }, 400); return; } el.querySelector('.aw-stage').innerHTML = steps[i]; el.querySelector('#awn').textContent = `${i + 1}/${steps.length}`; if (i === steps.length - 1) el.querySelector('#awb').textContent = 'Fechar'; };
-  el.querySelector('#awb').onclick = go; el.querySelector('#awx').onclick = () => { el.remove(); onDone?.(); };
+  try { window.PSFX?.('whistle'); } catch {}
+  const go = () => { i++; if (i >= steps.length) { el.classList.add('out'); setTimeout(() => { el.remove(); onDone?.(); }, 400); return; }
+    const st = el.querySelector('.aw-stage'); st.innerHTML = steps[i]; st.scrollTop = 0; el.querySelector('#awn').textContent = `${i + 1}/${steps.length}`;
+    el.querySelectorAll('.aw-dots i').forEach((d, k) => d.classList.toggle('on', k <= i));
+    if (i === steps.length - 1) el.querySelector('#awb').textContent = 'Fechar';
+    if (st.querySelector('.gold')) { setTimeout(() => { try { window.PSFX?.('horn'); navigator.vibrate?.([80, 60, 200]); } catch {} }, 2100); } };
+  el.querySelector('#awb').onclick = go; el.querySelector('#awx').onclick = () => { el.classList.add('out'); setTimeout(() => { el.remove(); onDone?.(); }, 300); };
 }
 
 // ---------------- animação de título e retrospectiva ----------------
