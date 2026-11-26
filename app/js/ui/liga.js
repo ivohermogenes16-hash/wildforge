@@ -6,13 +6,14 @@ import { crest } from './art.js';
 import { FORMATIONS } from '../engine/match.js';
 import { allClubs, clubByKey, squadOf, bestXI, fixXI, playO, sqOvr, pValue, roundRobin, OFORMS, OMENT, OPRESS } from '../engine/osim.js';
 import { ONL } from './online.js';
-import { pfAdd, isVip, W as WAL, frameColor } from './loja.js';
+import { pfAdd, isVip, grant, myLook } from './loja.js';
+import { avatar as cav, cosStr, cosParse } from './cosmetics.js';
 
 const { O, api, me, osave } = ONL;
 O.lgs ||= []; O.lgPaid ||= {};
 const BUD0 = 30e6, PR_W = 1.5e6, PR_D = 0.5e6, PR_L = 0.2e6, MINSQ = 16, MAXSQ = 26;
 let L = null; let CODE = null; let LT = 'tab';
-const avatar = (n, fr, size = 30) => `<span class="on-av" style="--fc:${frameColor(fr) || '#ffffff22'};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.45)}px">${esc((n || '?')[0].toUpperCase())}</span>`;
+const avatar = (n, fr, size = 30, cos) => cav({ ...(cos ? cosParse(cos) : { fr }), n }, size);
 const body = (h) => { const b = document.getElementById('onbody'); if (b) b.innerHTML = h; };
 const fmtT = (t) => new Date(t).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const sqArr = (o) => (Array.isArray(o) ? o : Object.values(o || {})).filter(Boolean);
@@ -77,8 +78,8 @@ H.pcgo = async (key) => {
     const mem = await api('GET', `pr/lg/${code}/mem`) || {}; if (Object.values(mem).some((m) => m.club === key && m !== mem[me()])) { centerNote('Esse clube acabou de ser escolhido. Escolha outro.'); return; }
     const sq = squadOf(key).slice(0, MAXSQ);
     await api('PUT', `pr/lg/${code}/sq/${me()}`, sq);
-    await api('PUT', `pr/lg/${code}/mem/${me()}`, { n: O.nick, fr: (WAL.frame || '').slice(0, 10), vip: isVip(), club: key, bud: BUD0, j: { '.sv': 'timestamp' } });
-    if (!O.lgs.includes(code)) O.lgs.unshift(code); osave(); closeSheet(true); centerNote(`Você está na liga com o ${clubByKey(key)?.name}!`, 2200); H.tonline('liga'); setTimeout(() => H.lgopen(code), 300);
+    await api('PUT', `pr/lg/${code}/mem/${me()}`, { n: O.nick, fr: (myLook().fr || '').slice(0, 10), cos: cosStr(myLook()), vip: isVip(), club: key, bud: BUD0, j: { '.sv': 'timestamp' } });
+    if (!O.lgs.includes(code)) O.lgs.unshift(code); osave(); try { window.PONT?.stat('lgJoined'); } catch {} closeSheet(true); centerNote(`Você está na liga com o ${clubByKey(key)?.name}!`, 2200); H.tonline('liga'); setTimeout(() => H.lgopen(code), 300);
   } catch (e) { centerNote('Não consegui entrar na liga.'); }
 };
 
@@ -86,14 +87,14 @@ H.pcgo = async (key) => {
 H.lgopen = async (code) => {
   CODE = code; const el = document.getElementById('onbody'); if (!el) { H.tonline('liga'); setTimeout(() => H.lgopen(code), 200); return; }
   body('<div class="pf-spin"></div>');
-  try { const d = await api('GET', `pr/lg/${code}`); if (!d?.meta) { body('<div class="hint">Liga não encontrada.</div>'); return; } L = prep(code, d); await processRounds(); render(); }
+  try { const d = await api('GET', `pr/lg/${code}`); if (!d?.meta) { body('<div class="hint">Liga não encontrada.</div>'); return; } L = prep(code, d); await processRounds(); render(); revealNew(); }
   catch (e) { body(`<div class="hint">Sem conexão com a liga.</div><button class="btn blk" data-a="lgopen" data-v="${code}">Tentar de novo</button>`); }
 };
 function prep(code, d) {
   const mem = d.mem || {}; const ids = Object.keys(mem).sort((a, b) => (mem[a].j || 0) - (mem[b].j || 0) || (a < b ? -1 : 1));
   const per = d.meta.per || 1; const gap = 864e5 / per;
   const R = d.meta.st !== 'lobby' && d.meta.start ? roundRobin(ids) : [];
-  return { code, ...d, mem, ids, R, gap, sq: d.sq || {}, ln: d.ln || {}, res: d.res || {}, of: d.of || {}, fa: d.fa || {} };
+  return { code, ...d, mem, ids, R, gap, sq: d.sq || {}, ln: d.ln || {}, res: d.res || {}, of: d.of || {}, fa: d.fa || {}, chat: d.chat || {} };
 }
 const rTime = (r) => L.meta.start + r * L.gap;
 function teamOf(u) {
@@ -112,6 +113,37 @@ async function processRounds() {
   if (L.R.length && Object.keys(L.res).length >= L.R.length && L.meta.st !== 'end' && L.meta.own === me()) { try { await api('PATCH', `pr/lg/${L.code}/meta`, { st: 'end' }); L.meta.st = 'end'; } catch {} }
   payMe();
 }
+// resumo da última rodada jogada
+function summary() {
+  const done = L.R.map((_, r) => r).filter((r) => L.res[r]); if (!done.length) return ''; const r = done[done.length - 1]; const ms = sqArr(L.res[r].m);
+  const big = [...ms].sort((a, b) => Math.abs(b.gh - b.ga) - Math.abs(a.gh - a.ga))[0]; const T = table(); const lead = T[0];
+  const goals = ms.reduce((s, m) => s + m.gh + m.ga, 0); const lines = [];
+  if (big && big.gh !== big.ga) { const w = big.gh > big.ga ? big.a : big.b, l = big.gh > big.ga ? big.b : big.a; lines.push(`<b>${esc(nm(w))}</b> ${Math.abs(big.gh - big.ga) >= 3 ? 'goleou' : 'venceu'} <b>${esc(nm(l))}</b> por ${Math.max(big.gh, big.ga)} a ${Math.min(big.gh, big.ga)}`); }
+  if (lead) lines.push(`<b>${esc(nm(lead.u))}</b> lidera com ${lead.pts} pontos`);
+  lines.push(`${goals} gols na rodada`);
+  return `<div class="lg-sum"><small>RESUMO DA RODADA ${r + 1}</small>${lines.map((l) => `<div>${l}</div>`).join('')}</div>`;
+}
+// placares da rodada aparecendo um por um quando a pessoa abre a liga
+function revealNew() {
+  const done = L.R.map((_, r) => r).filter((r) => L.res[r]); if (!done.length) return; const last = done[done.length - 1]; const seen = (O.lgSeen ||= {})[L.code] ?? -1;
+  if (last <= seen) return; O.lgSeen[L.code] = last; osave();
+  const ms = sqArr(L.res[last].m);
+  openSheet(`<div class="lg-rev"><small>RESULTADOS DA RODADA ${last + 1}</small><h2>${esc(L.meta.name)}</h2>${ms.map((m, i) => `<div class="lg-rv ${m.a === me() || m.b === me() ? 'me' : ''}" style="--d:${0.3 + i * 0.45}s"><span class="grow ell" style="text-align:right">${esc(nm(m.a))}</span>${crest(ck(m.a), 26)}<b><i data-to="${m.gh}">0</i> - <i data-to="${m.ga}">0</i></b>${crest(ck(m.b), 26)}<span class="grow ell">${esc(nm(m.b))}</span></div>`).join('')}<button class="btn pri blk" data-a="cs" style="margin-top:10px">Ver tabela</button></div>`);
+  document.querySelectorAll('.lg-rv').forEach((row, i) => setTimeout(() => { row.classList.add('in'); row.querySelectorAll('i[data-to]').forEach((el) => { const to = +el.dataset.to; let v = 0; const t = setInterval(() => { if (v >= to) { clearInterval(t); return; } el.textContent = ++v; }, 220); }); }, 300 + i * 450));
+}
+// conversa da liga
+function chatHtml() { const M = Object.values(L.chat || {}).sort((a, b) => a.t - b.t).slice(-60); return M.map((m) => `<div class="lg-mg ${m.u === me() ? 'me' : ''}"><b>${esc(m.n)}</b><span>${esc(m.m)}</span><small>${new Date(m.t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') || '<div class="xs mut" style="text-align:center;margin:20px 0">Ninguém falou nada ainda. Provoque o rival!</div>'; }
+let CHT = 0;
+async function chatLoad() {
+  clearTimeout(CHT); if (LT !== 'chat' || !document.getElementById('lgmsgs')) return;
+  try { L.chat = (await api('GET', `pr/lg/${L.code}/chat`, undefined, 'orderBy=%22t%22&limitToLast=60')) || {}; const el = document.getElementById('lgmsgs'); if (el) { el.innerHTML = chatHtml(); el.scrollTop = el.scrollHeight; } } catch {}
+  CHT = setTimeout(chatLoad, 12000);
+}
+H.lgsend = async () => {
+  const inp = document.getElementById('lgmsg'); const m = (inp?.value || '').replace(/\s+/g, ' ').trim().slice(0, 200); if (!m) return; inp.value = '';
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5); const o = { u: me(), n: O.nick, m, t: { '.sv': 'timestamp' } };
+  try { await api('PUT', `pr/lg/${L.code}/chat/${id}`, o); (L.chat ||= {})[id] = { ...o, t: Date.now() }; const el = document.getElementById('lgmsgs'); if (el) { el.innerHTML = chatHtml(); el.scrollTop = el.scrollHeight; } } catch { centerNote('Não consegui enviar.'); }
+};
 function table() {
   const T = {}; for (const u of L.ids) T[u] = { u, j: 0, v: 0, e: 0, d: 0, gp: 0, gc: 0, pts: 0, last: [] };
   for (let r = 0; r < L.R.length; r++) { const x = L.res[r]; if (!x) continue; for (const m of sqArr(x.m)) { const A = T[m.a], B = T[m.b]; if (!A || !B) continue; A.j++; B.j++; A.gp += m.gh; A.gc += m.ga; B.gp += m.ga; B.gc += m.gh; if (m.gh > m.ga) { A.v++; A.pts += 3; B.d++; A.last.push('v'); B.last.push('d'); } else if (m.gh < m.ga) { B.v++; B.pts += 3; A.d++; A.last.push('d'); B.last.push('v'); } else { A.e++; B.e++; A.pts++; B.pts++; A.last.push('e'); B.last.push('e'); } } }
@@ -120,15 +152,16 @@ function table() {
 const budOf = (u) => { const t = table().find((x) => x.u === u); return (L.mem[u]?.bud ?? BUD0) + (t ? t.v * PR_W + t.e * PR_D + t.d * PR_L : 0); };
 function payMe() {
   const t = table().find((x) => x.u === me()); if (!t) return; const paid = O.lgPaid[L.code] || 0;
-  if (t.v > paid) { O.lgPaid[L.code] = t.v; osave(); pfAdd((t.v - paid) * 10, `Vitórias na liga ${L.meta.name}`, true); }
-  if (L.meta.st === 'end' && table()[0]?.u === me() && !O.lgPaid[L.code + ':c']) { O.lgPaid[L.code + ':c'] = 1; O.lgw = (O.lgw || 0) + 1; osave(); pfAdd(200, `Campeão da liga ${L.meta.name}!`); window.PONLINE_SYNC?.(); }
+  if (t.v > paid) { const d = t.v - paid; O.lgPaid[L.code] = t.v; osave(); pfAdd(d * 10, `Vitórias na liga ${L.meta.name}`, true); try { window.PONT?.stat('lgWins', d); window.PONT?.sp(d * 20, 'liga'); window.PEV?.track('liga', d); } catch {} }
+  if (L.meta.st === 'end' && table()[0]?.u === me() && !O.lgPaid[L.code + ':c']) { O.lgPaid[L.code + ':c'] = 1; O.lgw = (O.lgw || 0) + 1; osave(); pfAdd(200, `Campeão da liga ${L.meta.name}!`); setTimeout(() => { grant('ex_liga', 'Campeão de liga!'); grant('tit_campliga'); }, 2400); try { window.PFEED?.(`foi campeão da liga ${L.meta.name}`, 'lg'); window.PONT?.sp(150, 'liga'); } catch {} window.PONLINE_SYNC?.(); }
 }
 
 // ---------- tela da liga ----------
 function render() {
-  const m = L.meta; const tabs = m.st === 'lobby' ? [['lobby', 'Sala de espera']] : [['tab', 'Tabela'], ['rod', 'Rodadas'], ['time', 'Meu time'], ['merc', 'Mercado'], ['mem', 'Participantes']];
+  const m = L.meta; const tabs = m.st === 'lobby' ? [['lobby', 'Sala de espera']] : [['tab', 'Tabela'], ['rod', 'Rodadas'], ['time', 'Meu time'], ['merc', 'Mercado'], ['chat', 'Conversa'], ['mem', 'Participantes']];
   if (!tabs.some((t) => t[0] === LT)) LT = tabs[0][0];
   const next = L.R.findIndex((_, r) => !L.res[r]);
+  O.lgVisit = Date.now(); if (next >= 0 && m.st === 'run') { const t = rTime(next); if (!O.lgNext || O.lgNext < Date.now() || t < O.lgNext) O.lgNext = t; } osave(); try { window.PNOTIF?.(); } catch {}
   body(`<div class="lg-hd"><button class="btn sm ghost" data-a="ontab" data-v="liga">‹ Ligas</button><div class="grow"><b>${esc(m.name)}</b><small>Código <b class="lg-code">${L.code}</b> · ${m.st === 'lobby' ? `${L.ids.length}/${m.max} participantes (mín. ${m.min})` : m.st === 'end' ? 'Liga encerrada' : next >= 0 ? `Rodada ${next + 1}/${L.R.length} · ${fmtT(rTime(next))}` : ''}</small></div><button class="btn sm" data-a="lginvite">Convidar</button><button class="btn sm ghost" data-a="lgopen" data-v="${L.code}">↻</button></div>
   <div class="seg sm lg-tabs">${tabs.map(([k, t]) => `<button class="${LT === k ? 'on' : ''}" data-a="lgt" data-v="${k}">${t}</button>`).join('')}</div><div id="lgbody">${tabHtml()}</div>`);
 }
@@ -137,13 +170,13 @@ const nm = (u) => L.mem[u]?.n || '?'; const ck = (u) => clubByKey(L.mem[u]?.club
 function tabHtml() {
   if (LT === 'lobby') {
     const ok = L.ids.length >= L.meta.min; const own = L.meta.own === me();
-    return `<div class="lg-lobby">${L.ids.map((u) => `<div class="li">${avatar(nm(u), L.mem[u].fr)}${crest(ck(u), 30)}<span class="grow"><b>${esc(nm(u))}</b><div class="xs mut">${esc(ck(u).name)}${u === L.meta.own ? ' · criador' : ''}</div></span></div>`).join('')}</div>
+    return `<div class="lg-lobby">${L.ids.map((u) => `<div class="li">${avatar(nm(u), L.mem[u].fr, 30, L.mem[u].cos)}${crest(ck(u), 30)}<span class="grow"><b>${esc(nm(u))}</b><div class="xs mut">${esc(ck(u).name)}${u === L.meta.own ? ' · criador' : ''}</div></span></div>`).join('')}</div>
     <div class="hint">${ok ? 'Já tem gente suficiente para começar!' : `Faltam ${L.meta.min - L.ids.length} para o mínimo. Mande o código <b>${L.code}</b> para os amigos.`} As rodadas serão ${L.meta.per === 2 ? 'de 12 em 12 horas' : 'todo dia'} às ${L.meta.hr}h (horário de Brasília).</div>
     ${own ? `<button class="btn pri big blk" ${ok ? '' : 'disabled'} data-a="lgstart">Começar a liga</button>` : '<div class="xs mut">Quem criou a liga é quem aperta para começar.</div>'}`;
   }
   if (LT === 'tab') {
     const T = table(); const champ = L.meta.st === 'end' ? T[0] : null;
-    return `${champ ? `<div class="lg-champ">🏆 <b>${esc(nm(champ.u))}</b> é o campeão com o ${esc(ck(champ.u).name)}!</div>` : ''}<table class="tbl lg-tbl"><tr><th>#</th><th style="text-align:left">Técnico</th><th>P</th><th>J</th><th>V</th><th>E</th><th>D</th><th>SG</th><th>Últimos</th></tr>${T.map((r, i) => `<tr class="${r.u === me() ? 'me' : ''}"><td>${i + 1}</td><td style="text-align:left"><span class="row" style="gap:6px">${crest(ck(r.u), 22)}<span class="ell"><b>${esc(nm(r.u))}</b> <span class="xs mut">${esc(ck(r.u).short)}</span></span></span></td><td><b>${r.pts}</b></td><td>${r.j}</td><td>${r.v}</td><td>${r.e}</td><td>${r.gp - r.gc}</td><td><span class="lg-last">${r.last.slice(-5).map((x) => `<i class="${x}"></i>`).join('')}</span></td></tr>`).join('')}</table>`;
+    return `${champ ? `<div class="lg-champ">🏆 <b>${esc(nm(champ.u))}</b> é o campeão com o ${esc(ck(champ.u).name)}!</div>` : ''}${summary()}<table class="tbl lg-tbl"><tr><th>#</th><th style="text-align:left">Técnico</th><th>P</th><th>J</th><th>V</th><th>E</th><th>D</th><th>SG</th><th>Últimos</th></tr>${T.map((r, i) => `<tr class="${r.u === me() ? 'me' : ''}"><td>${i + 1}</td><td style="text-align:left"><span class="row" style="gap:6px">${crest(ck(r.u), 22)}<span class="ell"><b>${esc(nm(r.u))}</b> <span class="xs mut">${esc(ck(r.u).short)}</span></span></span></td><td><b>${r.pts}</b></td><td>${r.j}</td><td>${r.v}</td><td>${r.e}</td><td>${r.gp - r.gc}</td><td><span class="lg-last">${r.last.slice(-5).map((x) => `<i class="${x}"></i>`).join('')}</span></td></tr>`).join('')}</table>`;
   }
   if (LT === 'rod') {
     return L.R.map((ms, r) => { const x = L.res[r]; const open = !x && (r === 0 || L.res[r - 1]);
@@ -151,7 +184,8 @@ function tabHtml() {
   }
   if (LT === 'time') return teamHtml();
   if (LT === 'merc') return mercHtml();
-  if (LT === 'mem') return L.ids.map((u) => { const sq = sqArr(L.sq[u]); return `<button class="li" data-a="lgsq" data-v="${u}">${avatar(nm(u), L.mem[u].fr)}${crest(ck(u), 28)}<span class="grow"><b>${esc(nm(u))}</b><div class="xs mut">${esc(ck(u).name)} · ${sq.length} jogadores · geral ${sqOvr(sq)} · caixa ${money(budOf(u))}</div></span><span>›</span></button>`; }).join('');
+  if (LT === 'chat') { setTimeout(chatLoad, 50); return `<div class="lg-chat"><div id="lgmsgs" class="lg-msgs">${chatHtml()}</div><div class="row lg-send" style="gap:6px"><input id="lgmsg" maxlength="200" placeholder="Mande uma mensagem para a liga…" class="grow"><button class="btn pri" data-a="lgsend">Enviar</button></div></div>`; }
+  if (LT === 'mem') return L.ids.map((u) => { const sq = sqArr(L.sq[u]); return `<button class="li" data-a="lgsq" data-v="${u}">${avatar(nm(u), L.mem[u].fr, 30, L.mem[u].cos)}${crest(ck(u), 28)}<span class="grow"><b>${esc(nm(u))}</b><div class="xs mut">${esc(ck(u).name)} · ${sq.length} jogadores · geral ${sqOvr(sq)} · caixa ${money(budOf(u))}</div></span><span>›</span></button>`; }).join('');
   return '';
 }
 const cd = (t) => { const s = Math.max(0, Math.round((t - Date.now()) / 1000)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return s <= 0 ? 'agora' : h > 0 ? `em ${h}h${String(m).padStart(2, '0')}` : `em ${m} min`; };

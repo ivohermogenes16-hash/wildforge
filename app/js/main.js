@@ -17,7 +17,9 @@ import './ui/presidente.js';
 import { musicOn, musicOff } from './ui/audio.js';
 import { firstCommunity, videoCard, videoFirstTime } from './ui/comunidade.js';
 import { checkUpdate } from './ui/pacotes.js';
-import { pfChip, dailyCheck, pixPending, adPreload, turboUse } from './ui/loja.js';
+import { pfChip, dailyCheck, pixPending, adPreload, turboUse, myLook, eq, shopIsNew } from './ui/loja.js';
+import { avatar as cav } from './ui/cosmetics.js';
+import './ui/eventos.js';
 import './ui/online.js';
 import './ui/liga.js';
 import { startIcons, stripEmoji } from './ui/icons.js';
@@ -44,31 +46,54 @@ async function title() {
   const build = window.PranchetaNative?.versionCode ? (() => { try { return ' · build ' + window.PranchetaNative.versionCode(); } catch { return ''; } })() : '';
   const M = [
     m ? ['loadsave', 'Continuar', `${esc(m.club)}${m.year ? ' · ' + m.year : ''}`] : null,
+    ['tonline', 'Online', 'Ranking, desafio e liga', 'rc-hot-on'],
+    ['tloja', 'Loja', 'Molduras, emblemas e mais', 'rc-hot-shop'],
     ['ng', 'Nova carreira', 'Do sub-20 ao topo'],
     ['tslots', 'Carreiras', 'Até 3 salvas'],
-    ['tonline', 'Online', 'Ranking, desafio e liga'],
-    ['tloja', 'Loja', 'Pranfixas e Sócio'],
     ['tcomu', 'Comunidade', 'Ideias e bugs'],
     ['tset', 'Configurações', 'Som, 3D, moeda'],
-    ['tnews', 'Novidades', 'Versão 6.0'],
+    ['tnews', 'Novidades', 'Versão 6.1'],
     ['thelp', 'Como jogar', ''],
     ['tpack', 'Pacotes', 'Escudos e times'],
   ].filter(Boolean);
-  app.innerHTML = `<canvas id="bgcv" class="title-bg"></canvas><div class="rc-title">
-  <div class="rc-prof"><span class="rc-av">${esc((m?.name || 'T')[0] || 'T').toUpperCase()}</span><div><b>${esc(m?.name || 'Novo técnico')}</b><small>${m?.rep != null && !m?.legacy ? `Reputação ${m.rep} · ${m.titles} títulos` : 'Bem-vindo ao Prancheta'}</small></div>${pfChip()}</div>
-  <nav class="rc-menu">${M.map(([a, t, d], i) => `<button class="rc-mi${i === 0 ? ' first' : ''}" data-a="${a}" style="--d:${i * 0.05}s"><span class="rc-t">${t}</span>${d ? `<small>${d}</small>` : ''}</button>`).join('')}
+  app.innerHTML = `<canvas id="bgcv" class="title-bg"></canvas><div class="rc-title ${eq('th') || ''}">
+  <div class="rc-prof" data-a="tonline" data-v="perfil">${cav({ ...myLook(), n: m?.name || 'T' }, 46)}<div><b>${esc(m?.name || 'Novo técnico')}</b><small>${m?.rep != null && !m?.legacy ? `Reputação ${m.rep} · ${m.titles} títulos` : 'Bem-vindo ao Prancheta'}</small></div>${pfChip()}</div>
+  <nav class="rc-menu">${M.map(([a, t, d, cls], i) => `<button class="rc-mi${i === 0 ? ' first' : ''}${cls ? ' ' + cls : ''}" data-a="${a}" style="--d:${i * 0.05}s"><span class="rc-t">${t}${a === 'tloja' && shopIsNew() ? '<i class="shop-new">NOVO</i>' : ''}${a === 'tonline' ? '<i class="live-badge"><i class="live-dot"></i> AO VIVO</i>' : ''}</span>${d ? `<small${a === 'tonline' ? ' id="rclive"' : ''}>${d}</small>` : ''}</button>`).join('')}
     <button class="rc-mi sm" data-a="fs" style="--d:${M.length * 0.05}s"><span class="rc-t">⛶ Tela cheia</span></button></nav>
   <div class="rc-panel"><div class="rc-slant"></div><div class="rc-in">
     <div class="rc-kicker">MANAGER DE FUTEBOL</div>
     <div class="rc-logo">PRAN<span>CHETA</span></div>
     <div class="rc-sub">Do sub-20 ao império do futebol.</div>
-    <div class="rc-stats"><div><b>990+</b><span>clubes reais</span></div><div><b>30</b><span>ligas</span></div><div><b>20</b><span>países</span></div></div>
+    ${window.PEV?.active?.() ? window.PEV.card() : ''}${rcChallenge()}
     <div class="vid-slot">${videoCard()}</div>
     ${m ? `<div class="rc-save" data-a="loadsave" style="--c1:${m.c1 || '#1b2a25'};--c2:${m.c2 || '#0b1210'}"><small>Continuar · ${slotName(cur)}</small><b>${esc(m.club)}</b><span>${m.year ? `${m.year}, semana ${m.week + 1}` : ''}</span><i>▶</i></div>` : `<button class="btn pri big rc-cta" data-a="ng">✨ Começar carreira</button>`}
   </div></div>
-  <div class="rc-ver">Lumbra Games · Versão 6.0${build}</div></div>`;
+  <div class="rc-ver">Lumbra Games · Versão 6.1${build}</div></div>`;
   startBg();
-  firstCommunity(); videoFirstTime(); musicOn(); dailyCheck(); pixPending(); adPreload();
+  if (!localStorage.getItem('prancheta.intro61')) { setTimeout(intro, 900); } else { firstCommunity(); dailyCheck(); }
+  videoFirstTime(); musicOn(); pixPending(); adPreload(); liveCount(); window.PNOTIF?.();
+}
+// cartão do Desafio da Semana no painel da direita
+function rcChallenge() {
+  const d = window.PONHOMEDATA?.(); if (!d) return '';
+  const left = Math.max(0, d.end - Date.now()); const dd = Math.floor(left / 864e5), hh = Math.floor((left % 864e5) / 36e5);
+  return `<div class="rc-ch" data-a="tonline" data-v="desafio" style="--c1:${d.W.club.c1};--c2:${d.W.club.c2}"><div class="rc-ch-k"><span>🎯 DESAFIO DA SEMANA</span><span>termina em ${dd ? dd + 'd ' : ''}${hh}h</span></div><div class="rc-ch-b">${crest(d.W.club, 46)}<div class="grow"><b>${esc(d.W.club.name)}</b><small>${esc(d.W.th.t)} · 5 jogos · prêmio até ${d.prize} Pranfixas</small></div><span class="rc-ch-go">${d.best ? 'Melhorar' : 'Jogar agora'} ›</span></div>
+  <div class="rc-ch-f">${window.PCOSCAT ? '' : ''}<span>${d.nick ? `Seu recorde: <b>${d.best}</b>` : 'Entre no Online e apareça no ranking'}</span><span id="rcrank">${d.total ? `${d.total} técnicos no ranking` : ''}</span></div></div>`;
+}
+async function liveCount() {
+  try { const all = await window.LumbraAnalytics?.api('GET', 'pr/prof', undefined, 'shallow=true'); const n = Object.keys(all || {}).length; if (!n) return; const el = document.getElementById('rclive'); if (el) el.textContent = `${n.toLocaleString('pt-BR')} técnicos jogando`; const lb = document.querySelector('.live-badge'); if (lb) lb.innerHTML = `<i class="live-dot"></i> AO VIVO · ${n.toLocaleString('pt-BR')}`; const r = document.getElementById('rcrank'); if (r) r.textContent = `${n.toLocaleString('pt-BR')} técnicos no ranking`; } catch {}
+}
+// apresentação do Online na primeira vez depois de atualizar
+const INTRO = [
+  ['🌍', 'Prancheta Online', 'Agora você joga contra todo mundo. Seus títulos da carreira contam no ranking geral, e o mês vira uma temporada com divisões do Bronze à Lenda.', '#2fe08a'],
+  ['🎯', 'Desafio da Semana', 'Toda semana, a mesma situação para todos os técnicos: um clube, cinco jogos difíceis. Monte a escalação e a tática e dispute o topo.', '#f4c542'],
+  ['🤝', 'Liga com amigos', 'Crie uma liga, mande o código e escolha um clube real. As rodadas acontecem no horário marcado, e tem conversa e mercado entre vocês.', '#4cc9f0'],
+];
+function intro() {
+  let i = 0; const el = document.createElement('div'); el.className = 'intro';
+  const draw = () => { const [ic, t, d, c] = INTRO[i]; el.innerHTML = `<div class="intro-box" style="--ic:${c}"><div class="intro-ic">${ic}</div><small>NOVIDADE · ${i + 1}/${INTRO.length}</small><h2>${t}</h2><p>${d}</p><div class="intro-dots">${INTRO.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div><div class="row" style="gap:8px">${i < INTRO.length - 1 ? '<button class="btn ghost" data-k="skip">Pular</button><button class="btn pri grow" data-k="next">Próximo ›</button>' : '<button class="btn ghost" data-k="skip">Agora não</button><button class="btn pri grow" data-k="go">Escolher meu apelido</button>'}</div></div>`; };
+  draw(); document.body.appendChild(el);
+  el.onclick = (e) => { const k = e.target.closest('[data-k]')?.dataset.k; if (!k) return; if (k === 'next') { i++; draw(); return; } localStorage.setItem('prancheta.intro61', '1'); el.remove(); if (k === 'go') H.tonline('inicio'); else { firstCommunity(); dailyCheck(); } };
 }
 const slotName = (s) => 'Espaço ' + s.slice(-1);
 H.tslots = () => {
@@ -108,15 +133,18 @@ function setHtml() {
 H.setv = (v) => { const [k, x] = v.split(':'); SET[k] = typeof DEFV[k] === 'boolean' ? x === '1' : typeof DEFV[k] === 'number' ? +x : x; saveSet(); if (k === 'music') { if (SET.music && !S.G) musicOn(); else musicOff(); } if (k === 'voice' && SET.voice !== 'off') { import('./ui/audio.js').then((a) => a.say('Narração ligada. Bola rolando!', 'teste', true)); } replaceSheet(setHtml()); applyTheme(); if (S.G) render(); };
 const DEFV = DEF;
 H.setnotif = async () => { const ok = await askNotif(); toast(ok ? '🔔 Notificações liberadas' : 'Permissão negada ou indisponível'); };
-H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 6.0</h2><div class="list">${[
-  ['🌐', 'Prancheta Online: ranking geral com todos os técnicos, perfil público e card para compartilhar'],
-  ['🎯', 'Desafio da Semana: a mesma situação para todo mundo, ranking e prêmios'],
-  ['🤝', 'Liga com amigos: código de convite, rodadas em horário fixo, escalação, tática e mercado entre vocês'],
-  ['💰', 'Pranfixas: bônus diário, conquistas, loja, molduras e Sócio Prancheta'],
-  ['🎉', 'Premiação de fim de temporada nova: cerimônia com palco, luzes e suspense, sem travar'],
-  ['🇷🇺', 'Novas ligas: Rússia e Ucrânia'],
-  ['🔁', 'Proposta com jogador na troca: dá para tirar o jogador e pedir em dinheiro'],
-  ['💬', 'Comunidade: ideias e bugs só são enviados depois de escrever'],
+H.tnews = () => openSheet(`<h2>🆕 Novidades da versão 6.1</h2><div class="list">${[
+  ['🌍', 'Online com tela própria: início com mural, ranking geral, temporada mensal e Desafio da Semana'],
+  ['🛡️', 'Divisões do Bronze à Lenda, com selo no perfil no fim de cada temporada'],
+  ['🎯', 'Desafio da Semana com lances animados, campeões da semana passada e histórico'],
+  ['🤝', 'Liga com amigos: conversa, resumo e placares animados de cada rodada'],
+  ['🎨', 'Seu visual: molduras animadas, emblemas, faixas e títulos, com tela de coleção'],
+  ['🏅', 'Conquistas online e sala de troféus no perfil'],
+  ['🎁', 'Eventos com missões e itens exclusivos'],
+  ['🎆', 'Comemoração de gol especial na partida 3D e temas para a tela inicial'],
+  ['🔔', 'Lembretes no celular do Desafio e da rodada da liga'],
+].map(([i, t]) => `<div class="li"><span style="font-size:20px">${i}</span><span class="grow">${t}</span></div>`).join('')}</div><h3 style="margin-top:14px">Versão 6.0</h3><div class="list">${[
+  ['🌐', 'Prancheta Online: ranking geral, perfil e card para compartilhar'], ['🤝', 'Liga com amigos com rodadas em horário fixo'], ['🎉', 'Premiação de fim de temporada nova'], ['🇷🇺', 'Novas ligas: Rússia e Ucrânia'],
 ].map(([i, t]) => `<div class="li"><span style="font-size:20px">${i}</span><span class="grow">${t}</span></div>`).join('')}</div><h3 style="margin-top:14px">Versão 5.1</h3><div class="list">${[
   ['🏆', 'Final com taça: ela aparece no pedestal na entrada e o campeão levanta e comemora'],
   ['🎺', 'No 3D os times entram em campo e ficam perfilados para o hino'],

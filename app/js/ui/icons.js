@@ -88,7 +88,7 @@ add(['🌍', '🌎', '🌏', '✈'], 'globe', 'blue'); add(['💼', '👔', '�
 add(['🤝'], 'deal', 'ok'); add(['✍', '✏'], 'pen'); add(['📄', '📋', '📰', '🗞'], 'doc'); add(['🌱'], 'sprout', 'ok');
 add(['🔁', '🔄', '↺', '🔀', '↩'], 'swap', 'blue'); add(['💰', '💸', '💵', '💲', '💎'], 'coin', 'gold'); add(['⚡'], 'bolt', 'gold');
 add(['⚖'], 'scale'); add(['💾', '📂'], 'save'); add(['⚠', '🚨'], 'alert', 'warn'); add(['⏰', '⏳', '⌛'], 'clock', 'warn');
-add(['🧑', '👋', '🕵', '🧑‍💼'], 'user'); add(['⚔', '🥊'], 'swords', 'bad'); add(['🟢'], 'dot', 'ok'); add(['🔴'], 'dot', 'bad'); add(['🟡'], 'dot', 'warn');
+add(['🧑', '👋', '🕵', '🧑‍💼', '👤'], 'user'); add(['🎆', '🎇'], 'spark', 'gold'); add(['🇷🇺', '🇺🇦'], 'flag'); add(['⚔', '🥊'], 'swords', 'bad'); add(['🟢'], 'dot', 'ok'); add(['🔴'], 'dot', 'bad'); add(['🟡'], 'dot', 'warn');
 add(['🟥'], 'card', 'bad'); add(['🟨'], 'card', 'warn'); add(['🩹', '🚑'], 'med', 'bad'); add(['🔥', '🤯'], 'flame', 'hot'); add(['📈', '🚀'], 'up', 'ok');
 add(['📉', '💔'], 'down', 'bad'); add(['★', '⭐', '🌟', '✨'], 'star', 'gold'); add(['🎖', '🎯'], 'target'); add(['🏗', '🚧'], 'tool');
 add(['⬆', '🔼'], 'arrowUp', 'ok'); add(['⬇', '↓', '👇', '🔽'], 'arrowDown', 'bad'); add(['→', '➜', '👉', '➡'], 'arrowRight');

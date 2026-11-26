@@ -43,7 +43,7 @@ export class Match3D {
       case 'loaded': {
         const hc = this.m.s[0].club; const f = this.m.f; const night = (f && f.s === 1) || Math.random() < 0.35;
         this.post({ t: 'setup', home: { name: hc.name, c1: hc.c1, c2: hc.c2 }, stadium: hc.stadium || `Estádio ${hc.city || hc.name}`, kits: this.kits(), teams: [this.team(0), this.team(1)],
-          time: this.opt.time || (night ? 'noite' : Math.random() < 0.5 ? 'dia' : 'tarde'), rain: !!this.opt.rain, replays: this._replays, names: this._names, ts: this.ts(), tact: [this.tactOf(0), this.tactOf(1)], final: !!this.opt.final });
+          time: this.opt.time || (night ? 'noite' : Math.random() < 0.5 ? 'dia' : 'tarde'), rain: !!this.opt.rain, replays: this._replays, names: this._names, ts: this.ts(), tact: [this.tactOf(0), this.tactOf(1)], final: !!this.opt.final, gfx: (window.PCOS && window.PCOS.eq('gfx')) || '', uside: typeof this.us === 'number' ? this.us : -1 });
         break; }
       case 'walk': clearTimeout(this.loadT); this.walkBtn(); break;
       case 'ready': this.ready = true; clearTimeout(this.loadT); this.sk?.remove(); this.sk = null; this.h.onReady?.(); break;

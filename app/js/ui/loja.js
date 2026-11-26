@@ -3,10 +3,12 @@
 import { S, H, render, openSheet, closeSheet, replaceSheet, centerNote, save } from './app.js';
 import { esc, money, clamp } from '../util.js';
 import { SLOTS } from '../store.js';
+import { CAT, item, RARITY, KINDS, EVENTS, avatar as cavatar, preview, bannerCls, bannerStyle, bannerFx, titleTag, cosStr } from './cosmetics.js';
 
 const K = 'prancheta.pf';
 function load() { const d = { bal: 0, own: [], claimed: [], pend: [], log: [] }; try { return { ...d, ...JSON.parse(localStorage.getItem(K) || '{}') }; } catch { return d; } }
 export const W = load();
+W.eq ||= { fr: W.frame || '' }; delete W.frame; W.seen ||= [];
 function wsave() { try { localStorage.setItem(K, JSON.stringify(W)); } catch {} }
 export const pf = () => Math.max(0, Math.floor(W.bal || 0));
 export const isVip = () => (W.vip || 0) > Date.now();
@@ -53,19 +55,21 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMo
 
 // ---------- bônus diário ----------
 const DAILY = [10, 15, 20, 25, 30, 40, 70];
+const dMul = () => (isVip() ? 2 : 1) * (Math.max(1, Math.min(3, +(window.PEV?.active?.()?.bonus?.daily) || 1)));
 export function dailyReady() { return W.day !== today(); }
 export function dailyCheck() { if (dailyReady()) setTimeout(() => { if (!document.querySelector('.modal-bg')) openSheet(dailyHtml()); }, 1400); }
 function dailyHtml() {
   const y = new Date(Date.now() - 864e5); const yk = `${y.getFullYear()}-${y.getMonth() + 1}-${y.getDate()}`;
   const st = dailyReady() ? (W.day === yk ? (W.streak || 0) % 7 : 0) : ((W.streak || 1) - 1) % 7; const ready = dailyReady();
-  return `<div class="pf-daily"><h2>Bônus diário</h2><p class="xs mut">Entre todo dia para ganhar mais. No 7º dia vem o prêmio grande.${isVip() ? ' <b class="gold">Sócio ganha em dobro.</b>' : ''}</p>
-  <div class="pf-days">${DAILY.map((v, i) => `<div class="pf-day ${i < st ? 'got' : i === st ? (ready ? 'now' : 'got') : ''}" style="--d:${i * 0.06}s"><small>Dia ${i + 1}</small>${PF_SVG}<b>${v * (isVip() ? 2 : 1)}</b></div>`).join('')}</div>
-  ${ready ? `<button class="btn pri big blk" data-a="pfdaily">Pegar ${DAILY[st] * (isVip() ? 2 : 1)} Pranfixas</button>` : '<div class="hint">Você já pegou o bônus de hoje. Volte amanhã!</div>'}</div>`;
+  return `<div class="pf-daily"><h2>Bônus diário</h2><p class="xs mut">Entre todo dia para ganhar mais. No 7º dia vem o prêmio grande.${isVip() ? ' <b class="gold">Sócio ganha em dobro.</b>' : ''}${(window.PEV?.active?.()?.bonus?.daily || 1) > 1 ? ' <b class="gold">Evento: bônus em dobro!</b>' : ''}</p>
+  <div class="pf-days">${DAILY.map((v, i) => `<div class="pf-day ${i < st ? 'got' : i === st ? (ready ? 'now' : 'got') : ''}" style="--d:${i * 0.06}s"><small>Dia ${i + 1}</small>${PF_SVG}<b>${v * dMul()}</b></div>`).join('')}</div>
+  ${ready ? `<button class="btn pri big blk" data-a="pfdaily">Pegar ${DAILY[st] * dMul()} Pranfixas</button>` : '<div class="hint">Você já pegou o bônus de hoje. Volte amanhã!</div>'}</div>`;
 }
 H.pfdaily = () => {
   if (!dailyReady()) return; const y = new Date(Date.now() - 864e5); const yk = `${y.getFullYear()}-${y.getMonth() + 1}-${y.getDate()}`;
-  W.streak = W.day === yk ? (W.streak || 0) + 1 : 1; W.day = today(); const v = DAILY[(W.streak - 1) % 7] * (isVip() ? 2 : 1); wsave();
+  W.streak = W.day === yk ? (W.streak || 0) + 1 : 1; W.day = today(); const v = DAILY[(W.streak - 1) % 7] * dMul(); wsave(); try { window.PEV?.track('dias', 1); window.PONT?.sp(5, 'login'); } catch {}
   closeSheet(); pfAdd(v, `Bônus diário · dia ${((W.streak - 1) % 7) + 1}`);
+  if (W.streak % 7 === 0) { const L = CAT.filter((x) => x.k === 'em' && x.ra === 'comum' && !has(x.id)); if (L.length) setTimeout(() => grant(L[Math.floor(Math.random() * L.length)].id, '7 dias seguidos: emblema de presente!'), 2400); }
 };
 
 // ---------- anúncio com recompensa (AdMob, só no app) ----------
@@ -93,11 +97,20 @@ H.pfad = async (v) => {
 };
 
 // ---------- itens da loja ----------
-const FRAMES = [
-  ['fr_bronze', 'Moldura Bronze', 60, '#c07a3a'], ['fr_prata', 'Moldura Prata', 140, '#c9d2dc'], ['fr_ouro', 'Moldura Ouro', 280, '#f5c542'],
-  ['fr_neon', 'Moldura Neon', 450, '#2ff3c5'], ['fr_lenda', 'Moldura Lenda', 900, '#b36bff'],
-];
-export const frameColor = (id) => (FRAMES.find((f) => f[0] === id) || [])[3] || '';
+// ---------- itens visuais (catálogo em cosmetics.js) ----------
+const SOCIO_ITEMS = ['ex_socio', 'em_escudo'];
+export const has = (id) => W.own.includes(id) || (isVip() && SOCIO_ITEMS.includes(id));
+export const eq = (k) => { const v = W.eq[k] || ''; return v && (has(v) || !item(v)) ? v : ''; };
+export const myLook = () => ({ fr: eq('fr'), em: eq('em'), ban: eq('ban'), tit: eq('tit'), vip: isVip() });
+export const frameColor = () => '';
+export function grant(id, why) { if (!id || has(id)) return false; W.own.push(id); wsave(); const it = item(id); try { window.LumbraAnalytics?.event('item_ganho', { id }); } catch {} if (it && why) itemFx(it, why); return true; }
+function itemFx(it, why) {
+  const el = document.createElement('div'); el.className = 'pf-fx it-fx';
+  el.innerHTML = `<div class="pf-fx-box"><div class="it-fx-p">${preview(it, myLook(), nickName())}</div><div class="it-fx-n" style="color:${RARITY[it.ra].c}">${RARITY[it.ra].t.toUpperCase()}</div><div class="pf-fx-n" style="font-size:22px">${esc(it.n)}</div><div class="pf-fx-w">${esc(why)}</div></div>`;
+  document.body.appendChild(el); setTimeout(() => el.remove(), 3200); try { window.PSFX?.('coin'); } catch {}
+}
+const nickName = () => { try { return JSON.parse(localStorage.getItem('prancheta.on') || '{}').nick || S.G?.me.name || 'Técnico'; } catch { return 'Técnico'; } };
+window.PCOS = { eq, has, look: myLook, grant, W };
 const myC = () => { const G = S.G; return G && G.me.job ? G.clubs[G.me.job.cid] : null; };
 const verbaVal = () => { const c = myC(); return c ? clamp(Math.round(Math.abs(c.money || 0) * 0.06 / 1e4) * 1e4 + 2e5, 2e5, 2.5e7) : 0; };
 const ITEMS = [
@@ -117,33 +130,90 @@ export const scoutOn = () => !!(S.G && S.G._pfScout === S.G.year);
 export const PACKS = [
   { id: 'p100', pf: 100, brl: 4.9 }, { id: 'p330', pf: 330, brl: 12.9, tag: '+10%' }, { id: 'p800', pf: 800, brl: 24.9, tag: '+20%' }, { id: 'p1900', pf: 1900, brl: 49.9, tag: 'Melhor valor' },
 ];
+export const KITS = [
+  { id: 'kit_ouro', n: 'Kit Ouro', brl: 24.9, pf: 300, items: ['fr_ouro', 'em_aguia'] },
+  { id: 'kit_lenda', n: 'Kit Lenda', brl: 99.9, pf: 1000, items: ['fr_lenda', 'em_dragao', 'ban_ouro'] },
+];
 export const VIP_PACK = { id: 'vip30', vip: 30, brl: 9.9, pf: 900 };
 const brl = (v) => 'R$ ' + v.toFixed(2).replace('.', ',');
 
+// ---------- evento ativo (vem do Lumbra Control, ver eventos.js) ----------
+const evNow = () => window.PEV?.active?.() || null;
+const buyable = (it) => it.p > 0 && (!it.ev || (evNow() && evNow().theme === it.ev && evNow().shop !== false));
+const priceOf = (it) => it.p;
+const RAS = ['comum', 'raro', 'epico', 'lendario', 'exclusivo', 'evento'];
+
 // ---------- tela da loja ----------
-let TAB = 'loja';
-H.tloja = (v) => { if (v) TAB = v; if (document.querySelector('.pf-shop')) replaceSheet(shopHtml()); else openSheet(shopHtml()).parentElement.classList.add('wide'); };
-H.pftab = (v) => { TAB = v; replaceSheet(shopHtml()); };
+let TAB = 'dest';
+const TABS = [['dest', 'Destaques'], ['fr', 'Molduras'], ['em', 'Emblemas'], ['ban', 'Faixas'], ['tit', 'Títulos'], ['mais', 'Gol, temas e cards'], ['col', 'Minha coleção'], ['car', 'Itens de carreira'], ['comprar', 'Pranfixas'], ['socio', 'Sócio'], ['ganhar', 'Ganhar grátis']];
+export const SHOP_VER = 61;
+export const shopIsNew = () => (W.seenShop || 0) < SHOP_VER || !!(evNow() && W.seenEv !== evNow().id);
+H.tloja = (v) => {
+  if (v) TAB = v === 'visual' ? 'fr' : v; W.seenShop = SHOP_VER; if (evNow()) W.seenEv = evNow().id; wsave(); document.querySelectorAll('.shop-new').forEach((e) => e.remove());
+  if (document.querySelector('.pf-shop')) replaceSheet(shopHtml()); else openSheet(shopHtml()).parentElement.classList.add('wide', 'shop-bg');
+};
+H.pftab = (v) => { TAB = v; replaceSheet(shopHtml()); document.querySelector('.pf-tabs .on')?.scrollIntoView({ inline: 'center', block: 'nearest' }); };
+const lookNow = () => myLook();
+function card(it, i = 0) {
+  const o = has(it.id), on = W.eq[it.k] === it.id, R = RARITY[it.ra];
+  let act;
+  if (o) act = on ? '<span class="it-on">Em uso</span>' : '<span class="it-use">Usar</span>';
+  else if (buyable(it)) act = pfTag(priceOf(it));
+  else act = `<span class="it-lock">${it.ev ? 'Evento ' + esc(EVENTS[it.ev].t) : 'Exclusivo'}</span>`;
+  return `<button class="it-card ra-${it.ra} ${o ? 'own' : ''} ${on ? 'on' : ''}" data-a="itopen" data-v="${it.id}" style="--rc:${R.c};--d:${Math.min(i, 16) * 0.035}s"><span class="it-prev">${preview(it, lookNow(), nickName(), 58)}</span><b>${esc(it.n)}</b><small style="color:${R.c}">${R.t}</small><span class="it-act">${act}</span></button>`;
+}
+const grid = (list) => `<div class="it-grid">${list.map(card).join('')}</div>`;
 function shopHtml() {
-  const tabs = [['loja', 'Loja'], ['comprar', 'Comprar'], ['socio', 'Sócio'], ['visual', 'Molduras'], ['ganhar', 'Ganhar grátis']];
   let body = '';
-  if (TAB === 'loja') body = `<div class="pf-grid">${ITEMS.map((it) => { const can = it.ok(); return `<div class="pf-item ${can ? '' : 'off'}"><b>${esc(it.t)}</b><small>${esc(it.d())}</small>${can ? '' : `<small class="pf-why">${esc(it.career && !S.G ? 'Abra uma carreira para usar.' : it.why)}</small>`}<div class="row" style="gap:6px;margin-top:auto"><span class="grow">${pfTag(isVip() && it.id === 'verba' ? it.p / 2 : it.p)}</span>${can ? `<button class="btn sm pri" data-a="pfitem" data-v="${it.id}">Usar</button>` : ''}</div></div>`; }).join('')}</div>`;
+  const ev = evNow(); const sort = (a, b) => RAS.indexOf(a.ra) - RAS.indexOf(b.ra) || a.p - b.p;
+  if (TAB === 'dest') {
+    const evItems = ev ? CAT.filter((x) => x.ev === ev.theme) : [];
+    const top = ['fr_lenda', 'em_dragao', 'ban_fogos', 'g_fogo', 'fr_neon', 'em_fenix', 'em_coroa', 'ban_ouro'].map(item);
+    body = `${ev ? `<div class="sh-ev" style="--e1:${EVENTS[ev.theme]?.c || '#f4c542'};--e2:${EVENTS[ev.theme]?.c2 || '#0b1210'}"><div class="grow"><small>EVENTO · termina ${new Date(ev.to).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</small><b>${esc(ev.name)}</b><span class="xs">Itens que só aparecem durante o evento</span></div><button class="btn sm" data-a="evopen">Missões</button></div>${grid(evItems)}` : ''}
+    <div class="sh-hero"><div class="sh-hero-av">${cavatar({ ...lookNow(), n: nickName() }, 92)}</div><div class="grow"><small>SEU VISUAL</small><b>${esc(nickName())}</b><div>${titleTag(lookNow().tit)}</div><div class="xs mut" style="margin-top:4px">Moldura, emblema, faixa e título aparecem no ranking, no Desafio, na liga e no seu card.</div></div></div>
+    <h3>Mais desejados</h3>${grid(top)}
+    <h3>Kits</h3><div class="kit-row">${KITS.map((k) => `<div class="kit"><div class="kit-p">${k.items.map((id) => `<span>${preview(item(id), lookNow(), nickName(), 46)}</span>`).join('')}</div><b>${k.n}</b><small>${k.items.map((id) => item(id).n).join(' + ')} + ${k.pf} Pranfixas</small>${payUrl() ? `<button class="btn pri sm" data-a="pfbuy" data-v="${k.id}">${brl(k.brl)} no Pix</button>` : '<span class="xs mut">Em breve</span>'}</div>`).join('')}</div>`;
+  }
+  if (['fr', 'em', 'ban', 'tit'].includes(TAB)) body = `${TAB === 'fr' ? '<p class="xs mut">Cada nível tem uma animação mais caprichada que o anterior. Toque para ver de perto.</p>' : ''}${grid(CAT.filter((x) => x.k === TAB && (!x.ev || buyable(x) || has(x.id))).sort(sort))}`;
+  if (TAB === 'mais') body = `<h3>Comemoração de gol <span class="xs mut">(partida 3D, só nos gols do seu time)</span></h3>${grid(CAT.filter((x) => x.k === 'gfx'))}<h3>Temas da tela inicial</h3>${grid(CAT.filter((x) => x.k === 'th'))}<h3>Card de compartilhar</h3>${grid(CAT.filter((x) => x.k === 'cd'))}`;
+  if (TAB === 'col') {
+    const total = CAT.length, mine = CAT.filter((x) => has(x.id)).length;
+    body = `<div class="col-hd"><b>${mine}</b><span>de ${total} itens</span><div class="col-bar"><i style="width:${Math.round((mine / total) * 100)}%"></i></div></div>${Object.entries(KINDS).map(([k, t]) => { const L = CAT.filter((x) => x.k === k); return `<h3>${t}s <span class="xs mut">${L.filter((x) => has(x.id)).length}/${L.length}</span></h3><div class="col-grid">${L.map((it) => `<button class="col-it ${has(it.id) ? '' : 'miss'}" data-a="itopen" data-v="${it.id}" style="--rc:${RARITY[it.ra].c}"><span>${preview(it, lookNow(), nickName(), 40)}</span>${has(it.id) ? '' : '<i>?</i>'}</button>`).join('')}</div>`; }).join('')}`;
+  }
+  if (TAB === 'car') body = `<div class="pf-grid">${ITEMS.map((it) => { const can = it.ok(); return `<div class="pf-item ${can ? '' : 'off'}"><b>${esc(it.t)}</b><small>${esc(it.d())}</small>${can ? '' : `<small class="pf-why">${esc(it.career && !S.G ? 'Abra uma carreira para usar.' : it.why)}</small>`}<div class="row" style="gap:6px;margin-top:auto"><span class="grow">${pfTag(isVip() && it.id === 'verba' ? it.p / 2 : it.p)}</span>${can ? `<button class="btn sm pri" data-a="pfitem" data-v="${it.id}">Usar</button>` : ''}</div></div>`; }).join('')}</div>`;
   if (TAB === 'comprar') body = payUrl() ? `<div class="pf-packs">${PACKS.map((p, i) => `<button class="pf-pack" data-a="pfbuy" data-v="${p.id}" style="--d:${i * 0.06}s">${p.tag ? `<i>${p.tag}</i>` : ''}<div class="pf-stack">${PF_SVG.repeat(Math.min(4, i + 1))}</div><b>${p.pf}</b><small>Pranfixas</small><span>${brl(p.brl)}</span></button>`).join('')}</div><div class="xs mut" style="margin-top:8px">Pagamento por Pix com confirmação automática. As Pranfixas ficam neste aparelho e valem para todas as carreiras.</div>`
     : `<div class="hint">A compra pelo Pix ainda não foi liberada. Enquanto isso, ganhe Pranfixas grátis na aba "Ganhar grátis".</div>`;
-  if (TAB === 'socio') body = `<div class="pf-vipcard ${isVip() ? 'on' : ''}"><div class="pf-vip-h"><b>SÓCIO PRANCHETA</b><small>${isVip() ? `Ativo até ${new Date(W.vip).toLocaleDateString('pt-BR')}` : '30 dias'}</small></div>
-    <ul><li>Bônus diário em dobro</li><li>8 anúncios por dia em vez de 5</li><li>Verba extra pela metade do preço</li><li>4º e 5º espaços de carreira</li><li>Selo dourado de Sócio no ranking e no perfil</li><li>Tentativas extras no Desafio da Semana</li></ul>
+  if (TAB === 'socio') body = `<div class="pf-vipcard ${isVip() ? 'on' : ''}"><div class="row" style="gap:12px;align-items:center"><div>${cavatar({ fr: 'ex_socio', em: 'em_escudo', n: nickName() }, 70)}</div><div class="pf-vip-h"><b>SÓCIO PRANCHETA</b><small>${isVip() ? `Ativo até ${new Date(W.vip).toLocaleDateString('pt-BR')}` : '30 dias'}</small></div></div>
+    <ul><li>Moldura e emblema exclusivos de Sócio</li><li>Bônus diário em dobro</li><li>8 anúncios por dia em vez de 5</li><li>Verba extra pela metade do preço</li><li>4º e 5º espaços de carreira</li><li>Selo dourado no ranking e no perfil</li><li>Tentativas extras no Desafio da Semana</li></ul>
     <div class="row" style="gap:8px">${payUrl() ? `<button class="btn pri grow" data-a="pfbuy" data-v="vip30">Assinar no Pix · ${brl(VIP_PACK.brl)}</button>` : ''}<button class="btn grow" data-a="pfvip">Trocar por ${pfTag(VIP_PACK.pf)}</button></div></div>`;
-  if (TAB === 'visual') body = `<p class="xs mut">A moldura aparece no seu perfil, no ranking geral, na liga com amigos e no card de compartilhar.</p><div class="pf-frames">${FRAMES.map(([id, t, p, col]) => { const o = owns(id); const eq = W.frame === id; return `<div class="pf-frame ${eq ? 'eq' : ''}" style="--fc:${col}"><span class="pf-av">${esc((S.G?.me.name || 'T')[0])}</span><b>${t}</b>${o ? `<button class="btn sm ${eq ? '' : 'pri'}" data-a="pfframe" data-v="${eq ? '' : id}">${eq ? 'Tirar' : 'Usar'}</button>` : `<button class="btn sm" data-a="pfframebuy" data-v="${id}">${pfTag(p)}</button>`}</div>`; }).join('')}</div>`;
   if (TAB === 'ganhar') body = `<div class="pf-earn">
-    <div class="li"><span class="grow"><b>Bônus diário</b><div class="xs mut">Até ${DAILY[6]} por dia na sequência de 7 dias</div></span>${dailyReady() ? '<button class="btn sm pri" data-a="pfdailyo">Pegar</button>' : '<span class="xs mut">Pego hoje ✓</span>'}</div>
+    <div class="li"><span class="grow"><b>Bônus diário</b><div class="xs mut">Até ${DAILY[6]} por dia na sequência de 7 dias${ev?.bonus?.daily > 1 ? ' · <b class="gold">em dobro no evento!</b>' : ''}</div></span>${dailyReady() ? '<button class="btn sm pri" data-a="pfdailyo">Pegar</button>' : '<span class="xs mut">Pego hoje ✓</span>'}</div>
     <div class="li"><span class="grow"><b>Anúncio com recompensa</b><div class="xs mut">${adOk() ? `+${AD_PF} cada · faltam ${adsLeft()} hoje` : 'Só no app do Prancheta'}</div></span>${adBtn('Ver')}</div>
-    <div class="li"><span class="grow"><b>Desafio da Semana</b><div class="xs mut">Até 300 para os melhores do ranking da semana</div></span><button class="btn sm" data-a="tonline" data-v="desafio">Jogar</button></div>
+    ${ev ? `<div class="li"><span class="grow"><b>Missões do evento ${esc(ev.name)}</b><div class="xs mut">Pranfixas e itens exclusivos</div></span><button class="btn sm pri" data-a="evopen">Ver</button></div>` : ''}
+    <div class="li"><span class="grow"><b>Desafio da Semana</b><div class="xs mut">Pranfixas e moldura exclusiva para o 1º lugar</div></span><button class="btn sm" data-a="tonline" data-v="desafio">Jogar</button></div>
+    <div class="li"><span class="grow"><b>Conquistas online</b><div class="xs mut">Cada conquista dá Pranfixas e algumas dão itens</div></span><button class="btn sm" data-a="tonline" data-v="perfil">Ver</button></div>
     <div class="li"><span class="grow"><b>Conquistas na carreira</b><div class="xs mut">Títulos e temporadas completas dão Pranfixas</div></span></div>
     <div class="li"><span class="grow"><b>Liga com amigos</b><div class="xs mut">Vitórias e título da liga online</div></span><button class="btn sm" data-a="tonline" data-v="liga">Abrir</button></div></div>
     <h3 style="margin-top:10px">Histórico</h3><div class="list">${W.log.slice(0, 12).map((l) => `<div class="li sm"><span class="grow xs">${esc(l.why)}</span><b class="${l.n > 0 ? 'good' : 'bad'}">${l.n > 0 ? '+' : ''}${l.n}</b></div>`).join('') || '<div class="xs mut">Nada ainda.</div>'}</div>`;
-  return `<div class="pf-shop"><div class="pf-hd"><div class="pf-bal">${PF_SVG}<div><b class="pf-n">${pf()}</b><small>Pranfixas</small></div></div>${isVip() ? '<span class="pf-vipb">SÓCIO</span>' : ''}<button class="btn sm ghost" data-a="cs">Fechar</button></div>
-  <div class="seg pf-tabs">${tabs.map(([k, t]) => `<button class="${TAB === k ? 'on' : ''}" data-a="pftab" data-v="${k}">${t}</button>`).join('')}</div>${body}</div>`;
+  return `<div class="pf-shop"><div class="pf-hd"><div class="pf-bal">${PF_SVG}<div><b class="pf-n">${pf()}</b><small>Pranfixas</small></div></div>${isVip() ? '<span class="pf-vipb">SÓCIO</span>' : ''}<button class="btn sm pri" data-a="pftab" data-v="comprar">+ Pranfixas</button></div>
+  <div class="pf-tabs">${TABS.map(([k, t]) => `<button class="${TAB === k ? 'on' : ''}" data-a="pftab" data-v="${k}">${t}${k === 'dest' && ev ? ' <i class="dot"></i>' : ''}</button>`).join('')}</div><div class="pf-body">${body}</div></div>`;
 }
+// detalhe do item com prévia grande
+H.itopen = (id) => {
+  const it = item(id); if (!it) return; const o = has(id), R = RARITY[it.ra]; const L = { ...myLook() }; if (['fr', 'em', 'ban', 'tit'].includes(it.k)) L[it.k] = id;
+  const row = `<div class="on-row ${bannerCls(L.ban)}" style="${bannerStyle(L.ban)}">${bannerFx(L.ban)}<span class="on-p">1</span>${cavatar({ ...L, n: nickName() }, 40)}<span class="grow ell"><b>${esc(nickName())}</b><small>${titleTag(L.tit) || 'Seu clube'}</small></span><span class="on-sc">9999</span></div>`;
+  openSheet(`<div class="it-detail" style="--rc:${R.c}"><div class="it-big">${it.k === 'fr' || it.k === 'em' ? cavatar({ ...L, n: nickName() }, 140) : preview(it, L, nickName(), 140)}</div>
+  <small class="it-ra" style="color:${R.c}">${R.t.toUpperCase()} · ${KINDS[it.k].toUpperCase()}</small><h2>${esc(it.n)}</h2>
+  ${['fr', 'em', 'ban', 'tit'].includes(it.k) ? `<div class="xs mut" style="margin:6px 0 4px">Assim fica no ranking:</div>${row}` : ''}
+  <div class="row" style="gap:8px;margin-top:12px">${o ? (W.eq[it.k] === id ? `<button class="btn grow" data-a="itequip" data-v="${it.k}:">Tirar</button>` : `<button class="btn pri big grow" data-a="itequip" data-v="${it.k}:${id}">Usar agora</button>`)
+    : buyable(it) ? `<button class="btn pri big grow" data-a="itbuy" data-v="${id}">Comprar por ${pfTag(priceOf(it))}</button>` : `<div class="hint grow">${esc(it.how || (it.ev ? `Aparece durante o evento ${EVENTS[it.ev].t}.` : 'Item exclusivo.'))}</div>`}</div></div>`).parentElement.classList.add('it-sheet');
+};
+H.itbuy = (id) => {
+  const it = item(id); if (!it || has(id) || !buyable(it)) return; if (!pfSpend(priceOf(it), it.n)) return;
+  W.own.push(id); W.eq[it.k] = id; wsave(); closeSheet(); afterEquip(it.k); itemFx(it, 'Agora é seu!'); if (document.querySelector('.pf-shop')) replaceSheet(shopHtml());
+};
+H.itequip = (v) => { const [k, id] = v.split(':'); if (id && !has(id)) return; W.eq[k] = id || ''; wsave(); closeSheet(); afterEquip(k); if (document.querySelector('.pf-shop')) replaceSheet(shopHtml()); centerNote(id ? 'Visual atualizado!' : 'Item retirado.', 1300); };
+function afterEquip(k) { try { window.PONLINE_SYNC?.(); } catch {} if (k === 'th') { const t = document.querySelector('.rc-title'); if (t) t.className = 'rc-title ' + (eq('th') || ''); } if (S.G) render(); }
 H.pfdailyo = () => replaceSheet(dailyHtml());
 H.pfitem = (id) => {
   const it = ITEMS.find((x) => x.id === id); if (!it || !it.ok()) return; const price = isVip() && id === 'verba' ? it.p / 2 : it.p;
@@ -151,13 +221,11 @@ H.pfitem = (id) => {
 };
 H.pfvip = () => { if (!pfSpend(VIP_PACK.pf, 'Sócio Prancheta (30 dias)')) return; giveVip(30); replaceSheet(shopHtml()); };
 function giveVip(days) { W.vip = Math.max(Date.now(), W.vip || 0) + days * 864e5; wsave(); for (const s of ['slot4', 'slot5']) if (!SLOTS.includes(s)) SLOTS.push(s); centerNote('Agora você é Sócio Prancheta!', 2600); }
-H.pfframe = (v) => { W.frame = v || ''; wsave(); replaceSheet(shopHtml()); try { window.PONLINE_SYNC?.(); } catch {} };
-H.pfframebuy = (id) => { const f = FRAMES.find((x) => x[0] === id); if (!f || owns(id)) return; if (!pfSpend(f[2], f[1])) return; W.own.push(id); W.frame = id; wsave(); replaceSheet(shopHtml()); try { window.PONLINE_SYNC?.(); } catch {} };
 
 // ---------- compra no Pix (servidor da Lumbra no Cloudflare + Mercado Pago) ----------
 let POLL = null;
 H.pfbuy = async (id) => {
-  const url = payUrl(); if (!url) return; const pk = id === 'vip30' ? VIP_PACK : PACKS.find((p) => p.id === id); if (!pk) return;
+  const url = payUrl(); if (!url) return; const pk = id === 'vip30' ? VIP_PACK : PACKS.find((p) => p.id === id) || KITS.find((p) => p.id === id); if (!pk) return;
   replaceSheet(`<div class="pf-pix"><h2>Gerando o Pix…</h2><div class="pf-spin"></div></div>`);
   try {
     const uid = window.LumbraAnalytics?.uid || W.dev || (W.dev = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
@@ -168,7 +236,7 @@ H.pfbuy = async (id) => {
   } catch (e) { replaceSheet(`<div class="pf-pix"><h2>Não deu para gerar o Pix</h2><p class="sm mut">Confira sua internet e tente de novo. (${esc(String(e.message || e).slice(0, 60))})</p><button class="btn pri blk" data-a="tloja" data-v="comprar">Voltar</button></div>`); }
 };
 function pixHtml(j, pk) {
-  return `<div class="pf-pix"><h2>Pague com Pix</h2><div class="xs mut">${pk.vip ? 'Sócio Prancheta · 30 dias' : `${pk.pf} Pranfixas`} · <b>${brl(pk.brl)}</b></div>
+  return `<div class="pf-pix"><h2>Pague com Pix</h2><div class="xs mut">${pk.vip ? 'Sócio Prancheta · 30 dias' : pk.items ? esc(pk.n) : `${pk.pf} Pranfixas`} · <b>${brl(pk.brl)}</b></div>
   <div class="pf-qr">${j.b64 ? `<img src="data:image/png;base64,${j.b64}" alt="QR Code do Pix">` : ''}</div>
   <div class="field"><label>Pix copia e cola</label><textarea id="pixcode" rows="3" readonly style="width:100%;font-size:11px">${esc(j.qr || '')}</textarea></div>
   <button class="btn pri blk" data-a="pixcopy">Copiar código Pix</button>
@@ -185,6 +253,7 @@ async function checkPay(id) {
       W.claimed.push(id); W.pend = (W.pend || []).filter((p) => p.id !== id); wsave();
       closeSheet(true);
       if (j.vip) giveVip(+j.vip || 30); else if (+j.pf) pfAdd(+j.pf, 'Compra no Pix');
+      const kit = KITS.find((k) => k.id === j.pack); for (const it of (Array.isArray(j.items) ? j.items : kit ? kit.items : [])) grant(it, 'Compra no Pix');
       try { window.LumbraAnalytics?.event('pix_pago', { pack: String(j.pack || ''), v: +j.brl || 0 }); } catch {}
       return true;
     }
@@ -200,8 +269,18 @@ export function careerRewards(G) {
   if (!G || !G.me) return;
   const nt = G.me.titles?.length || 0;
   if (G._pfT == null) { G._pfT = nt; G._pfY = G.year; G._pfUp = G._pfUp || 0; return; }
-  if (nt > G._pfT) { const fresh = G.me.titles.slice(G._pfT); let v = 0; for (const t of fresh) v += 30 + clamp((t.w || 3) * 6, 0, 120); G._pfT = nt; pfAdd(v, fresh.length > 1 ? `${fresh.length} títulos conquistados` : `Título: ${fresh[0].c}`); }
+  if (nt > G._pfT) { const fresh = G.me.titles.slice(G._pfT); let v = 0; for (const t of fresh) { v += 30 + clamp((t.w || 3) * 6, 0, 120); try { window.PONTITLE?.(t); } catch {} } G._pfT = nt; pfAdd(v, fresh.length > 1 ? `${fresh.length} títulos conquistados` : `Título: ${fresh[0].c}`); setTimeout(() => titleCta(fresh[fresh.length - 1]), 2600); }
+  const st = G.me.stats || {}; if (G._pfV == null) { G._pfV = st.v || 0; G._pfJ = st.j || 0; }
+  if ((st.v || 0) > G._pfV) { const d = st.v - G._pfV; G._pfV = st.v; try { for (let i = 0; i < Math.min(d, 5); i++) window.PONTWIN?.(); window.PEV?.track('vit', d); } catch {} }
+  if ((st.j || 0) > G._pfJ) { const d = st.j - G._pfJ; G._pfJ = st.j; try { window.PEV?.track('jogos', d); } catch {} }
   if (G.year > G._pfY) { G._pfY = G.year; pfAdd(20, 'Temporada completa'); }
 }
-window.PPF = { add: pfAdd, spend: pfSpend, bal: pf, vip: isVip, W, frame: () => W.frame || '', watchAd };
+window.PPF = { add: pfAdd, spend: pfSpend, bal: pf, vip: isVip, W, frame: () => eq('fr'), watchAd };
 window.PPFCHIP = pfChip; window.PCAREER = careerRewards;
+// depois de um título: chamar para o ranking e para compartilhar o card
+function titleCta(t, tries = 0) {
+  if (!t || tries > 60) return;
+  if (document.querySelector('.modal-bg, .title-anim, .tanim, .awards, .lc, #live, .sign-anim, .intro, .pcenter, .pf-fx')) { setTimeout(() => titleCta(t, tries + 1), 1500); return; }
+  openSheet(`<div class="tcta"><div class="tcta-cup">🏆</div><small>CAMPEÃO</small><h2>${esc(t.c)}</h2><p class="sm mut">Esse título já conta no ranking geral e nos pontos da sua temporada online.</p><div class="row" style="gap:8px"><button class="btn pri grow" data-a="tcta" data-v="rank">Ver minha posição no ranking</button><button class="btn grow" data-a="tcta" data-v="card">Compartilhar card</button></div></div>`);
+}
+H.tcta = (v) => { closeSheet(); if (v === 'rank') H.tonline('rank'); else { H.tonline('perfil'); setTimeout(() => H.onshare?.(), 400); } };

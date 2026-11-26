@@ -93,7 +93,7 @@ export function render() {
   <div class="right"><header class="top">${S.page ? `<button class="btn sm" data-a="back">‹ Voltar</button>` : c ? crest(c, 32) : '<span class="logo" style="font-size:20px">P<span>.</span></span>'}
     <div class="grow"><div class="t1 ell">${esc(S.page ? (PAGES_T[S.page] || '') : title)}</div><div class="t2">${dateStr(Math.min(G.week, SEASON_WEEKS - 1), true)} de ${G.year} ${G.me.job && !G.me.job.youth ? (inWindow(G) ? '<span class="mk-pill open">Mercado aberto</span>' : '<span class="mk-pill">Mercado fechado</span>') : `· sem. ${Math.min(G.week, SEASON_WEEKS - 1) + 1}/${SEASON_WEEKS}`}${c && G.me.obj ? ` · 🎯 ${esc(G.me.obj.text)}` : ''}</div></div>
     <button class="icon-btn" data-a="search" title="Buscar">🔎</button><button class="icon-btn" data-a="go" data-v="inbox">📩${unread ? `<span class="badge">${unread}</span>` : ''}</button>
-    ${window.PPF ? window.PPFCHIP() : ''}<span class="money-pill dual" data-a="moneyinfo">${c && G.me.job && !G.me.job.youth ? `<span title="Caixa do clube"><i>🏟️</i>${money(c.money)}</span>` : ''}<span title="Seu dinheiro pessoal"><i>👤</i>${money(G.me.money)}</span></span>
+    ${window.PTOPON ? window.PTOPON() : ''}${window.PPF ? window.PPFCHIP() : ''}<span class="money-pill dual" data-a="moneyinfo">${c && G.me.job && !G.me.job.youth ? `<span title="Caixa do clube"><i>🏟️</i>${money(c.money)}</span>` : ''}<span title="Seu dinheiro pessoal"><i>👤</i>${money(G.me.money)}</span></span>
     <button class="btn sim-hd" data-a="simper" title="Simular período">⏩</button><button class="btn pri cont" data-a="continue">${now ? '▶ Jogo' : 'Continuar'} ›</button></header>
   <main class="${same ? '' : 'enter'}">${body}</main></div>`;
   app.dataset.view = vk;
@@ -147,7 +147,7 @@ VIEWS.home = () => {
       <div class="match-hero"><div data-a="club" data-v="${hc.id}">${crest(hc, 54)}<div class="nm">${esc(hc.name)}</div><div class="xs mut">${Math.round(strength(G, hc.id, me.job.youth))} força</div></div><div class="vs">VS</div><div data-a="club" data-v="${ac.id}">${crest(ac, 54)}<div class="nm">${esc(ac.name)}</div><div class="xs mut">${Math.round(strength(G, ac.id, me.job.youth))} força</div></div></div>
       <div class="row" style="gap:8px;margin-top:10px"><button class="btn pri grow" data-a="continue">${now ? '▶ Ir para o jogo' : 'Continuar ›'}</button><button class="btn" data-a="simper">⏩ Simular período</button></div></div>`;
     }
-    col1 += `<div class="vid-slot">${window.PVIDCARD ? window.PVIDCARD() : ''}</div>`;
+    col1 += `${window.PONHOME ? window.PONHOME() : ''}<div class="vid-slot">${window.PVIDCARD ? window.PVIDCARD() : ''}</div>`;
     if (!me.job.youth) col1 += `<div class="card"><div class="row sm"><span class="grow mut">Confiança da diretoria</span><b>${Math.round(c.board.conf)}%</b></div><div class="bar"><i style="width:${c.board.conf}%;background:${c.board.conf < 30 ? 'var(--red)' : c.board.conf < 55 ? 'var(--gold)' : 'var(--ac)'}"></i></div><div class="xs mut" style="margin-top:6px">🎯 ${esc(me.obj?.text || '')}</div></div>`;
     else col1 += `<div class="card"><div class="row sm"><span class="grow mut">Sua reputação</span><b>${Math.round(me.rep)}/100</b></div><div class="bar"><i style="width:${me.rep}%;background:linear-gradient(90deg,var(--ac2),var(--gold))"></i></div><div class="xs mut" style="margin-top:6px">Técnico do sub-20: vença e revele talentos para ser notado.</div></div>`;
     // 5.1: a tabela acompanha o campeonato do próximo jogo (estadual, copa, continental…)

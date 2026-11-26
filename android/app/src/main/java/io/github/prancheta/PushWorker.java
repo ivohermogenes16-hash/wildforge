@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
    que olha se tem aviso novo e mostra na barra de notificações. */
 public class PushWorker extends Worker {
     static final String KEY = "AIzaSyAFevjfHH4l04WyU3H2rxmvhiENlacBUO4";
-    static final String DB = "https://lumbra-control-default-rtdb.firebaseio.com/remote/prancheta/push.json";
+    static final String DB = "https://lumbra-control-default-rtdb.firebaseio.com/remote/PRANCHETA/push.json";
 
     public PushWorker(@NonNull Context c, @NonNull WorkerParameters p) { super(c, p); }
 
