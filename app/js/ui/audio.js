@@ -110,6 +110,7 @@ export function say(text, key, prio = false) {
   const now = Date.now(); if (!prio && now - lastSay < 2500) return; lastSay = now;
   const clip = key && CLIPS[key]?.length ? CLIPS[key][Math.floor(Math.random() * CLIPS[key].length)] : null;
   if (clip) { try { new Audio(clip).play(); return; } catch {} }
+  return; // 6.2: sem voz robótica do celular; só as frases gravadas de verdade (quando existirem)
   const clean = String(text).replace(/<[^>]+>/g, '').replace(/[\p{Extended_Pictographic}\u{FE0F}]/gu, '').replace(/\s+/g, ' ').trim();
   const N = window.PranchetaNative; if (N?.speak) { try { if (!prio && N.speaking?.()) return; N.speak(clean, key === 'gol' ? 1.15 : 1.05, key === 'gol' ? 1.12 : 1, !!prio); } catch {} return; }
   try {

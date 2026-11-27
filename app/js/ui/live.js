@@ -371,6 +371,9 @@ H.lclose = () => { closeSheet(); L.viz.paused = false; updPause(); };
 function endLive() {
   const el = document.getElementById('lend');
   if (el && !el.innerHTML) el.innerHTML = `<button class="btn pri blk" style="margin-top:8px" data-a="lfinish">Ver resumo ›</button>`;
+  // 6.2: fim de jogo em destaque no meio da tela (o painel lateral fica escondido no 3D em tela cheia)
+  const w = document.getElementById('live'); if (w && !w.querySelector('.lv-endbox')) { const m = L.m; const G = S.G; const b = document.createElement('div'); b.className = 'lv-endbox';
+    b.innerHTML = `<small>FIM DE JOGO</small><div class="lv-endsc"><span>${esc(G.clubs[L.f.h].short || G.clubs[L.f.h].name)}</span><b>${m.score[0]} – ${m.score[1]}</b><span>${esc(G.clubs[L.f.a].short || G.clubs[L.f.a].name)}</span></div><button class="btn pri blk" data-a="lfinish">Ver resumo ›</button>`; w.appendChild(b); }
 }
 H.lfinish = () => {
   const f = L.f, res = L.m.result(), done = L.done; if (L.champ3d && L.m.score[0] !== L.m.score[1]) res._champShown = true;
