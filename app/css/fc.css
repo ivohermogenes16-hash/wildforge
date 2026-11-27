@@ -456,3 +456,4 @@
 .lv-endbox small{font:900 10px system-ui;letter-spacing:3px;color:#f4c542}
 .lv-endsc{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0 12px;font:900 italic 16px 'Barlow Condensed',system-ui;text-transform:uppercase}
 .lv-endsc b{font:900 italic 38px 'Barlow Condensed',system-ui}
+.pslot[data-slot]{touch-action:none;-webkit-user-select:none;user-select:none}
