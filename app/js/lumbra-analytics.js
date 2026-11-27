@@ -101,7 +101,7 @@
         if (store.err) { var e = store.err; store.err = null; save(); return db("POST", "diag/" + game, { u: store.uid, w: e.w, m: e.m, t: TS, ct: e.t }).catch(function () {}); }
       })
       .then(function () { ready = true; push("session_start", { novo: first ? 1 : 0 }); flush(); shownThisSession = {}; fetchRemote(); })
-      .catch(function (e) { ready = false; sid = null; logErr("start", e); });
+      .catch(function (e) { ready = false; sid = null; logErr("start", e); fetchRemote(); });
   }
 
   function beat(final) {
@@ -119,7 +119,7 @@
       ps.push(final ? db("DELETE", "online/" + game + "/" + uid, undefined, ka)
                     : db("PUT", "online/" + game + "/" + uid, { sid: mySid, l: TS, v: gameVersion }, ka));
       return Promise.all(ps);
-    }).then(function () { if (!final && ++beats % 10 === 0) fetchRemote(); return flush(); }).catch(function (e) { logErr("beat", e); });
+    }).then(function () { if (!final && ++beats % 10 === 0) fetchRemote(); return flush(); }).catch(function (e) { logErr("beat", e); if (!remote) fetchRemote(); });
   }
 
   function endSession() {
@@ -142,11 +142,11 @@
     try { w.open(u, "_blank"); } catch (e) {}
   }
   function fetchRemote() {
-    if (!store || !store.tok) return;
+    if (!store) return;
     auth().then(function () { return db("GET", "remote/" + game); })
       .then(function (r) { return r.json(); })
-      .then(function (j) { remote = j || {}; applyRemote(); remoteCbs.forEach(function (cb) { try { cb(remote); } catch (e) {} }); })
-      .catch(function () {});
+      .then(function (j) { remote = j || {}; try { localStorage.setItem("lumbra.rc." + game, JSON.stringify(remote)); } catch (e) {} applyRemote(); remoteCbs.forEach(function (cb) { try { cb(remote); } catch (e) {} }); })
+      .catch(function (e) { logErr("remote", e); });
   }
   var css = false;
   function styles() {
@@ -286,6 +286,7 @@
         cfg = o.config; game = String(o.game).toUpperCase().replace(/[^A-Z0-9_]/g, "_");
         gameVersion = String(o.version || "").slice(0, 20);
         key = "lumbra_an_" + game; store = load();
+        try { var rc = localStorage.getItem("lumbra.rc." + game); if (rc) remote = JSON.parse(rc); } catch (e) {}
         if (store.optout) return;
         document.addEventListener("visibilitychange", onVis);
         w.addEventListener("pagehide", function () { endSession(); });

@@ -11,7 +11,7 @@ export const W = load();
 W.eq ||= { fr: W.frame || '' }; delete W.frame; W.seen ||= [];
 function wsave() { try { localStorage.setItem(K, JSON.stringify(W)); } catch {} }
 // 6.2: conta de desenvolvedor (ligada no Lumbra Control): tudo liberado para testar
-export const isDev = () => { try { const L = window.LumbraAnalytics; const d = L?.remote?.dev; return !!(d && d.on !== false && L.uid && (d.uids || []).includes(L.uid)); } catch { return false; } };
+export const isDev = () => { try { const L = window.LumbraAnalytics; const d = L?.remote?.dev; if (!d || d.on === false) return false; const em = (L.account?.email || '').toLowerCase(); return !!((L.uid && (d.uids || []).includes(L.uid)) || (em && (d.emails || []).map((x) => String(x).toLowerCase()).includes(em))); } catch { return false; } };
 window.PISDEV = isDev;
 export const pf = () => isDev() ? 999999 : Math.max(0, Math.floor(W.bal || 0));
 export const isVip = () => isDev() || (W.vip || 0) > Date.now();
@@ -51,7 +51,7 @@ function noFunds(n) {
 }
 
 // ---------- configuração remota (Lumbra Control) ----------
-let RC = {}; try { window.LumbraAnalytics?.onRemote((r) => { RC = r || {}; }); } catch {}
+let RC = {}; try { RC = window.LumbraAnalytics?.remote || {}; window.LumbraAnalytics?.onRemote((r) => { RC = r || {}; }); } catch {}
 const AD_TEST = 'ca-app-pub-8449786356389316/2705027601'; // bloco "Prancheta Premiado"
 const adUnit = () => (RC.ads && RC.ads.unit) || AD_TEST;
 const payUrl = () => (RC.pay && RC.pay.on && RC.pay.url ? String(RC.pay.url).replace(/\/$/, '') : '');
