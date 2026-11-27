@@ -1,5 +1,5 @@
 import { esc, money } from './util.js';
-import { S, H, render, toast, openSheet, closeSheet, replaceSheet, save, stars, starsH, clubStars } from './ui/app.js';
+import { S, H, render, toast, openSheet, closeSheet, replaceSheet, save, stars, starsH, clubStars, centerNote } from './ui/app.js';
 import './ui/pages.js';
 import './ui/live.js';
 import './ui/editor.js';
@@ -31,7 +31,7 @@ import { setupU17 } from './engine/season.js';
 import { ensureU17 } from './engine/world.js';
 import { ensureBase } from './engine/youth.js';
 import { crest } from './ui/art.js';
-import { loadGame, deleteGame, loadImages, listSlots, getSlot, setSlot, SLOTS } from './store.js';
+import { loadGame, deleteGame, loadImages, listSlots, getSlot, setSlot, SLOTS, saveGame } from './store.js';
 import { SET, DEF, saveSet, applySet, ACCENTS, askNotif, notifSupported, planReminders, cancelAll } from './settings.js';
 import { newGame } from './engine/game.js';
 import { LEAGUES, CLUBS, COUNTRIES } from './data/leagues.js';
@@ -70,7 +70,7 @@ async function title() {
       <button class="t2-ic" data-a="tcomu" title="Comunidade"><b>◎</b></button>
       <button class="t2-ic" data-a="tset" title="Configurações"><b>⚙</b></button>
       <button class="t2-ic" data-a="fs" title="Tela cheia"><b>⛶</b></button>${window.PranchetaNative?.googleSignIn ? `<button class="t2-ic t2-g ${gLogged() ? 'ok' : ''}" data-a="gconta" title="Conta Google"><b>${gLogged() ? '✓' : 'G'}</b></button>` : ''}
-      ${pfChip()}
+      <span id="t2dev"></span>${pfChip()}
       <div class="t2-prof" data-a="tonline" data-v="perfil">${cav({ ...myLook(), n: m?.name || 'T' }, 34)}<div><b>${esc(m?.name || 'Novo técnico')}</b><small>${m?.rep != null && !m?.legacy ? `REP ${m.rep} · ${m.titles} títulos` : 'Bem-vindo'}</small></div></div>
     </div>
   </header>
@@ -95,6 +95,7 @@ async function title() {
   <footer class="t2-foot"><span>Lumbra Games · 6.2${build}</span><button data-a="tpack">Pacotes</button><button data-a="thelp">Ajuda</button></footer>
   </div>`;
   import('./ui/hero3d.js').then((h) => { const el = document.getElementById('t2hero'); if (el) h.mountHero(el, { c1: m?.c1 || '#1b8f4e', c2: m?.c2 || '#ffffff', rim: '#2fe08a', name: m?.key || m?.club || 'Prancheta', crest: m?.club ? crest({ name: m.club, key: m.key, short: m.short, c1: m.c1, c2: m.c2, troph: m.troph }, 160) : '' }); }).catch((e) => console.warn('hero', e));
+  devChip(); try { window.LumbraAnalytics?.onRemote(() => devChip()); } catch {}
   if (!localStorage.getItem('prancheta.intro61')) { setTimeout(intro, 900); } else { firstCommunity(); dailyCheck(); }
   setTimeout(contaPrompt, 3500);
   videoFirstTime(); musicOn(); pixPending(); adPreload(); liveCount(); window.PNOTIF?.();
@@ -109,6 +110,21 @@ function rcChallenge() {
 async function liveCount() {
   try { const all = await window.LumbraAnalytics?.api('GET', 'pr/prof', undefined, 'shallow=true'); const n = Object.keys(all || {}).length; if (!n) return; const el = document.getElementById('rclive'); if (el) el.textContent = `${n.toLocaleString('pt-BR')} técnicos jogando`; const lb = document.querySelector('.live-badge'); if (lb) lb.innerHTML = `<i class="live-dot"></i> AO VIVO · ${n.toLocaleString('pt-BR')}`; const r = document.getElementById('rcrank'); if (r) r.textContent = `${n.toLocaleString('pt-BR')} técnicos no ranking`; } catch {}
 }
+// 6.2: painel de desenvolvedor (só para a conta ligada no Lumbra Control)
+function devChip() { const el = document.getElementById('t2dev'); if (!el) return; el.innerHTML = window.PISDEV?.() ? '<button class="t2-dev" data-a="tdev">DEV</button>' : ''; try { document.querySelectorAll('.pf-n').forEach((x) => { if (window.PISDEV?.()) x.textContent = '∞'; }); } catch {} }
+H.tdev = () => openSheet(`<h2>🛠️ Modo desenvolvedor</h2><p class="xs mut">Só a sua conta vê isso. Todos os itens da loja estão liberados, Pranfixas infinitas e Sócio ativo.</p>
+  <div class="list">${[['dclub', '💰 +R$ 100 milhões no caixa do clube'], ['dme', '👤 +R$ 50 milhões no seu bolso'], ['dfit', '⚡ Elenco 100% descansado e sem lesões'], ['drep', '⭐ +20 de reputação'], ['dchal', '🎯 Zerar tentativas do Desafio da Semana'], ['dshop', '🛍️ Abrir a Loja']].map(([k, t]) => `<button class="li tap" data-a="ddo" data-v="${k}" style="width:100%;text-align:left"><span class="grow">${t}</span>›</button>`).join('')}</div>`);
+H.ddo = async (k) => {
+  if (k === 'dshop') { closeSheet(); H.tloja('dest'); return; }
+  if (k === 'dchal') { try { const o = JSON.parse(localStorage.getItem('prancheta.on') || '{}'); for (const x of Object.keys(o)) if (/^ch|try|tent/i.test(x)) delete o[x]; localStorage.setItem('prancheta.on', JSON.stringify(o)); } catch {} toast('Tentativas do desafio zeradas'); return; }
+  if (!S.G) { const m = SL[getSlot()]; if (!m) { toast('Abra uma carreira primeiro'); return; } const g = await loadGame(); if (!g) return; S.G = g; }
+  const G = S.G, c = G.me.job ? G.clubs[G.me.job.cid] : null;
+  if (k === 'dclub') { if (!c) return toast('Você está sem clube'); c.money += 1e8; }
+  if (k === 'dme') G.me.money += 5e7;
+  if (k === 'dfit' && c) for (const p of G.players) if (p && p.club === c.id) { p.fit = 100; p.inj = 0; }
+  if (k === 'drep') G.me.rep = Math.min(100, G.me.rep + 20);
+  await saveGame(G); centerNote('Feito!', 1200); if (document.querySelector('.t2x')) title();
+};
 // apresentação do Online na primeira vez depois de atualizar
 const INTRO = [
   ['🌍', 'Prancheta Online', 'Agora você joga contra todo mundo. Seus títulos da carreira contam no ranking geral, e o mês vira uma temporada com divisões do Bronze à Lenda.', '#2fe08a'],

@@ -10,8 +10,11 @@ function load() { const d = { bal: 0, own: [], claimed: [], pend: [], log: [] };
 export const W = load();
 W.eq ||= { fr: W.frame || '' }; delete W.frame; W.seen ||= [];
 function wsave() { try { localStorage.setItem(K, JSON.stringify(W)); } catch {} }
-export const pf = () => Math.max(0, Math.floor(W.bal || 0));
-export const isVip = () => (W.vip || 0) > Date.now();
+// 6.2: conta de desenvolvedor (ligada no Lumbra Control): tudo liberado para testar
+export const isDev = () => { try { const L = window.LumbraAnalytics; const d = L?.remote?.dev; return !!(d && d.on !== false && L.uid && (d.uids || []).includes(L.uid)); } catch { return false; } };
+window.PISDEV = isDev;
+export const pf = () => isDev() ? 999999 : Math.max(0, Math.floor(W.bal || 0));
+export const isVip = () => isDev() || (W.vip || 0) > Date.now();
 export const owns = (id) => W.own.includes(id);
 
 // espaços extras de carreira (comprados ou do Sócio)
@@ -29,6 +32,7 @@ export function pfAdd(n, why, quiet) {
   if (!quiet && n > 0) coinFx(n, why);
 }
 export function pfSpend(n, why) {
+  if (isDev()) return true;
   if (pf() < n) { noFunds(n); return false; }
   W.bal -= n; W.log.unshift({ t: Date.now(), n: -n, why }); W.log.length = Math.min(W.log.length, 40); wsave(); updChips();
   try { window.LumbraAnalytics?.event('pf_gasto', { n, em: String(why || '').slice(0, 40) }); } catch {}
@@ -99,7 +103,7 @@ H.pfad = async (v) => {
 // ---------- itens da loja ----------
 // ---------- itens visuais (catálogo em cosmetics.js) ----------
 const SOCIO_ITEMS = ['ex_socio', 'em_escudo'];
-export const has = (id) => W.own.includes(id) || (isVip() && SOCIO_ITEMS.includes(id));
+export const has = (id) => isDev() || W.own.includes(id) || (isVip() && SOCIO_ITEMS.includes(id));
 export const eq = (k) => { const v = W.eq[k] || ''; return v && (has(v) || !item(v)) ? v : ''; };
 export const myLook = () => ({ fr: eq('fr'), em: eq('em'), ban: eq('ban'), tit: eq('tit'), vip: isVip() });
 export const frameColor = () => '';
